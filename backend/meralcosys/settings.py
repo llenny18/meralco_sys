@@ -37,7 +37,29 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'meralcoapp'
 ]
+
+REST_FRAMEWORK = {
+    # Default permission classes (who can access the API)
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',  # Anyone can access
+        # 'rest_framework.permissions.IsAuthenticated',  # Require login
+    ],
+
+    # Default authentication classes
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+        # You can also add JWT or Token authentication later
+    ],
+
+    # Pagination (optional)
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
+}
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
