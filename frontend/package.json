@@ -1,77 +1,57 @@
 {
-  "name": "dashboard-kit-react",
-  "version": "3.0.0",
-  "private": true,
-  "homepage": "https://your-username.github.io/DashboardKit",
-
+  "name": "tokyo-free-black-nextjs-admin-dashboard",
+  "version": "1.0.0",
+  "title": "Tokyo Free Black NextJS Typescript Admin Dashboard",
+  "description": "High performance React template built with lots of powerful MUI (Material-UI) components across multiple product niches for fast & perfect apps development processes",
+  "author": {
+    "name": "BloomUI.com",
+    "url": "https://bloomui.com"
+  },
+  "private": false,
   "dependencies": {
-    "@tanem/react-nprogress": "^5.0.53",
-    "@vitejs/plugin-react": "^4.3.4",
-    "apexcharts": "^4.3.0",
-    "bootstrap": "5.3.3",
-    "feather-icons-react": "^0.7.0",
-    "lodash-es": "^4.17.21",
-    "react": "^18.3.1",
-    "react-apexcharts": "^1.7.0",
-    "react-bootstrap": "^2.10.4",
-    "react-copy-to-clipboard": "^5.1.0",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.1",
-    "simplebar-react": "^3.2.6",
-    "styled-components": "^6.1.13",
-    "vite": "^5.4.1",
-    "vite-tsconfig-paths": "^5.0.1",
-    "web-vitals": "^4.2.3",
-    "yup": "^1.4.0"
+    "@emotion/cache": "11.7.1",
+    "@emotion/react": "11.9.0",
+    "@emotion/server": "11.4.0",
+    "@emotion/styled": "11.8.1",
+    "@mui/core": "5.0.0-alpha.54",
+    "@mui/icons-material": "5.8.2",
+    "@mui/lab": "5.0.0-alpha.84",
+    "@mui/material": "5.8.2",
+    "@mui/styles": "5.8.0",
+    "apexcharts": "3.35.3",
+    "clsx": "1.1.1",
+    "context-api": "0.0.2",
+    "date-fns": "2.28.0",
+    "next": "12.1.6",
+    "next-images": "1.8.4",
+    "nprogress": "0.2.0",
+    "numeral": "2.0.6",
+    "react": "17.0.2",
+    "react-apexcharts": "1.4.0",
+    "react-custom-scrollbars-2": "4.4.0",
+    "react-dom": "17.0.2",
+    "@types/node": "17.0.39",
+    "@types/nprogress": "0.2.0",
+    "@types/numeral": "2.0.2",
+    "@types/react": "17.0.40",
+    "@types/react-dom": "17.0.13",
+    "typescript": "4.7.3"
   },
   "scripts": {
-    "start": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "lint": "eslint \"src/**/*.{js,jsx,ts,tsx}\"",
-    "lint:fix": "eslint --fix \"src/**/*.{js,jsx,ts,tsx}\"",
-    "prettier": "prettier --write \"src/**/*.{js,jsx,ts,tsx}\"",
-    "knip": "knip",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
-  },
-  "overrides": {
-    "autoprefixer": "10.4.5"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "dev": "next",
+    "build": "next build",
+    "start": "next start",
+    "export": "next export",
+    "lint": "next lint",
+    "lint-fix": "next lint --fix",
+    "format": "prettier --write \"./**/*.{ts,tsx,js,jsx,json}\" --config ./.prettierrc"
   },
   "devDependencies": {
-    "@eslint/compat": "^1.2.3",
-    "@eslint/eslintrc": "^3.2.0",
-    "@eslint/js": "^9.15.0",
-    "env-cmd": "^10.1.0",
-    "eslint": "^9.15.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-import": "^2.31.0",
-    "eslint-plugin-jsx-a11y": "^6.10.2",
-    "eslint-plugin-prettier": "^5.2.1",
-    "eslint-plugin-react": "^7.37.2",
-    "eslint-plugin-react-hooks": "^5.0.0",
-    "gh-pages": "^6.3.0",
-    "knip": "^5.30.6",
-    "prettier": "^3.4.1",
-    "sass": "1.77.6"
-  },
-  "packageManager": "yarn@4.6.0"
+    "eslint": "8.17.0",
+    "eslint-config-next": "12.1.6",
+    "eslint-config-prettier": "8.5.0",
+    "eslint-plugin-prettier": "4.0.0",
+    "next-transpile-modules": "9.0.0",
+    "prettier": "2.6.2"
+  }
 }

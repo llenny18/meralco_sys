@@ -28,7 +28,7 @@ export default class DimXAxis {
       const coords = this.getxAxisTimeScaleLabelsCoords()
       rect = {
         width: coords.width,
-        height: coords.height,
+        height: coords.height
       }
       w.globals.rotateXLabels = false
     } else {
@@ -62,12 +62,12 @@ export default class DimXAxis {
       val = xFormat.xLabelFormat(xlbFormatter, val, timestamp, {
         i: undefined,
         dateFormatter: new DateTime(this.dCtx.ctx).formatDate,
-        w,
+        w
       })
       valArr = xFormat.xLabelFormat(xlbFormatter, valArr, timestamp, {
         i: undefined,
         dateFormatter: new DateTime(this.dCtx.ctx).formatDate,
-        w,
+        w
       })
 
       if (
@@ -99,7 +99,7 @@ export default class DimXAxis {
         height:
           xLabelrect.height >= xArrLabelrect.height
             ? xLabelrect.height
-            : xArrLabelrect.height,
+            : xArrLabelrect.height
       }
 
       if (
@@ -145,13 +145,13 @@ export default class DimXAxis {
     if (!w.config.xaxis.labels.show) {
       rect = {
         width: 0,
-        height: 0,
+        height: 0
       }
     }
 
     return {
       width: rect.width,
-      height: rect.height,
+      height: rect.height
     }
   }
 
@@ -163,7 +163,7 @@ export default class DimXAxis {
   getxAxisGroupLabelsCoords() {
     let w = this.w
 
-    if (!w.globals.hasXaxisGroups) {
+    if (!w.globals.hasGroups) {
       return { width: 0, height: 0 }
     }
 
@@ -197,19 +197,19 @@ export default class DimXAxis {
       height:
         xLabelrect.height >= xArrLabelrect.height
           ? xLabelrect.height
-          : xArrLabelrect.height,
+          : xArrLabelrect.height
     }
 
     if (!w.config.xaxis.labels.show) {
       rect = {
         width: 0,
-        height: 0,
+        height: 0
       }
     }
 
     return {
       width: rect.width,
-      height: rect.height,
+      height: rect.height
     }
   }
 
@@ -237,7 +237,7 @@ export default class DimXAxis {
 
     return {
       width,
-      height,
+      height
     }
   }
 
@@ -298,8 +298,9 @@ export default class DimXAxis {
       if (this.dCtx.timescaleLabels && this.dCtx.timescaleLabels.length) {
         // for timeline labels, we take the last label and check if it exceeds gridWidth
         const firstimescaleLabel = this.dCtx.timescaleLabels[0]
-        const lastTimescaleLabel =
-          this.dCtx.timescaleLabels[this.dCtx.timescaleLabels.length - 1]
+        const lastTimescaleLabel = this.dCtx.timescaleLabels[
+          this.dCtx.timescaleLabels.length - 1
+        ]
 
         const lastLabelPosition =
           lastTimescaleLabel.position +
@@ -343,7 +344,9 @@ export default class DimXAxis {
         if (
           this.dCtx.gridPad.right < lbWidth / 2 - this.dCtx.yAxisWidthRight &&
           !gl.rotateXLabels &&
-          !w.config.xaxis.labels.trim
+          !w.config.xaxis.labels.trim &&
+          (w.config.xaxis.tickPlacement !== 'between' ||
+            w.globals.isBarHorizontal)
         ) {
           this.dCtx.xPadRight = lbWidth / 2 + 1
         }
@@ -351,7 +354,19 @@ export default class DimXAxis {
     }
 
     const padYAxe = (yaxe, i) => {
-      if (cnf.yaxis.length > 1 && isCollapsed(i)) return
+      if (isCollapsed(i)) return
+
+      // the code below causes issue apexcharts.js#1989
+      // after testing with other use-cases, this has no actual value, hence commented
+      // if (xtype !== 'datetime') {
+      //   if (
+      //     this.dCtx.gridPad.left < lbWidth / 2 - this.dCtx.yAxisWidthLeft &&
+      //     !gl.rotateXLabels &&
+      //     !cnf.xaxis.labels.trim
+      //   ) {
+      //     this.dCtx.xPadLeft = lbWidth / 2 + 1
+      //   }
+      // }
 
       rightPad(yaxe)
     }

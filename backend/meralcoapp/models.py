@@ -2,1070 +2,990 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
-from decimal import Decimal
 import uuid
 
 
-# =====================================================
-# CORE SYSTEM MODELS
-# =====================================================
+# ============================================
+# USER MANAGEMENT MODELS
+# ============================================
 
-class Role(models.Model):
+class UserRole(models.Model):
+    role_id = models.AutoField(primary_key=True)
     role_name = models.CharField(max_length=50, unique=True)
-    description = models.TextField(blank=True, null=True)
+    role_description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'user_roles'
+        ordering = ['role_name']
 
     def __str__(self):
         return self.role_name
 
+
+class User(AbstractUser):
+    user_id = models.AutoField(primary_key=True)
+    role = models.ForeignKey(UserRole, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    password = models.CharField(max_length=20, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    last_login = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_super_user = models.BooleanField(default=False)
+    is_staff = models.BooleanField(default=False)
+    date_joined = models.DateTimeField(auto_now_add=True)
+
     class Meta:
-        db_table = 'roles'
+        db_table = 'users'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.get_full_name()} ({self.username})"
+
+    @property
+    def is_superuser(self):
+        return self.is_super_user
+
+    @is_superuser.setter
+    def is_superuser(self, value):
+        self.is_super_user = value
+    
+    def save(self, *args, **kwargs):
+        # ✅ Automatically hash plain text passwords before saving
+        if self.password and not self.password.startswith('pbkdf2_'):
+            self.password = make_password(self.password)
+        super().save(*args, **kwargs)
 
 
 class Permission(models.Model):
     permission_name = models.CharField(max_length=100, unique=True)
-    description = models.TextField(blank=True, null=True)
+    permission_description = models.TextField(blank=True, null=True)
+    module_name = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'permissions'
+        ordering = ['module_name', 'permission_name']
 
     def __str__(self):
         return self.permission_name
 
-    class Meta:
-        db_table = 'permissions'
-
-
-class User(AbstractUser):
-    """Custom User model extending Django's AbstractUser"""
-    role = models.ForeignKey(Role, on_delete=models.PROTECT)
-    first_name = models.CharField(max_length=50)
-    last_name = models.CharField(max_length=50)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    # Fix reverse accessor conflicts with Django's built-in User model
-    groups = models.ManyToManyField(
-        'auth.Group',
-        verbose_name='groups',
-        blank=True,
-        help_text='The groups this user belongs to.',
-        related_name="custom_user_set",
-        related_query_name="custom_user",
-    )
-    user_permissions = models.ManyToManyField(
-        'auth.Permission',
-        verbose_name='user permissions',
-        blank=True,
-        help_text='Specific permissions for this user.',
-        related_name="custom_user_set",
-        related_query_name="custom_user",
-    )
-
-    def __str__(self):
-        return f"{self.first_name} {self.last_name}"
-
-    class Meta:
-        db_table = 'users'
-
 
 class RolePermission(models.Model):
-    role = models.ForeignKey(Role, on_delete=models.CASCADE)
-    permission = models.ForeignKey(Permission, on_delete=models.CASCADE)
+    role = models.ForeignKey(UserRole, on_delete=models.CASCADE, related_name='role_permissions')
+    permission = models.ForeignKey(Permission, on_delete=models.CASCADE, related_name='role_permissions')
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('role', 'permission')
         db_table = 'role_permissions'
-
-
-# =====================================================
-# ORGANIZATIONAL STRUCTURE
-# =====================================================
-
-class Sector(models.Model):
-    sector_name = models.CharField(max_length=100)
-    sector_code = models.CharField(max_length=20, unique=True)
-    location = models.CharField(max_length=200, blank=True, null=True)
-    manager = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+        unique_together = ['role', 'permission']
+        ordering = ['role', 'permission']
 
     def __str__(self):
-        return f"{self.sector_name} ({self.sector_code})"
+        return f"{self.role.role_name} - {self.permission.permission_name}"
+
+
+class UserSession(models.Model):
+    session_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
+    login_time = models.DateTimeField(auto_now_add=True)
+    logout_time = models.DateTimeField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
-        db_table = 'sectors'
-
-
-class Team(models.Model):
-    team_name = models.CharField(max_length=100)
-    team_code = models.CharField(max_length=20, unique=True)
-    sector = models.ForeignKey(Sector, on_delete=models.CASCADE, related_name='teams')
-    team_lead = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+        db_table = 'user_sessions'
+        ordering = ['-login_time']
 
     def __str__(self):
-        return f"{self.team_name} ({self.team_code})"
+        return f"{self.user.username} - {self.login_time}"
 
-    class Meta:
-        db_table = 'teams'
 
+# ============================================
+# VENDOR MANAGEMENT MODELS
+# ============================================
 
 class Vendor(models.Model):
-    vendor_name = models.CharField(max_length=200)
     vendor_code = models.CharField(max_length=50, unique=True)
+    vendor_name = models.CharField(max_length=255)
+    company_name = models.CharField(max_length=255, blank=True, null=True)
     contact_person = models.CharField(max_length=100, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
-    phone = models.CharField(max_length=20, blank=True, null=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    region = models.CharField(max_length=100, blank=True, null=True)
+    postal_code = models.CharField(max_length=20, blank=True, null=True)
+    tax_id = models.CharField(max_length=50, blank=True, null=True)
+    compliance_score = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     is_active = models.BooleanField(default=True)
-    registration_date = models.DateField(blank=True, null=True)
+    is_blacklisted = models.BooleanField(default=False)
+    blacklist_reason = models.TextField(blank=True, null=True)
+    blacklist_date = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.vendor_name} ({self.vendor_code})"
 
     class Meta:
         db_table = 'vendors'
+        ordering = ['vendor_name']
+
+    def __str__(self):
+        return f"{self.vendor_code} - {self.vendor_name}"
 
 
-# =====================================================
-# PROJECT AND WORK ORDER MANAGEMENT
-# =====================================================
-
-class Project(models.Model):
-    PROJECT_TYPE_CHOICES = [
-        ('PCA', 'PCA'),
-        ('RELOCATION', 'Relocation'),
-        ('GOVERNMENT', 'Government'),
-        ('BBB', 'BBB'),
-    ]
-
-    PROJECT_SUBTYPE_CHOICES = [
-        ('NEW', 'New'),
-        ('MODIFICATION', 'Modification'),
-        ('TERMINATION', 'Termination'),
-        ('RELOC', 'Relocation'),
-    ]
-
-    CUSTOMER_TYPE_CHOICES = [
-        ('RESIDENTIAL', 'Residential'),
-        ('COMMERCIAL', 'Commercial'),
-        ('INDUSTRIAL', 'Industrial'),
-        ('GOVERNMENT', 'Government'),
-    ]
-
-    STATUS_CHOICES = [
-        ('WMTRL', 'WMTRL'),
-        ('APPR', 'Approved'),
-        ('INPRG', 'In Progress'),
-        ('SCHED', 'Scheduled'),
-        ('COMP', 'Complete'),
-        ('FCOMP', 'Final Complete'),
-        ('CLOSED', 'Closed'),
-    ]
-
-    PRIORITY_CHOICES = [
-        ('LOW', 'Low'),
-        ('NORMAL', 'Normal'),
-        ('HIGH', 'High'),
-        ('URGENT', 'Urgent'),
-    ]
-
-    AGING_CATEGORY_CHOICES = [
-        ('0-90', '0-90 days'),
-        ('90+', '90+ days'),
-        ('>90', '>90 days'),
-    ]
-
-    project_code = models.CharField(max_length=50, unique=True)
-    project_name = models.CharField(max_length=200)
-    project_type = models.CharField(max_length=50, choices=PROJECT_TYPE_CHOICES)
-    project_subtype = models.CharField(max_length=50, choices=PROJECT_SUBTYPE_CHOICES, blank=True, null=True)
-    description = models.TextField(blank=True, null=True)
-    sector = models.ForeignKey(Sector, on_delete=models.SET_NULL, null=True, blank=True)
-    team = models.ForeignKey(Team, on_delete=models.SET_NULL, null=True, blank=True)
-    assigned_vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True)
-    customer_name = models.CharField(max_length=200, blank=True, null=True)
-    customer_type = models.CharField(max_length=50, choices=CUSTOMER_TYPE_CHOICES, blank=True, null=True)
-    applied_load = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    manhours = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    project_value = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
-    currency = models.CharField(max_length=3, default='PHP')
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='WMTRL')
-    priority_level = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='NORMAL')
-    wmtrl_date = models.DateField(blank=True, null=True)
-    appr_date = models.DateField(blank=True, null=True)
-    start_date = models.DateField(blank=True, null=True)
-    target_completion_date = models.DateField(blank=True, null=True)
-    actual_completion_date = models.DateField(blank=True, null=True)
-    fcomp_date = models.DateField(blank=True, null=True)
-    closed_date = models.DateField(blank=True, null=True)
-    spt_days = models.IntegerField(blank=True, null=True, help_text="Standard Processing Time in days")
-    is_revenue = models.BooleanField(default=True)
-    is_aging = models.BooleanField(default=False)
-    aging_category = models.CharField(max_length=20, choices=AGING_CATEGORY_CHOICES, blank=True, null=True)
+class VendorContact(models.Model):
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='contacts')
+    contact_name = models.CharField(max_length=100)
+    contact_position = models.CharField(max_length=100, blank=True, null=True)
+    contact_email = models.EmailField(blank=True, null=True)
+    contact_phone = models.CharField(max_length=20, blank=True, null=True)
+    is_primary = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
-        return f"{self.project_code} - {self.project_name}"
-
-    @property
-    def actual_days(self):
-        """Calculate actual days taken for the project"""
-        if self.fcomp_date and self.wmtrl_date:
-            return (self.fcomp_date - self.wmtrl_date).days
-        elif self.wmtrl_date:
-            return (timezone.now().date() - self.wmtrl_date).days
-        return None
-
-    @property
-    def is_delayed(self):
-        """Check if project is delayed beyond SPT"""
-        if self.spt_days and self.wmtrl_date:
-            expected_completion = self.wmtrl_date + timezone.timedelta(days=self.spt_days)
-            current_date = self.fcomp_date or timezone.now().date()
-            return current_date > expected_completion
-        return False
-
     class Meta:
-        db_table = 'projects'
-        indexes = [
-            models.Index(fields=['status']),
-            models.Index(fields=['assigned_vendor']),
-            models.Index(fields=['team']),
-            models.Index(fields=['wmtrl_date']),
-            models.Index(fields=['fcomp_date']),
-            models.Index(fields=['project_type', 'project_subtype']),
-        ]
-
-
-class WorkOrder(models.Model):
-    WO_TYPE_CHOICES = [
-        ('NEW', 'New'),
-        ('MODIFICATION', 'Modification'),
-        ('TERMINATION', 'Termination'),
-        ('RELOCATION', 'Relocation'),
-    ]
-
-    wo_number = models.CharField(max_length=50, unique=True)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='work_orders')
-    wo_type = models.CharField(max_length=50, choices=WO_TYPE_CHOICES)
-    description = models.TextField(blank=True, null=True)
-    assigned_crew = models.CharField(max_length=100, blank=True, null=True)
-    assigned_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    manhours = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    material_cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
-    labor_cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
-    total_cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
-    status = models.CharField(max_length=50, default='PENDING')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+        db_table = 'vendor_contacts'
+        ordering = ['-is_primary', 'contact_name']
 
     def __str__(self):
-        return f"{self.wo_number} - {self.project.project_code}"
-
-    class Meta:
-        db_table = 'work_orders'
-
-
-# =====================================================
-# DOCUMENT MANAGEMENT
-# =====================================================
-
-class DocumentType(models.Model):
-    doc_type_name = models.CharField(max_length=100)
-    doc_type_code = models.CharField(max_length=20, unique=True)
-    description = models.TextField(blank=True, null=True)
-    is_required = models.BooleanField(default=False)
-    sla_days = models.IntegerField(blank=True, null=True, help_text="SLA deadline in days")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.doc_type_name} ({self.doc_type_code})"
-
-    class Meta:
-        db_table = 'document_types'
-
-
-class ProjectDocument(models.Model):
-    STATUS_CHOICES = [
-        ('PENDING', 'Pending'),
-        ('APPROVED', 'Approved'),
-        ('REJECTED', 'Rejected'),
-        ('REVISION_REQUIRED', 'Revision Required'),
-    ]
-
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='documents')
-    doc_type = models.ForeignKey(DocumentType, on_delete=models.CASCADE)
-    document_name = models.CharField(max_length=200)
-    file_path = models.CharField(max_length=500, blank=True, null=True)
-    file_size_kb = models.IntegerField(blank=True, null=True)
-    mime_type = models.CharField(max_length=100, blank=True, null=True)
-    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='uploaded_documents')
-    uploaded_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='PENDING')
-    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_documents')
-    approved_at = models.DateTimeField(blank=True, null=True)
-    rejection_reason = models.TextField(blank=True, null=True)
-    version_number = models.IntegerField(default=1)
-    is_current_version = models.BooleanField(default=True)
-
-    def __str__(self):
-        return f"{self.document_name} - {self.project.project_code}"
-
-    class Meta:
-        db_table = 'project_documents'
-
-
-class COCSubmission(models.Model):
-    STATUS_CHOICES = [
-        ('SUBMITTED', 'Submitted'),
-        ('APPROVED', 'Approved'),
-        ('REJECTED', 'Rejected'),
-    ]
-
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='coc_submissions')
-    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE)
-    submission_date = models.DateField()
-    due_date = models.DateField()
-    days_delayed = models.IntegerField(default=0)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='SUBMITTED')
-    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    approved_date = models.DateField(blank=True, null=True)
-    rejection_reason = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"COC - {self.project.project_code} - {self.vendor.vendor_name}"
-
-    class Meta:
-        db_table = 'coc_submissions'
-
-
-# =====================================================
-# QUALITY INSPECTION MODULE
-# =====================================================
-
-class QIInspector(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='qi_inspector')
-    inspector_code = models.CharField(max_length=20, unique=True)
-    specialization = models.TextField(blank=True, null=True)
-    daily_target = models.IntegerField(default=5, help_text="Daily audit target")
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.user.first_name} {self.user.last_name} ({self.inspector_code})"
-
-    class Meta:
-        db_table = 'qi_inspectors'
-
-
-class QIAudit(models.Model):
-    AUDIT_TYPE_CHOICES = [
-        ('REGULAR', 'Regular'),
-        ('RE_AUDIT', 'Re-audit'),
-        ('SPOT_CHECK', 'Spot Check'),
-    ]
-
-    STATUS_CHOICES = [
-        ('SCHEDULED', 'Scheduled'),
-        ('IN_PROGRESS', 'In Progress'),
-        ('COMPLETED', 'Completed'),
-        ('CANCELLED', 'Cancelled'),
-    ]
-
-    RESULT_CHOICES = [
-        ('PASSED', 'Passed'),
-        ('FAILED', 'Failed'),
-        ('CONDITIONAL', 'Conditional'),
-        ('PENDING', 'Pending'),
-    ]
-
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='qi_audits')
-    inspector = models.ForeignKey(QIInspector, on_delete=models.CASCADE, related_name='audits')
-    audit_date = models.DateField()
-    scheduled_date = models.DateField(blank=True, null=True)
-    audit_type = models.CharField(max_length=50, choices=AUDIT_TYPE_CHOICES, default='REGULAR')
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='SCHEDULED')
-    start_time = models.TimeField(blank=True, null=True)
-    end_time = models.TimeField(blank=True, null=True)
-    duration_hours = models.DecimalField(max_digits=4, decimal_places=2, blank=True, null=True)
-    audit_result = models.CharField(max_length=50, choices=RESULT_CHOICES, blank=True, null=True)
-    findings = models.TextField(blank=True, null=True)
-    recommendations = models.TextField(blank=True, null=True)
-    photos_uploaded = models.IntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"Audit - {self.project.project_code} - {self.audit_date}"
-
-    class Meta:
-        db_table = 'qi_audits'
-        indexes = [
-            models.Index(fields=['audit_date']),
-            models.Index(fields=['inspector']),
-            models.Index(fields=['project']),
-        ]
-
-
-class QIPerformanceLog(models.Model):
-    REASON_CHOICES = [
-        ('SICK_LEAVE', 'Sick Leave'),
-        ('SITE_ISSUE', 'Site Issue'),
-        ('DOCUMENT_DELAY', 'Document Delay'),
-        ('SYSTEM_ISSUE', 'System Issue'),
-    ]
-
-    inspector = models.ForeignKey(QIInspector, on_delete=models.CASCADE, related_name='performance_logs')
-    log_date = models.DateField()
-    target_audits = models.IntegerField()
-    completed_audits = models.IntegerField(default=0)
-    target_met = models.BooleanField(default=False)
-    reason_not_met = models.CharField(max_length=100, choices=REASON_CHOICES, blank=True, null=True)
-    custom_reason = models.TextField(blank=True, null=True)
-    logged_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.inspector.user.first_name} {self.inspector.user.last_name} - {self.log_date}"
-
-    class Meta:
-        db_table = 'qi_performance_log'
-
-
-# =====================================================
-# SLA MONITORING AND COMPLIANCE
-# =====================================================
-
-class SLADefinition(models.Model):
-    PROCESS_STAGE_CHOICES = [
-        ('QI', 'Quality Inspection'),
-        ('COC', 'Certificate of Completion'),
-        ('BILLING', 'Billing'),
-        ('COMPLETION', 'Completion'),
-    ]
-
-    sla_name = models.CharField(max_length=100)
-    project_type = models.CharField(max_length=50, blank=True, null=True)
-    process_stage = models.CharField(max_length=50, choices=PROCESS_STAGE_CHOICES, blank=True, null=True)
-    sla_days = models.IntegerField()
-    description = models.TextField(blank=True, null=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.sla_name} - {self.sla_days} days"
-
-    class Meta:
-        db_table = 'sla_definitions'
-
-
-class SLATracking(models.Model):
-    STATUS_CHOICES = [
-        ('ACTIVE', 'Active'),
-        ('COMPLETED', 'Completed'),
-        ('BREACHED', 'Breached'),
-    ]
-
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='sla_tracking')
-    sla = models.ForeignKey(SLADefinition, on_delete=models.CASCADE)
-    start_date = models.DateField()
-    due_date = models.DateField()
-    completion_date = models.DateField(blank=True, null=True)
-    days_used = models.IntegerField(blank=True, null=True)
-    days_overdue = models.IntegerField(default=0)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='ACTIVE')
-    breach_reason = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.project.project_code} - {self.sla.sla_name}"
-
-    class Meta:
-        db_table = 'sla_tracking'
-        indexes = [
-            models.Index(fields=['status']),
-            models.Index(fields=['due_date']),
-        ]
-
-
-# =====================================================
-# PENALTY MANAGEMENT
-# =====================================================
-
-class PenaltyRule(models.Model):
-    rule_name = models.CharField(max_length=100)
-    project_type = models.CharField(max_length=50, blank=True, null=True)
-    penalty_per_day = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    max_penalty_percentage = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
-    grace_period_days = models.IntegerField(default=0)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.rule_name
-
-    class Meta:
-        db_table = 'penalty_rules'
-
-
-class Penalty(models.Model):
-    STATUS_CHOICES = [
-        ('CALCULATED', 'Calculated'),
-        ('ISSUED', 'Issued'),
-        ('DISPUTED', 'Disputed'),
-        ('WAIVED', 'Waived'),
-        ('PAID', 'Paid'),
-    ]
-
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='penalties')
-    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='penalties')
-    rule = models.ForeignKey(PenaltyRule, on_delete=models.CASCADE)
-    delay_days = models.IntegerField()
-    penalty_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    penalty_percentage = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
-    memo_generated = models.BooleanField(default=False)
-    memo_sent_date = models.DateField(blank=True, null=True)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='CALCULATED')
-    dispute_reason = models.TextField(blank=True, null=True)
-    waiver_reason = models.TextField(blank=True, null=True)
-    waived_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"Penalty - {self.project.project_code} - {self.penalty_amount}"
-
-    class Meta:
-        db_table = 'penalties'
-        indexes = [
-            models.Index(fields=['vendor']),
-            models.Index(fields=['status']),
-        ]
-
-
-# =====================================================
-# BILLING MODULE
-# =====================================================
-
-class VendorBilling(models.Model):
-    STATUS_CHOICES = [
-        ('DRAFT', 'Draft'),
-        ('SENT', 'Sent'),
-        ('PAID', 'Paid'),
-        ('OVERDUE', 'Overdue'),
-    ]
-
-    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='billing_records')
-    billing_period_start = models.DateField()
-    billing_period_end = models.DateField()
-    total_projects = models.IntegerField(default=0)
-    total_billed_amount = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
-    total_paid_amount = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
-    outstanding_balance = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
-    penalty_deductions = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='DRAFT')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.vendor.vendor_name} - {self.billing_period_start} to {self.billing_period_end}"
-
-    class Meta:
-        db_table = 'vendor_billing'
-
-
-class ProjectBilling(models.Model):
-    billing = models.ForeignKey(VendorBilling, on_delete=models.CASCADE, related_name='billing_items')
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-    penalty_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    net_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    payment_date = models.DateField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.project.project_code} - {self.net_amount}"
-
-    class Meta:
-        db_table = 'project_billing'
-
-
-# =====================================================
-# NOTIFICATION SYSTEM
-# =====================================================
-
-class NotificationTemplate(models.Model):
-    NOTIFICATION_TYPE_CHOICES = [
-        ('EMAIL', 'Email'),
-        ('SMS', 'SMS'),
-        ('PUSH', 'Push Notification'),
-        ('IN_APP', 'In-App Notification'),
-    ]
-
-    template_name = models.CharField(max_length=100)
-    template_code = models.CharField(max_length=50, unique=True)
-    subject_template = models.TextField()
-    body_template = models.TextField()
-    notification_type = models.CharField(max_length=50, choices=NOTIFICATION_TYPE_CHOICES)
-    trigger_event = models.CharField(max_length=100)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.template_name} ({self.template_code})"
-
-    class Meta:
-        db_table = 'notification_templates'
-
-
-class Notification(models.Model):
-    STATUS_CHOICES = [
-        ('PENDING', 'Pending'),
-        ('SENT', 'Sent'),
-        ('DELIVERED', 'Delivered'),
-        ('FAILED', 'Failed'),
-    ]
-
-    template = models.ForeignKey(NotificationTemplate, on_delete=models.CASCADE, blank=True, null=True)
-    recipient_user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)
-    recipient_email = models.EmailField(blank=True, null=True)
-    recipient_phone = models.CharField(max_length=20, blank=True, null=True)
-    subject = models.TextField()
-    message_body = models.TextField()
-    notification_type = models.CharField(max_length=50, choices=NotificationTemplate.NOTIFICATION_TYPE_CHOICES)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, blank=True, null=True)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='PENDING')
-    sent_at = models.DateTimeField(blank=True, null=True)
-    delivered_at = models.DateTimeField(blank=True, null=True)
-    error_message = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.subject} - {self.recipient_email or self.recipient_user}"
-
-    class Meta:
-        db_table = 'notifications'
-        indexes = [
-            models.Index(fields=['status']),
-            models.Index(fields=['recipient_user']),
-        ]
-
-
-# =====================================================
-# ANALYTICS AND REPORTING
-# =====================================================
-
-class KPIDefinition(models.Model):
-    CATEGORY_CHOICES = [
-        ('ENERGY_SALES', 'Energy Sales'),
-        ('CSI', 'Customer Satisfaction Index'),
-        ('LTIFR', 'Lost Time Injury Frequency Rate'),
-        ('SUSTAINABILITY', 'Sustainability'),
-        ('CAPEX', 'Capital Expenditure'),
-    ]
-
-    UNIT_CHOICES = [
-        ('INDEX', 'Index'),
-        ('PERCENTAGE', 'Percentage'),
-        ('DAYS', 'Days'),
-        ('COUNT', 'Count'),
-        ('CURRENCY', 'Currency'),
-    ]
-
-    OL_LEVEL_CHOICES = [
-        ('OL1', 'OL1'),
-        ('OL2', 'OL2'),
-        ('OL3', 'OL3'),
-    ]
-
-    kpi_code = models.CharField(max_length=50, unique=True)
-    kpi_name = models.CharField(max_length=200)
-    kpi_category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
-    measurement_unit = models.CharField(max_length=50, choices=UNIT_CHOICES, blank=True, null=True)
-    target_value = models.DecimalField(max_digits=15, decimal_places=4, blank=True, null=True)
-    stretch_value = models.DecimalField(max_digits=15, decimal_places=4, blank=True, null=True)
-    weight_percentage = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
-    ol_level = models.CharField(max_length=10, choices=OL_LEVEL_CHOICES, blank=True, null=True)
-    calculation_formula = models.TextField(blank=True, null=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.kpi_code} - {self.kpi_name}"
-
-    class Meta:
-        db_table = 'kpi_definitions'
-
-
-class KPIPerformance(models.Model):
-    STATUS_CHOICES = [
-        ('BELOW_TARGET', 'Below Target'),
-        ('TARGET_MET', 'Target Met'),
-        ('STRETCH_ACHIEVED', 'Stretch Achieved'),
-    ]
-
-    kpi = models.ForeignKey(KPIDefinition, on_delete=models.CASCADE, related_name='performance_records')
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, blank=True, null=True)
-    sector = models.ForeignKey(Sector, on_delete=models.CASCADE, blank=True, null=True)
-    measurement_date = models.DateField()
-    actual_value = models.DecimalField(max_digits=15, decimal_places=4, blank=True, null=True)
-    target_value = models.DecimalField(max_digits=15, decimal_places=4, blank=True, null=True)
-    stretch_value = models.DecimalField(max_digits=15, decimal_places=4, blank=True, null=True)
-    variance = models.DecimalField(max_digits=15, decimal_places=4, blank=True, null=True, help_text="actual - target")
-    performance_percentage = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True, help_text="(actual/target) * 100")
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, blank=True, null=True)
-    notes = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.kpi.kpi_code} - {self.measurement_date}"
-
-    class Meta:
-        db_table = 'kpi_performance'
-        indexes = [
-            models.Index(fields=['measurement_date']),
-            models.Index(fields=['team']),
-        ]
+        return f"{self.contact_name} - {self.vendor.vendor_name}"
 
 
 class VendorPerformance(models.Model):
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='performance_records')
-    measurement_period_start = models.DateField()
-    measurement_period_end = models.DateField()
-    total_projects = models.IntegerField(default=0)
-    completed_on_time = models.IntegerField(default=0)
-    completed_late = models.IntegerField(default=0)
-    on_time_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'), help_text="percentage")
-    average_delay_days = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('0.00'))
-    total_penalties = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
-    quality_score = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'), help_text="0-100")
-    compliance_score = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'), help_text="0-100")
+    evaluation_date = models.DateField()
+    on_time_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    document_submission_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    quality_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    compliance_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    overall_rating = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    evaluator = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='vendor_evaluations')
+    comments = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.vendor.vendor_name} - {self.measurement_period_start} to {self.measurement_period_end}"
 
     class Meta:
         db_table = 'vendor_performance'
+        ordering = ['-evaluation_date']
+
+    def __str__(self):
+        return f"{self.vendor.vendor_name} - {self.evaluation_date}"
 
 
-# =====================================================
-# PREDICTIVE ANALYTICS
-# =====================================================
+# ============================================
+# PROJECT MANAGEMENT MODELS
+# ============================================
 
-class ProjectRiskAssessment(models.Model):
-    RISK_SCORE_CHOICES = [
-        ('LOW', 'Low'),
-        ('MEDIUM', 'Medium'),
-        ('HIGH', 'High'),
-    ]
+class Sector(models.Model):
+    sector_code = models.CharField(max_length=50, unique=True)
+    sector_name = models.CharField(max_length=255)
+    sector_manager = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='managed_sectors')
+    location = models.CharField(max_length=255, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='risk_assessments')
-    risk_score = models.CharField(max_length=20, choices=RISK_SCORE_CHOICES, default='LOW')
-    predicted_delay_days = models.IntegerField(default=0)
-    confidence_level = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True, help_text="0-100")
-    risk_factors = models.JSONField(blank=True, null=True, help_text="Store array of contributing factors")
-    assessment_date = models.DateField(default=timezone.now)
-    model_version = models.CharField(max_length=20, blank=True, null=True)
+    class Meta:
+        db_table = 'sectors'
+        ordering = ['sector_name']
+
+    def __str__(self):
+        return f"{self.sector_code} - {self.sector_name}"
+
+
+class ProjectStatus(models.Model):
+    status_name = models.CharField(max_length=50, unique=True)
+    status_description = models.TextField(blank=True, null=True)
+    status_order = models.IntegerField(null=True, blank=True)
+    status_color = models.CharField(max_length=7, blank=True, null=True)  # Hex color
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f"{self.project.project_code} - {self.risk_score}"
-
     class Meta:
-        db_table = 'project_risk_assessment'
-
-
-# =====================================================
-# AUDIT TRAIL AND HISTORY
-# =====================================================
-
-class ChangeHistory(models.Model):
-    table_name = models.CharField(max_length=100)
-    record_id = models.IntegerField()
-    field_name = models.CharField(max_length=100)
-    old_value = models.TextField(blank=True, null=True)
-    new_value = models.TextField(blank=True, null=True)
-    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-    change_reason = models.CharField(max_length=200, blank=True, null=True)
-    changed_at = models.DateTimeField(auto_now_add=True)
+        db_table = 'project_status'
+        ordering = ['status_order']
+        verbose_name_plural = 'Project Statuses'
 
     def __str__(self):
-        return f"{self.table_name}[{self.record_id}].{self.field_name}"
+        return self.status_name
+
+
+class Project(models.Model):
+    PRIORITY_CHOICES = [
+        ('Low', 'Low'),
+        ('Medium', 'Medium'),
+        ('High', 'High'),
+        ('Critical', 'Critical'),
+    ]
+    
+    RISK_CHOICES = [
+        ('Low', 'Low'),
+        ('Medium', 'Medium'),
+        ('High', 'High'),
+    ]
+
+    project_code = models.CharField(max_length=100, unique=True)
+    project_name = models.CharField(max_length=255)
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects')
+    sector = models.ForeignKey(Sector, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects')
+    status = models.ForeignKey(ProjectStatus, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects')
+    assigned_engineer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='engineer_projects')
+    assigned_qi = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='qi_projects')
+    wo_supervisor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='supervisor_projects')
+    project_type = models.CharField(max_length=100, blank=True, null=True)
+    project_description = models.TextField(blank=True, null=True)
+    contract_value = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    project_location = models.CharField(max_length=255, blank=True, null=True)
+    start_date = models.DateField(null=True, blank=True)
+    completion_date = models.DateField(null=True, blank=True)
+    expected_billing_date = models.DateField(null=True, blank=True)
+    actual_billing_date = models.DateField(null=True, blank=True)
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='Medium')
+    risk_score = models.CharField(max_length=20, choices=RISK_CHOICES, default='Low')
+    is_delayed = models.BooleanField(default=False)
+    delay_days = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'change_history'
+        db_table = 'projects'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.project_code} - {self.project_name}"
+
+
+class ProjectMilestone(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='milestones')
+    milestone_name = models.CharField(max_length=255)
+    milestone_description = models.TextField(blank=True, null=True)
+    target_date = models.DateField(null=True, blank=True)
+    completion_date = models.DateField(null=True, blank=True)
+    is_completed = models.BooleanField(default=False)
+    milestone_order = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'project_milestones'
+        ordering = ['milestone_order']
+
+    def __str__(self):
+        return f"{self.project.project_code} - {self.milestone_name}"
+
+
+class ProjectTeam(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='team_members')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='project_memberships')
+    role_in_project = models.CharField(max_length=100, blank=True, null=True)
+    assigned_date = models.DateField(default=timezone.now)
+    removed_date = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'project_team'
+        ordering = ['project', '-is_active']
+
+    def __str__(self):
+        return f"{self.project.project_code} - {self.user.get_full_name()}"
+
+
+# ============================================
+# WORKFLOW MANAGEMENT MODELS
+# ============================================
+
+class WorkflowStage(models.Model):
+    stage_name = models.CharField(max_length=100, unique=True)
+    stage_description = models.TextField(blank=True, null=True)
+    stage_order = models.IntegerField(null=True, blank=True)
+    default_duration_days = models.IntegerField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'workflow_stages'
+        ordering = ['stage_order']
+
+    def __str__(self):
+        return self.stage_name
+
+
+class ProjectWorkflow(models.Model):
+    STATUS_CHOICES = [
+        ('Pending', 'Pending'),
+        ('In Progress', 'In Progress'),
+        ('Completed', 'Completed'),
+        ('Blocked', 'Blocked'),
+    ]
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='workflow_stages')
+    stage = models.ForeignKey(WorkflowStage, on_delete=models.CASCADE, related_name='project_workflows')
+    assigned_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='workflow_assignments')
+    start_date = models.DateTimeField(null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    completion_date = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Pending')
+    notes = models.TextField(blank=True, null=True)
+    is_current_stage = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'project_workflow'
+        ordering = ['project', 'stage__stage_order']
+
+    def __str__(self):
+        return f"{self.project.project_code} - {self.stage.stage_name}"
+
+
+# ============================================
+# DOCUMENT MANAGEMENT MODELS
+# ============================================
+
+class DocumentType(models.Model):
+    doc_type_name = models.CharField(max_length=100, unique=True)
+    doc_type_description = models.TextField(blank=True, null=True)
+    is_required = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'document_types'
+        ordering = ['doc_type_name']
+
+    def __str__(self):
+        return self.doc_type_name
+
+
+class ProjectDocument(models.Model):
+    APPROVAL_STATUS_CHOICES = [
+        ('Pending', 'Pending'),
+        ('Approved', 'Approved'),
+        ('Rejected', 'Rejected'),
+    ]
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='documents')
+    doc_type = models.ForeignKey(DocumentType, on_delete=models.CASCADE, related_name='documents')
+    document_name = models.CharField(max_length=255)
+    document_path = models.CharField(max_length=500)
+    file_size = models.IntegerField(null=True, blank=True)  # in bytes
+    file_type = models.CharField(max_length=50, blank=True, null=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='uploaded_documents')
+    upload_date = models.DateTimeField(auto_now_add=True)
+    version_number = models.IntegerField(default=1)
+    is_current_version = models.BooleanField(default=True)
+    approval_status = models.CharField(max_length=50, choices=APPROVAL_STATUS_CHOICES, default='Pending')
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_documents')
+    approval_date = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'project_documents'
+        ordering = ['-upload_date']
+
+    def __str__(self):
+        return f"{self.project.project_code} - {self.document_name}"
+
+
+class DocumentCompliance(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='document_compliance')
+    doc_type = models.ForeignKey(DocumentType, on_delete=models.CASCADE, related_name='compliance_records')
+    is_submitted = models.BooleanField(default=False)
+    submission_date = models.DateTimeField(null=True, blank=True)
+    is_approved = models.BooleanField(default=False)
+    approval_date = models.DateTimeField(null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    is_overdue = models.BooleanField(default=False)
+    overdue_days = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'document_compliance'
+        ordering = ['project', 'doc_type']
+
+    def __str__(self):
+        return f"{self.project.project_code} - {self.doc_type.doc_type_name}"
+
+
+# ============================================
+# SLA MANAGEMENT MODELS
+# ============================================
+
+class SLARule(models.Model):
+    rule_name = models.CharField(max_length=100, unique=True)
+    rule_description = models.TextField(blank=True, null=True)
+    stage = models.ForeignKey(WorkflowStage, on_delete=models.CASCADE, related_name='sla_rules')
+    deadline_days = models.IntegerField()
+    warning_threshold_days = models.IntegerField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'sla_rules'
+        ordering = ['rule_name']
+
+    def __str__(self):
+        return self.rule_name
+
+
+class SLATracking(models.Model):
+    STATUS_CHOICES = [
+        ('Open', 'Open'),
+        ('Met', 'Met'),
+        ('Breached', 'Breached'),
+        ('Waived', 'Waived'),
+    ]
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='sla_tracking')
+    sla_rule = models.ForeignKey(SLARule, on_delete=models.CASCADE, related_name='tracking_records')
+    start_date = models.DateField()
+    due_date = models.DateField()
+    completion_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Open')
+    days_taken = models.IntegerField(null=True, blank=True)
+    is_breached = models.BooleanField(default=False)
+    breach_days = models.IntegerField(default=0)
+    waiver_reason = models.TextField(blank=True, null=True)
+    waived_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='sla_waivers')
+    waiver_date = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'sla_tracking'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.project.project_code} - {self.sla_rule.rule_name}"
+
+
+# ============================================
+# QUALITY INSPECTION MODELS
+# ============================================
+
+class InspectionType(models.Model):
+    inspection_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    inspection_name = models.CharField(max_length=100, unique=True)
+    inspection_description = models.TextField(blank=True, null=True)
+    estimated_duration_hours = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'inspection_types'
+        ordering = ['inspection_name']
+
+    def __str__(self):
+        return self.inspection_name
+
+
+class QIInspection(models.Model):
+    RESULT_CHOICES = [
+        ('Pass', 'Pass'),
+        ('Fail', 'Fail'),
+        ('Conditional', 'Conditional'),
+    ]
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='inspections')
+    inspection_type = models.ForeignKey(InspectionType, on_delete=models.CASCADE, related_name='inspections')
+    assigned_qi = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_inspections')
+    inspection_date = models.DateField(null=True, blank=True)
+    scheduled_date = models.DateField(null=True, blank=True)
+    inspection_result = models.CharField(max_length=50, choices=RESULT_CHOICES, blank=True, null=True)
+    findings = models.TextField(blank=True, null=True)
+    recommendations = models.TextField(blank=True, null=True)
+    photos_uploaded = models.BooleanField(default=False)
+    location_coordinates = models.CharField(max_length=100, blank=True, null=True)
+    is_completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'qi_inspections'
+        ordering = ['-scheduled_date']
+
+    def __str__(self):
+        return f"{self.project.project_code} - {self.inspection_type.inspection_name}"
+
+
+class QIDailyTarget(models.Model):
+    qi_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='daily_targets')
+    target_date = models.DateField()
+    target_audits = models.IntegerField()
+    actual_audits = models.IntegerField(default=0)
+    target_met = models.BooleanField(default=False)
+    reason_not_met = models.TextField(blank=True, null=True)
+    reason_category = models.CharField(max_length=100, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'qi_daily_targets'
+        unique_together = ['qi_user', 'target_date']
+        ordering = ['-target_date']
+
+    def __str__(self):
+        return f"{self.qi_user.get_full_name()} - {self.target_date}"
+
+
+class QIPerformance(models.Model):
+    qi_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='performance_records')
+    evaluation_period_start = models.DateField()
+    evaluation_period_end = models.DateField()
+    total_inspections = models.IntegerField(default=0)
+    on_time_inspections = models.IntegerField(default=0)
+    on_time_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    average_inspection_time = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    targets_met = models.IntegerField(default=0)
+    targets_missed = models.IntegerField(default=0)
+    quality_rating = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'qi_performance'
+        ordering = ['-evaluation_period_end']
+
+    def __str__(self):
+        return f"{self.qi_user.get_full_name()} - {self.evaluation_period_start} to {self.evaluation_period_end}"
+
+
+# ============================================
+# PENALTY MANAGEMENT MODELS
+# ============================================
+
+class PenaltyRule(models.Model):
+    rule_name = models.CharField(max_length=100, unique=True)
+    rule_description = models.TextField(blank=True, null=True)
+    violation_type = models.CharField(max_length=100)
+    penalty_formula = models.TextField()
+    minimum_penalty = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    maximum_penalty = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    grace_period_days = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'penalty_rules'
+        ordering = ['rule_name']
+
+    def __str__(self):
+        return self.rule_name
+
+
+class Penalty(models.Model):
+    STATUS_CHOICES = [
+        ('Draft', 'Draft'),
+        ('Issued', 'Issued'),
+        ('Paid', 'Paid'),
+        ('Waived', 'Waived'),
+        ('Disputed', 'Disputed'),
+    ]
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='penalties')
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='penalties')
+    penalty_rule = models.ForeignKey(PenaltyRule, on_delete=models.CASCADE, related_name='penalties')
+    violation_date = models.DateField()
+    delay_days = models.IntegerField(null=True, blank=True)
+    penalty_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    penalty_status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Draft')
+    issue_date = models.DateField(null=True, blank=True)
+    payment_date = models.DateField(null=True, blank=True)
+    waiver_reason = models.TextField(blank=True, null=True)
+    waived_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='penalty_waivers')
+    waiver_date = models.DateTimeField(null=True, blank=True)
+    dispute_reason = models.TextField(blank=True, null=True)
+    dispute_date = models.DateTimeField(null=True, blank=True)
+    dispute_resolution = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_penalties')
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_penalties')
+    approval_date = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'penalties'
+        ordering = ['-created_at']
+        verbose_name_plural = 'Penalties'
+
+    def __str__(self):
+        return f"{self.project.project_code} - {self.penalty_rule.rule_name}"
+
+
+# ============================================
+# BILLING MANAGEMENT MODELS
+# ============================================
+
+class Invoice(models.Model):
+    STATUS_CHOICES = [
+        ('Unpaid', 'Unpaid'),
+        ('Partially Paid', 'Partially Paid'),
+        ('Paid', 'Paid'),
+        ('Overdue', 'Overdue'),
+    ]
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='invoices')
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='invoices')
+    invoice_number = models.CharField(max_length=100, unique=True)
+    invoice_date = models.DateField()
+    due_date = models.DateField(null=True, blank=True)
+    invoice_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    penalty_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+    net_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    payment_status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Unpaid')
+    payment_date = models.DateField(null=True, blank=True)
+    payment_reference = models.CharField(max_length=100, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_invoices')
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_invoices')
+    approval_date = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'invoices'
+        ordering = ['-invoice_date']
+
+    def __str__(self):
+        return f"{self.invoice_number} - {self.vendor.vendor_name}"
+
+
+class Payment(models.Model):
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='payments')
+    payment_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    payment_date = models.DateField()
+    payment_method = models.CharField(max_length=50, blank=True, null=True)
+    payment_reference = models.CharField(max_length=100, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_payments')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'payments'
+        ordering = ['-payment_date']
+
+    def __str__(self):
+        return f"{self.invoice.invoice_number} - {self.payment_amount}"
+
+
+# ============================================
+# NOTIFICATION MANAGEMENT MODELS
+# ============================================
+
+class NotificationTemplate(models.Model):
+    TYPE_CHOICES = [
+        ('Email', 'Email'),
+        ('SMS', 'SMS'),
+        ('Push', 'Push'),
+    ]
+
+    template_name = models.CharField(max_length=100, unique=True)
+    template_subject = models.CharField(max_length=255, blank=True, null=True)
+    template_body = models.TextField()
+    notification_type = models.CharField(max_length=50, choices=TYPE_CHOICES)
+    variables = models.JSONField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'notification_templates'
+        ordering = ['template_name']
+
+    def __str__(self):
+        return self.template_name
+
+
+class Notification(models.Model):
+    TYPE_CHOICES = [
+        ('Email', 'Email'),
+        ('SMS', 'SMS'),
+        ('Push', 'Push'),
+        ('In-App', 'In-App'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('Pending', 'Pending'),
+        ('Sent', 'Sent'),
+        ('Delivered', 'Delivered'),
+        ('Failed', 'Failed'),
+        ('Read', 'Read'),
+    ]
+
+    recipient_user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
+    recipient_email = models.EmailField(blank=True, null=True)
+    recipient_phone = models.CharField(max_length=20, blank=True, null=True)
+    notification_type = models.CharField(max_length=50, choices=TYPE_CHOICES)
+    subject = models.CharField(max_length=255, blank=True, null=True)
+    message = models.TextField()
+    related_project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications')
+    related_entity_type = models.CharField(max_length=50, blank=True, null=True)
+    related_entity_id = models.IntegerField(null=True, blank=True)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Pending')
+    sent_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True, null=True)
+    retry_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'notifications'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.notification_type} - {self.subject}"
+
+
+# ============================================
+# ESCALATION MANAGEMENT MODELS
+# ============================================
+
+class EscalationRule(models.Model):
+    rule_name = models.CharField(max_length=100, unique=True)
+    rule_description = models.TextField(blank=True, null=True)
+    trigger_condition = models.CharField(max_length=255)
+    delay_threshold_days = models.IntegerField()
+    escalate_to_role = models.ForeignKey(UserRole, on_delete=models.CASCADE, related_name='escalation_rules')
+    notification_template = models.ForeignKey(NotificationTemplate, on_delete=models.SET_NULL, null=True, blank=True, related_name='escalation_rules')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'escalation_rules'
+        ordering = ['rule_name']
+
+    def __str__(self):
+        return self.rule_name
 
 
 class Escalation(models.Model):
     STATUS_CHOICES = [
-        ('OPEN', 'Open'),
-        ('RESPONDED', 'Responded'),
-        ('RESOLVED', 'Resolved'),
-        ('CLOSED', 'Closed'),
+        ('Open', 'Open'),
+        ('In Progress', 'In Progress'),
+        ('Resolved', 'Resolved'),
+        ('Closed', 'Closed'),
     ]
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='escalations')
-    escalation_level = models.IntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(3)])
-    escalated_to = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_escalations')
-    escalated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_escalations')
+    escalation_rule = models.ForeignKey(EscalationRule, on_delete=models.CASCADE, related_name='escalations')
+    escalated_from_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='escalations_from')
+    escalated_to_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='escalations_to')
     escalation_reason = models.TextField()
-    response_required_by = models.DateField(blank=True, null=True)
-    response_received_at = models.DateTimeField(blank=True, null=True)
-    response_details = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='OPEN')
+    escalation_date = models.DateTimeField(auto_now_add=True)
+    response_date = models.DateTimeField(null=True, blank=True)
+    response_delay_hours = models.IntegerField(null=True, blank=True)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Open')
+    resolution = models.TextField(blank=True, null=True)
+    resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_escalations')
+    resolution_date = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"Escalation L{self.escalation_level} - {self.project.project_code}"
 
     class Meta:
         db_table = 'escalations'
+        ordering = ['-escalation_date']
+
+    def __str__(self):
+        return f"{self.project.project_code} - {self.escalation_rule.rule_name}"
 
 
-# =====================================================
-# CONFIGURATION AND LOOKUP TABLES
-# =====================================================
+# ============================================
+# ANALYTICS MODELS
+# ============================================
 
-class SPTConfiguration(models.Model):
-    applied_load_min = models.IntegerField(blank=True, null=True)
-    applied_load_max = models.IntegerField(blank=True, null=True)
-    manhour_min = models.IntegerField(blank=True, null=True)
-    manhour_max = models.IntegerField(blank=True, null=True)
-    spt_days = models.IntegerField()
+class DelayFactor(models.Model):
+    factor_name = models.CharField(max_length=100, unique=True)
+    factor_category = models.CharField(max_length=50, blank=True, null=True)
+    factor_description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        db_table = 'delay_factors'
+        ordering = ['factor_category', 'factor_name']
+
     def __str__(self):
-        if self.applied_load_min is not None:
-            return f"Applied Load {self.applied_load_min}-{self.applied_load_max}: {self.spt_days} days"
-        elif self.manhour_min is not None:
-            return f"Manhours {self.manhour_min}-{self.manhour_max}: {self.spt_days} days"
-        return f"SPT: {self.spt_days} days"
+        return self.factor_name
+
+
+class ProjectDelay(models.Model):
+    RESPONSIBLE_CHOICES = [
+        ('Vendor', 'Vendor'),
+        ('Internal', 'Internal'),
+        ('External', 'External'),
+    ]
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='delays')
+    factor = models.ForeignKey(DelayFactor, on_delete=models.CASCADE, related_name='project_delays')
+    delay_days = models.IntegerField()
+    delay_start_date = models.DateField()
+    delay_end_date = models.DateField(null=True, blank=True)
+    responsible_party = models.CharField(max_length=100, choices=RESPONSIBLE_CHOICES, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    reported_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reported_delays')
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'spt_configuration'
+        db_table = 'project_delays'
+        ordering = ['-delay_start_date']
+
+    def __str__(self):
+        return f"{self.project.project_code} - {self.factor.factor_name}"
 
 
-class SystemConfig(models.Model):
-    config_key = models.CharField(max_length=100, unique=True)
-    config_value = models.TextField()
-    description = models.TextField(blank=True, null=True)
-    is_system = models.BooleanField(default=False)
-    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+# ============================================
+# VENDOR PORTAL MODELS
+# ============================================
+
+class VendorDispute(models.Model):
+    STATUS_CHOICES = [
+        ('Open', 'Open'),
+        ('Under Review', 'Under Review'),
+        ('Resolved', 'Resolved'),
+        ('Rejected', 'Rejected'),
+    ]
+
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='disputes')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name='disputes')
+    dispute_type = models.CharField(max_length=100, blank=True, null=True)
+    dispute_subject = models.CharField(max_length=255)
+    dispute_description = models.TextField()
+    related_penalty = models.ForeignKey(Penalty, on_delete=models.SET_NULL, null=True, blank=True, related_name='disputes')
+    dispute_status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Open')
+    submitted_date = models.DateTimeField(auto_now_add=True)
+    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_disputes')
+    resolution = models.TextField(blank=True, null=True)
+    resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_disputes')
+    resolution_date = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'vendor_disputes'
+        ordering = ['-submitted_date']
+
+    def __str__(self):
+        return f"{self.vendor.vendor_name} - {self.dispute_subject}"
+
+
+class VendorFeedback(models.Model):
+    TYPE_CHOICES = [
+        ('Suggestion', 'Suggestion'),
+        ('Complaint', 'Complaint'),
+        ('Compliment', 'Compliment'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('Pending', 'Pending'),
+        ('Reviewed', 'Reviewed'),
+        ('Actioned', 'Actioned'),
+    ]
+
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='feedback')
+    feedback_type = models.CharField(max_length=50, choices=TYPE_CHOICES)
+    feedback_subject = models.CharField(max_length=255)
+    feedback_text = models.TextField()
+    rating = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)], null=True, blank=True)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Pending')
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_feedback')
+    review_date = models.DateTimeField(null=True, blank=True)
+    response = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'vendor_feedback'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.vendor.vendor_name} - {self.feedback_type}"
+
+
+# ============================================
+# AUDIT & CHANGE LOG MODELS
+# ============================================
+
+class ChangeLog(models.Model):
+    CHANGE_CHOICES = [
+        ('INSERT', 'INSERT'),
+        ('UPDATE', 'UPDATE'),
+        ('DELETE', 'DELETE'),
+    ]
+
+    table_name = models.CharField(max_length=100)
+    record_id = models.IntegerField()
+    change_type = models.CharField(max_length=20, choices=CHANGE_CHOICES)
+    field_name = models.CharField(max_length=100, blank=True, null=True)
+    old_value = models.TextField(blank=True, null=True)
+    new_value = models.TextField(blank=True, null=True)
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='changes')
+    change_reason = models.TextField(blank=True, null=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'change_logs'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.table_name} - {self.change_type} - {self.created_at}"
+
+
+class SystemAuditLog(models.Model):
+    STATUS_CHOICES = [
+        ('Success', 'Success'),
+        ('Failed', 'Failed'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    action_type = models.CharField(max_length=100)
+    action_description = models.TextField(blank=True, null=True)
+    entity_type = models.CharField(max_length=50, blank=True, null=True)
+    entity_id = models.IntegerField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    error_message = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'system_audit_logs'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.action_type} by {self.user} - {self.created_at}"
+
+
+# ============================================
+# SYSTEM CONFIGURATION MODELS
+# ============================================
+
+class SystemSetting(models.Model):
+    TYPE_CHOICES = [
+        ('String', 'String'),
+        ('Integer', 'Integer'),
+        ('Boolean', 'Boolean'),
+        ('JSON', 'JSON'),
+    ]
+    setting_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    setting_key = models.CharField(max_length=100, unique=True)
+    setting_value = models.TextField(blank=True, null=True)
+    setting_type = models.CharField(max_length=50, choices=TYPE_CHOICES)
+    setting_description = models.TextField(blank=True, null=True)
+    is_editable = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
-        return f"{self.config_key}: {self.config_value}"
-
     class Meta:
-        db_table = 'system_config'
+        db_table = 'system_settings'
+        ordering = ['setting_key']
 
-
-# =====================================================
-# CUSTOM MANAGERS AND QUERYSETS
-# =====================================================
-
-class ProjectQuerySet(models.QuerySet):
-    def active(self):
-        return self.exclude(status__in=['CLOSED'])
-    
-    def delayed(self):
-        return self.filter(is_aging=True)
-    
-    def by_vendor(self, vendor):
-        return self.filter(assigned_vendor=vendor)
-    
-    def by_status(self, status):
-        return self.filter(status=status)
-    
-    def completed_projects(self):
-        return self.filter(status__in=['FCOMP', 'CLOSED'])
-
-
-class ProjectManager(models.Manager):
-    def get_queryset(self):
-        return ProjectQuerySet(self.model, using=self._db)
-    
-    def active(self):
-        return self.get_queryset().active()
-    
-    def delayed(self):
-        return self.get_queryset().delayed()
-    
-    def by_vendor(self, vendor):
-        return self.get_queryset().by_vendor(vendor)
-
-
-# Add custom manager to Project model
-Project.add_to_class('objects', ProjectManager())
-
-
-class VendorQuerySet(models.QuerySet):
-    def active(self):
-        return self.filter(is_active=True)
-    
-    def with_performance(self):
-        return self.prefetch_related('performance_records')
-
-
-class VendorManager(models.Manager):
-    def get_queryset(self):
-        return VendorQuerySet(self.model, using=self._db)
-    
-    def active(self):
-        return self.get_queryset().active()
-
-
-# Add custom manager to Vendor model
-Vendor.add_to_class('objects', VendorManager())
-
-
-# =====================================================
-# SIGNALS AND CUSTOM METHODS
-# =====================================================
-
-from django.db.models.signals import post_save, pre_save
-from django.dispatch import receiver
-
-
-@receiver(post_save, sender=Project)
-def update_project_spt(sender, instance, created, **kwargs):
-    """Automatically calculate and set SPT when project is created or updated"""
-    if created or not instance.spt_days:
-        spt_config = None
-        
-        # Try to find SPT based on applied load first
-        if instance.applied_load:
-            spt_config = SPTConfiguration.objects.filter(
-                applied_load_min__lte=instance.applied_load,
-                applied_load_max__gte=instance.applied_load,
-                is_active=True
-            ).first()
-        
-        # If no SPT found by applied load, try manhours
-        if not spt_config and instance.manhours:
-            spt_config = SPTConfiguration.objects.filter(
-                manhour_min__lte=instance.manhours,
-                manhour_max__gte=instance.manhours,
-                is_active=True
-            ).first()
-        
-        if spt_config:
-            instance.spt_days = spt_config.spt_days
-            instance.save(update_fields=['spt_days'])
-
-
-@receiver(post_save, sender=COCSubmission)
-def calculate_coc_delay(sender, instance, created, **kwargs):
-    """Calculate delay days for COC submission"""
-    if created:
-        if instance.submission_date > instance.due_date:
-            instance.days_delayed = (instance.submission_date - instance.due_date).days
-            instance.save(update_fields=['days_delayed'])
-
-
-@receiver(post_save, sender=QIAudit)
-def update_qi_performance(sender, instance, **kwargs):
-    """Update QI inspector performance when audit is completed"""
-    if instance.status == 'COMPLETED':
-        performance_log, created = QIPerformanceLog.objects.get_or_create(
-            inspector=instance.inspector,
-            log_date=instance.audit_date,
-            defaults={
-                'target_audits': instance.inspector.daily_target,
-                'completed_audits': 0,
-                'logged_by': None
-            }
-        )
-        
-        # Count completed audits for the day
-        completed_count = QIAudit.objects.filter(
-            inspector=instance.inspector,
-            audit_date=instance.audit_date,
-            status='COMPLETED'
-        ).count()
-        
-        performance_log.completed_audits = completed_count
-        performance_log.target_met = completed_count >= performance_log.target_audits
-        performance_log.save()
-
-
-# =====================================================
-# UTILITY FUNCTIONS
-# =====================================================
-
-def get_project_dashboard_data():
-    """Get dashboard data for projects"""
-    from django.db.models import Count, Sum, Q, Avg
-    
-    return {
-        'total_projects': Project.objects.count(),
-        'active_projects': Project.objects.active().count(),
-        'delayed_projects': Project.objects.delayed().count(),
-        'projects_by_status': Project.objects.values('status').annotate(count=Count('id')),
-        'projects_by_vendor': Project.objects.values('assigned_vendor__vendor_name').annotate(count=Count('id')),
-        'average_completion_days': Project.objects.filter(
-            fcomp_date__isnull=False,
-            wmtrl_date__isnull=False
-        ).aggregate(
-            avg_days=Avg('fcomp_date') - Avg('wmtrl_date')
-        )
-    }
-
-
-def get_vendor_performance_summary():
-    """Get vendor performance summary"""
-    from django.db.models import Count, Sum, Q, Avg, Case, When, IntegerField
-    
-    return Vendor.objects.active().annotate(
-        total_projects=Count('projects'),
-        completed_projects=Count('projects', filter=Q(projects__status='FCOMP')),
-        on_time_projects=Count(
-            'projects',
-            filter=Q(
-                projects__status='FCOMP',
-                projects__fcomp_date__lte=models.F('projects__wmtrl_date') + 
-                timezone.timedelta(days=1) * models.F('projects__spt_days')
-            )
-        ),
-        total_penalties=Sum('penalties__penalty_amount', filter=Q(penalties__status='ISSUED'))
-    ).filter(total_projects__gt=0)
-
-
-def calculate_ccti_index(project_ids=None):
-    """Calculate Customer Connection Timeliness Index (CCTI)"""
-    from django.db.models import Sum, F, Case, When, DecimalField
-    
-    projects = Project.objects.filter(status='FCOMP')
-    if project_ids:
-        projects = projects.filter(id__in=project_ids)
-    
-    # CCTI = Sum(Project Duration * 0.3 + Revised Duration * 0.7) / Sum(SPT)
-    ccti_data = projects.aggregate(
-        numerator=Sum(
-            Case(
-                When(
-                    fcomp_date__isnull=False,
-                    wmtrl_date__isnull=False,
-                    then=F('fcomp_date') - F('wmtrl_date')
-                ),
-                default=0,
-                output_field=DecimalField(max_digits=10, decimal_places=2)
-            )
-        ),
-        denominator=Sum('spt_days')
-    )
-    
-    if ccti_data['denominator'] and ccti_data['denominator'] > 0:
-        return ccti_data['numerator'] / ccti_data['denominator']
-    return 0
+    def __str__(self):
+        return self.setting_key
