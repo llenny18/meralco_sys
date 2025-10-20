@@ -60,9 +60,9 @@ const UserBoxDescription = styled(Typography)(
 
 function HeaderUserbox() {
   const user = {
-    name: 'Catherine Pike',
+    name: 'ADMIN Name',
     avatar: 'https://cdn-icons-png.flaticon.com/512/9187/9187532.png',
-    jobtitle: 'Project Manager'
+    jobtitle: 'Administrator 1'
   };
 
   const ref = useRef<any>(null);

@@ -105,16 +105,19 @@ function Sidebar({ menuComponent, userRole }: SidebarProps) {
         }}
       >
         <Scrollbar>
-          <Box mt={3}>
-            <Box
-              mx={2}
-              sx={{
-                width: 52
-              }}
-            >
-              <Logo />
-            </Box>
+          <Box
+            mx={2}
+            sx={{
+              marginTop: '50px',
+              width: 'auto',
+              display: 'flex',
+              justifyContent: 'center', // centers horizontally
+              alignItems: 'center',     // centers vertically
+            }}
+          >
+            <Logo />
           </Box>
+
           <Divider
             sx={{
               mt: theme.spacing(3),
@@ -150,16 +153,19 @@ function Sidebar({ menuComponent, userRole }: SidebarProps) {
           }}
         >
           <Scrollbar>
-            <Box mt={3}>
-              <Box
-                mx={2}
-                sx={{
-                  width: 52
-                }}
-              >
-                <Logo />
-              </Box>
-            </Box>
+            <Box
+            mx={2}
+            sx={{
+              marginTop: '50px',
+              width: 'auto',
+              display: 'flex',
+              justifyContent: 'center', // centers horizontally
+              alignItems: 'center',     // centers vertically
+            }}
+          >
+            <Logo />
+          </Box>
+
             <Divider
               sx={{
                 mt: theme.spacing(3),
