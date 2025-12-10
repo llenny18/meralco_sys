@@ -12,6 +12,12 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 
+# ML Models Path
+import os
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ML_MODELS_PATH = os.path.join(BASE_DIR, 'ml_models', 'ml_models.pkl')
+CHATBOT_CONFIG_PATH = os.path.join(BASE_DIR, 'ml_models', 'knowledge_base.json')
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -31,6 +37,18 @@ ALLOWED_HOSTS = []
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
 
 # Application definition
 
@@ -41,9 +59,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework',
-    'django_filters',  # Make sure this is here
     'corsheaders',
+    'rest_framework',
+    'django_filters',
+    'rest_framework.authtoken',
     'meralcoapp'
 ]
 
@@ -125,6 +144,20 @@ DATABASES = {
 }
 # In your settings.py file, add this line:
 AUTH_USER_MODEL = 'meralcoapp.User'
+
+
+# Password Validators
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {
+            'min_length': 6,
+        }
+    },
+]
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators

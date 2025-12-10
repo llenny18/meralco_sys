@@ -5,6 +5,14 @@ from django.utils import timezone
 import uuid
 
 
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.hashers import make_password
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
+import uuid
+
+
 # ============================================
 # USER MANAGEMENT MODELS
 # ============================================
@@ -28,7 +36,6 @@ class User(AbstractUser):
     user_id = models.AutoField(primary_key=True)
     role = models.ForeignKey(UserRole, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
     phone_number = models.CharField(max_length=20, blank=True, null=True)
-    password = models.CharField(max_length=20, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     last_login = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -51,12 +58,6 @@ class User(AbstractUser):
     @is_superuser.setter
     def is_superuser(self, value):
         self.is_super_user = value
-    
-    def save(self, *args, **kwargs):
-        # ✅ Automatically hash plain text passwords before saving
-        if self.password and not self.password.startswith('pbkdf2_'):
-            self.password = make_password(self.password)
-        super().save(*args, **kwargs)
 
 
 class Permission(models.Model):
@@ -109,6 +110,7 @@ class UserSession(models.Model):
 # ============================================
 
 class Vendor(models.Model):
+    vendor_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     vendor_code = models.CharField(max_length=50, unique=True)
     vendor_name = models.CharField(max_length=255)
     company_name = models.CharField(max_length=255, blank=True, null=True)
@@ -129,6 +131,7 @@ class Vendor(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'vendors'
         ordering = ['vendor_name']
 
@@ -137,6 +140,7 @@ class Vendor(models.Model):
 
 
 class VendorContact(models.Model):
+    contact_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='contacts')
     contact_name = models.CharField(max_length=100)
     contact_position = models.CharField(max_length=100, blank=True, null=True)
@@ -147,6 +151,7 @@ class VendorContact(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'vendor_contacts'
         ordering = ['-is_primary', 'contact_name']
 
@@ -167,6 +172,7 @@ class VendorPerformance(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'vendor_performance'
         ordering = ['-evaluation_date']
 
@@ -188,6 +194,7 @@ class Sector(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'sectors'
         ordering = ['sector_name']
 
@@ -196,6 +203,7 @@ class Sector(models.Model):
 
 
 class ProjectStatus(models.Model):
+    status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     status_name = models.CharField(max_length=50, unique=True)
     status_description = models.TextField(blank=True, null=True)
     status_order = models.IntegerField(null=True, blank=True)
@@ -204,6 +212,7 @@ class ProjectStatus(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'project_status'
         ordering = ['status_order']
         verbose_name_plural = 'Project Statuses'
@@ -226,6 +235,7 @@ class Project(models.Model):
         ('High', 'High'),
     ]
 
+    project_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     project_code = models.CharField(max_length=100, unique=True)
     project_name = models.CharField(max_length=255)
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects')
@@ -250,6 +260,7 @@ class Project(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'projects'
         ordering = ['-created_at']
 
@@ -269,6 +280,7 @@ class ProjectMilestone(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'project_milestones'
         ordering = ['milestone_order']
 
@@ -286,6 +298,7 @@ class ProjectTeam(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'project_team'
         ordering = ['project', '-is_active']
 
@@ -306,6 +319,7 @@ class WorkflowStage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'workflow_stages'
         ordering = ['stage_order']
 
@@ -334,6 +348,7 @@ class ProjectWorkflow(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'project_workflow'
         ordering = ['project', 'stage__stage_order']
 
@@ -346,12 +361,14 @@ class ProjectWorkflow(models.Model):
 # ============================================
 
 class DocumentType(models.Model):
+    doc_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     doc_type_name = models.CharField(max_length=100, unique=True)
     doc_type_description = models.TextField(blank=True, null=True)
     is_required = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'document_types'
         ordering = ['doc_type_name']
 
@@ -384,6 +401,7 @@ class ProjectDocument(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'project_documents'
         ordering = ['-upload_date']
 
@@ -405,6 +423,7 @@ class DocumentCompliance(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'document_compliance'
         ordering = ['project', 'doc_type']
 
@@ -427,6 +446,7 @@ class SLARule(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'sla_rules'
         ordering = ['rule_name']
 
@@ -442,6 +462,7 @@ class SLATracking(models.Model):
         ('Waived', 'Waived'),
     ]
 
+    sla_tracking_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='sla_tracking')
     sla_rule = models.ForeignKey(SLARule, on_delete=models.CASCADE, related_name='tracking_records')
     start_date = models.DateField()
@@ -458,6 +479,7 @@ class SLATracking(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'sla_tracking'
         ordering = ['-created_at']
 
@@ -477,6 +499,7 @@ class InspectionType(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'inspection_types'
         ordering = ['inspection_name']
 
@@ -506,6 +529,7 @@ class QIInspection(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'qi_inspections'
         ordering = ['-scheduled_date']
 
@@ -526,6 +550,7 @@ class QIDailyTarget(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'qi_daily_targets'
         unique_together = ['qi_user', 'target_date']
         ordering = ['-target_date']
@@ -548,6 +573,7 @@ class QIPerformance(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'qi_performance'
         ordering = ['-evaluation_period_end']
 
@@ -572,6 +598,7 @@ class PenaltyRule(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'penalty_rules'
         ordering = ['rule_name']
 
@@ -610,6 +637,7 @@ class Penalty(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'penalties'
         ordering = ['-created_at']
         verbose_name_plural = 'Penalties'
@@ -649,6 +677,7 @@ class Invoice(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'invoices'
         ordering = ['-invoice_date']
 
@@ -667,6 +696,7 @@ class Payment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'payments'
         ordering = ['-payment_date']
 
@@ -695,6 +725,7 @@ class NotificationTemplate(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'notification_templates'
         ordering = ['template_name']
 
@@ -736,6 +767,7 @@ class Notification(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'notifications'
         ordering = ['-created_at']
 
@@ -759,6 +791,7 @@ class EscalationRule(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'escalation_rules'
         ordering = ['rule_name']
 
@@ -790,6 +823,7 @@ class Escalation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'escalations'
         ordering = ['-escalation_date']
 
@@ -802,6 +836,7 @@ class Escalation(models.Model):
 # ============================================
 
 class DelayFactor(models.Model):
+    factor_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     factor_name = models.CharField(max_length=100, unique=True)
     factor_category = models.CharField(max_length=50, blank=True, null=True)
     factor_description = models.TextField(blank=True, null=True)
@@ -809,6 +844,7 @@ class DelayFactor(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'delay_factors'
         ordering = ['factor_category', 'factor_name']
 
@@ -823,6 +859,7 @@ class ProjectDelay(models.Model):
         ('External', 'External'),
     ]
 
+    delay_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='delays')
     factor = models.ForeignKey(DelayFactor, on_delete=models.CASCADE, related_name='project_delays')
     delay_days = models.IntegerField()
@@ -834,6 +871,7 @@ class ProjectDelay(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'project_delays'
         ordering = ['-delay_start_date']
 
@@ -868,6 +906,7 @@ class VendorDispute(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'vendor_disputes'
         ordering = ['-submitted_date']
 
@@ -900,6 +939,7 @@ class VendorFeedback(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'vendor_feedback'
         ordering = ['-created_at']
 
@@ -930,6 +970,7 @@ class ChangeLog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'change_logs'
         ordering = ['-created_at']
 
@@ -955,6 +996,7 @@ class SystemAuditLog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'system_audit_logs'
         ordering = ['-created_at']
 
@@ -984,6 +1026,7 @@ class SystemSetting(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'system_settings'
         ordering = ['setting_key']
 

@@ -1,0 +1,17 @@
+{
+  "model_name": "all-MiniLM-L6-v2",
+  "knowledge_base": {
+    "What is the Smart Vendor Monitoring System?": "The Smart Vendor Project Monitoring System is an AI-powered platform designed for comprehensive work order closing, quality assurance, and billing processes. It features real-time dashboards, automated notifications, SLA tracking, and predictive analytics to streamline vendor management operations.",
+    "What problems does it solve?": "The system addresses four critical issues: 1) Vendor project delays and missed deadlines, 2) Weak penalty enforcement and compliance tracking, 3) Quality Inspection (QI) team overload, and 4) Limited visibility into project status and vendor performance.",
+    "What are the main features?": "Key features include: Interactive dashboard with real-time metrics, automated email/SMS notifications, AI chatbot for instant support, SLA monitoring with breach alerts, automated penalty calculation, QI inspection tracker, vendor performance analytics, and predictive delay forecasting.",
+    "How does SLA monitoring work?": "The SLA system tracks project deadlines and milestones, automatically flags overdue tasks, calculates breach durations, generates penalty amounts based on violations, sends escalation notifications to stakeholders, and provides comprehensive breach reports.",
+    "What is predictive analytics?": "Our AI models predict project delays with 53.3% accuracy, forecast completion dates, identify at-risk vendors based on historical performance, and recommend preventive actions. The system uses XGBoost for delay prediction and Gradient Boosting for penalty forecasting.",
+    "Who uses this system?": "The platform serves multiple user roles: Team Leaders (oversight and approvals), Supervisors (daily operations), QI Team (inspections and validations), Vendors (document submission and tracking), Billing Clerks (invoice processing), Engineers (technical reviews), and Management (strategic insights).",
+    "How accurate is the delay prediction?": "The delay prediction model achieves 53.3% accuracy on test data using XGBoost algorithm. It considers factors like project status, priority, risk score, duration, contract value, and vendor compliance history.",
+    "What types of penalties are tracked?": "The system tracks five violation types: Late Submission (document delays), Quality Issues (failed inspections), SLA Breach (deadline violations), Incomplete Documentation (missing requirements), and Failed Inspection (quality failures). Penalties are automatically calculated based on delay duration and violation severity."
+  },
+  "config": {
+    "similarity_threshold": 0.4,
+    "max_response_length": 500
+  }
+}

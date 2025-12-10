@@ -36,7 +36,7 @@ const AvatarPageTitle = styled(Avatar)(
 
 function PageHeader() {
   const user = {
-    name: 'Catherine Pike',
+    name: 'User Name',
     avatar: '/static/images/avatars/1.jpg'
   };
 

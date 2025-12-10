@@ -1,4 +1,4 @@
-import { useContext } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import Scrollbar from 'src/components/Scrollbar';
 import { SidebarContext } from 'src/contexts/SidebarContext';
 
@@ -24,7 +24,8 @@ import {
   WOSupervisorSidebarMenu,
   TeamLeaderSidebarMenu,
   SectorManagerSidebarMenu,
-  SystemAdminSidebarMenu
+  SystemAdminSidebarMenu,
+  SidebarCircularLoader
 } from './SidebarMenu'; // Adjust path as needed
 
 import Logo from 'src/components/Logo';
@@ -41,16 +42,50 @@ const SidebarWrapper = styled(Box)(
 `
 );
 
-// Props interface to accept menu component or role
+// Props interface - menuComponent override is optional
 interface SidebarProps {
   menuComponent?: React.ComponentType;
-  userRole?: string;
 }
 
-function Sidebar({ menuComponent, userRole }: SidebarProps) {
+function Sidebar({ menuComponent }: SidebarProps) {
   const { sidebarToggle, toggleSidebar } = useContext(SidebarContext);
   const closeSidebar = () => toggleSidebar();
   const theme = useTheme();
+  
+  // Get user role from localStorage/sessionStorage or your auth context
+  const [userRole, setUserRole] = useState<string>('');
+
+  useEffect(() => {
+    // Try to get role from localStorage
+    const storedRole = localStorage.getItem('userRole');
+    if (storedRole) {
+      setUserRole(storedRole);
+      return;
+    }
+
+    // Alternative: Try to get from sessionStorage
+    const sessionRole = sessionStorage.getItem('userRole');
+    if (sessionRole) {
+      setUserRole(sessionRole);
+      return;
+    }
+
+    // Alternative: Fetch from API if needed
+    const fetchUserRole = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/v1/auth/me');
+        if (response.ok) {
+          const userData = await response.json();
+          setUserRole(userData.role);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user role:', error);
+      }
+    };
+
+    // Uncomment if you want to fetch from API
+    // fetchUserRole();
+  }, []);
 
   // Determine which menu to render
   const getMenuComponent = () => {
@@ -60,7 +95,7 @@ function Sidebar({ menuComponent, userRole }: SidebarProps) {
       return <MenuComponent />;
     }
 
-    // Otherwise, determine by userRole
+    // Otherwise, determine by userRole from session
     switch (userRole) {
       case 'vendor':
         return <VendorSidebarMenu />;
@@ -81,7 +116,7 @@ function Sidebar({ menuComponent, userRole }: SidebarProps) {
       case 'admin':
         return <SystemAdminSidebarMenu />;
       default:
-        return <ClerkSidebarMenu />; // Default fallback
+        return <SidebarCircularLoader />; // Default fallback
     }
   };
 

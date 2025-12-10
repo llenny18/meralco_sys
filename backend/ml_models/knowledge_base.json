@@ -1,0 +1,198 @@
+{
+  "model_name": "all-MiniLM-L6-v2",
+  "knowledge_base": {
+    "Hello": "Hello! Welcome to the Smart Vendor Monitoring System. I'm here to help you with any questions about the system, projects, vendors, or any other information you need. How can I assist you today?",
+    
+    "Hi": "Hi there! I'm your AI assistant for the Smart Vendor Monitoring System. Feel free to ask me anything about projects, vendors, SLAs, penalties, reports, or how to use the system. What would you like to know?",
+    
+    "Hey": "Hey! Great to see you. I'm here to help you navigate the Smart Vendor Monitoring System and answer your questions. What can I help you with?",
+    
+    "Good morning": "Good morning! I hope you're having a great day. I'm ready to assist you with the Smart Vendor Monitoring System. What would you like to know or do today?",
+    
+    "Good afternoon": "Good afternoon! I'm here to help you with any questions or tasks related to the Smart Vendor Monitoring System. How can I assist you?",
+    
+    "Good evening": "Good evening! I'm available to help you with the Smart Vendor Monitoring System. What information do you need?",
+    
+    "How are you?": "I'm functioning well and ready to help! I'm here to assist you with the Smart Vendor Monitoring System. How can I help you today?",
+    
+    "What can you do?": "I can help you with various tasks in the Smart Vendor Monitoring System including: answering questions about projects and vendors, explaining system features, providing project status updates, helping you understand reports and analytics, guiding you through processes, and retrieving historical data. What would you like to know?",
+    
+    "What are you?": "I'm an AI-powered chatbot integrated into the Smart Vendor Monitoring System. I use natural language processing to understand your questions and provide instant answers about projects, vendors, SLAs, penalties, and all system features. Think of me as your intelligent assistant for vendor project management.",
+    
+    "Who are you?": "I'm the AI assistant for MERALCO's Smart Vendor Monitoring System. I'm designed to help you quickly find information, answer questions, and navigate the system efficiently. I can access project data, vendor information, and system knowledge to assist you.",
+    
+    "What is your name?": "I'm the Smart Vendor Monitoring System AI Assistant. You can think of me as your virtual helper for all things related to vendor project management at MERALCO. How can I help you today?",
+    
+    "Thank you": "You're welcome! I'm happy to help. If you have any other questions about the Smart Vendor Monitoring System, feel free to ask anytime!",
+    
+    "Thanks": "You're welcome! Let me know if you need anything else regarding projects, vendors, or the system.",
+    
+    "Thank you so much": "You're very welcome! I'm glad I could help. Don't hesitate to reach out if you need assistance with anything else in the system.",
+    
+    "Thanks a lot": "My pleasure! I'm here whenever you need help with the Smart Vendor Monitoring System. Have a great day!",
+    
+    "I appreciate it": "I'm happy to help! That's what I'm here for. Feel free to ask if you need anything else.",
+    
+    "Goodbye": "Goodbye! Have a great day. Come back anytime you need help with the Smart Vendor Monitoring System!",
+    
+    "Bye": "Bye! Take care and feel free to return whenever you need assistance.",
+    
+    "See you": "See you later! I'll be here whenever you need help with the system.",
+    
+    "Help": "I'm here to help! I can assist you with: project information, vendor performance, SLA tracking, penalties, reports, system features, and much more. What specific help do you need?",
+    
+    "I need help": "Of course! I'm here to assist you. Could you tell me what you need help with? For example, are you looking for information about a project, vendor, report, or how to use a specific feature?",
+    
+    "Can you help me?": "Absolutely! I'd be happy to help you. What do you need assistance with in the Smart Vendor Monitoring System?",
+    
+    "I don't understand": "No problem! I'm here to explain things clearly. What would you like me to clarify? Feel free to ask your question in a different way, or let me know which part is confusing.",
+    
+    "Explain": "I'd be happy to explain! What would you like me to explain? You can ask about system features, processes, projects, vendors, or any specific topic you're interested in.",
+    
+    "Sorry": "No need to apologize! I'm here to help you. What do you need assistance with?",
+    
+    "Okay": "Great! Is there anything else you'd like to know or do in the Smart Vendor Monitoring System?",
+    
+    "OK": "Perfect! Let me know if you need anything else.",
+    
+    "Yes": "Great! How can I help you further?",
+    
+    "No": "Okay! If you need anything later, just let me know. I'm always here to help.",
+    
+    "Maybe": "No problem! Take your time. I'm here whenever you're ready. Just let me know what you need.",
+    
+    "I don't know": "That's perfectly fine! That's what I'm here for. Let me help you figure it out. What are you trying to do or find?",
+    
+    "What is the Smart Vendor Monitoring System?": "The Smart Vendor Monitoring System is a comprehensive platform designed to monitor and manage vendor performance, track project progress, enforce SLAs, calculate penalties, and provide analytics for MERALCO's vendor management operations. It integrates automation and AI to streamline work order closing processes, enhance quality assurance, and ensure timely vendor billing.",
+    
+    "Show me system statistics": "The system currently manages multiple projects across various sectors. You can view detailed statistics including total projects, active vendors, delayed projects, SLA breaches, and penalty amounts in the dashboard.",
+    
+    "List delayed projects": "To view delayed projects, go to the Projects section and filter by 'Delayed' status. The system tracks delays automatically and flags projects that are behind schedule based on their target completion dates.",
+    
+    "Which projects are at risk?": "Projects at risk are those with high risk scores (above 0.7) or multiple SLA breaches. The ML model analyzes factors like project status, priority, contract value, vendor compliance score, and days since start to predict delay probability.",
+    
+    "What are the main causes of project delays?": "Common delay factors include: weather conditions, material shortages, permit delays, design changes, resource unavailability, site access issues, quality problems, and vendor performance issues. The system tracks all delay factors for analytics.",
+    
+    "How does the penalty system work?": "Penalties are calculated based on violation type and delay duration. The system uses an ML model trained on historical data to predict penalty amounts. Penalties can be in Draft, Issued, Paid, Waived, or Disputed status. The system includes a penalty enforcement module that automatically tracks compliance, flags overdue tasks, and generates penalty memos to discourage repeated vendor delays.",
+    
+    "Explain SLA tracking": "SLA (Service Level Agreement) tracking monitors project milestones against defined timelines. Each workflow stage has SLA rules with target durations. The system automatically flags breaches and can escalate to appropriate personnel.",
+    
+    "What are the system features?": "Key features include: Automated Dashboard with real-time tracking and KPI visuals, Automated Email and Notification System with scheduled reminders, AI Integration with natural language chatbot, Project Management, Vendor Performance Tracking, SLA Monitoring, Document Management, Quality Inspections, Penalty Management, Billing & Invoicing, Analytics & Reporting, and AI-powered Predictions.",
+    
+    "How do quality inspections work?": "Quality Inspectors (QI) are assigned inspections based on project milestones. They have daily targets and must complete inspections by scheduled dates. Results are recorded as Passed, Failed, or Conditional, affecting project progression. The system includes a workload capability tracker that calculates audit targets based on historical performance and summarizes reasons for unmet targets.",
+    
+    "What is the vendor compliance score?": "Vendor compliance score (0-100) reflects overall vendor performance based on on-time delivery, quality ratings, SLA adherence, and penalty history. Higher scores indicate better performance.",
+    
+    "How can I view vendor performance?": "Navigate to the Vendors section to see performance metrics including compliance scores, total projects, delayed projects, SLA breaches, and penalty amounts. You can sort by performance to identify top and underperforming vendors.",
+    
+    "What workflows are tracked?": "The system tracks workflows for: Project Approval, Design Review, Material Procurement, Construction, QI Inspections, Testing & Commissioning, Documentation, and Project Closeout. Each stage has defined SLAs and assigned personnel.",
+    
+    "How are penalties calculated?": "The ML model considers violation type (delay, quality issue, safety violation, documentation issue) and delay duration in days. For example, a 30-day delay might result in a penalty of ₱50,000-₱200,000 depending on project value and contract terms.",
+    
+    "What reports are available?": "Available reports include: Project Status Summary, Vendor Performance Report, Delay Analysis, SLA Breach Report, Penalty Summary, Invoice Status, QI Performance, and Monthly Trends. Reports can be filtered by date range, sector, or vendor. The system enables automated report generation (weekly/monthly) that summarizes project statuses, vendor compliance, SLA breaches, billing progress, and other key metrics for management decision-making.",
+    
+    "How do I create a new project?": "To create a project, go to Projects > Add New. Enter project details including code, name, sector, vendor, start/end dates, contract value, and priority. The system will automatically set up workflow stages and SLA tracking.",
+    
+    "What is the escalation process?": "When SLAs are breached or issues arise, the system automatically escalates to designated personnel based on escalation rules. Team Leaders receive first-level escalations, then Sector Managers, and finally System Administrators.",
+    
+    "How do vendors submit documents?": "Vendors access the Vendor Portal to upload required documents. The system tracks submission deadlines and flags overdue documents. Documents undergo approval workflow by assigned personnel (Engineers, QI, or Supervisors). Automated reminders are sent to vendors to ensure timely submission of COC and other required documents.",
+    
+    "What are the user roles?": "System roles include: System Administrator, Team Leader, Sector Manager, Engineer, Vendor Representative, Quality Inspector, Clerk, Engineering Aide, and WO Supervisor. Each role has specific permissions and dashboard views.",
+    
+    "How is project delay predicted?": "The ML model analyzes project characteristics (status, priority, contract value, vendor compliance, days since start, risk score) and compares them to historical patterns to predict delay probability with risk levels: Low (<40%), Medium (40-70%), High (>70%). The AI-powered features provide predictive analytics for delay forecasting.",
+    
+    "What notifications are sent?": "The system sends notifications for: SLA breaches, approaching deadlines, document submissions, inspection schedules, escalations, penalty issuance, and invoice due dates. Users can configure notification preferences. The automated email and notification system sends scheduled reminders to vendors and internal teams, with SMS or push alerts for urgent cases.",
+    
+    "How do I dispute a penalty?": "Vendors can submit disputes through the Vendor Portal. Include dispute reason, supporting documents, and preferred resolution. Disputes are reviewed by assigned personnel and can be approved, rejected, or result in penalty waiver.",
+    
+    "What is the billing process?": "After project completion, invoices are generated based on contract value minus any applicable penalties. Invoices go through approval workflow before being issued to vendors. Payment status is tracked (Unpaid, Partially Paid, Paid). The system ensures timely billing by automating the process from project completion to vendor billing.",
+    
+    "How are sectors organized?": "Projects are organized by geographic sectors (e.g., Metro Manila North, Metro Manila South, Rizal, Cavite, Bulacan). Each sector has a designated Sector Manager who oversees all projects in that area. The system is being piloted at Meralco Networks Paranaque Sector Construction 1 Office.",
+    
+    "What is the document compliance tracking?": "The system tracks required documents for each project phase. It monitors submission deadlines, approval status, and flags overdue documents. Compliance affects project progression and vendor scores. The system addresses vendor submission delays where vendors often fail to submit required COC and documents on time.",
+    
+    "How do I view my tasks?": "Your role-specific dashboard shows assigned tasks including: pending approvals, scheduled inspections, overdue documents, escalations, and projects requiring attention. Tasks are prioritized by urgency and SLA status.",
+    
+    "What analytics are available?": "Analytics include: Project trends over time, Delay factor analysis, Vendor performance comparison, SLA compliance rates, Penalty trends, Budget vs. Actual costs, Sector-wise statistics, and QI performance metrics.",
+    
+    "How is vendor feedback handled?": "Stakeholders can submit vendor feedback rating service quality, responsiveness, and professionalism (1-5 stars). Feedback is reviewed and affects vendor compliance scores and future project assignments.",
+    
+    "What is the change log?": "The system maintains detailed audit logs tracking all data changes including who made changes, when, and what was modified. This ensures accountability and helps with compliance audits.",
+    
+    "How do I export data?": "Most data tables include export options for Excel, CSV, or PDF formats. Select the data you want to export, choose format, and click Export. Large datasets may be processed in the background.",
+    
+    "What are project milestones?": "Milestones are key checkpoints in project delivery (e.g., Design Approval, Material Delivery, Construction 50%, QI Inspection, Testing Complete). Each milestone has target dates and completion tracking.",
+    
+    "How is risk score calculated?": "Risk score (0-10) is calculated based on: project complexity, contract value, vendor history, location challenges, resource availability, and external factors. Higher scores indicate higher risk of delays or issues.",
+    
+    "What problems does the system solve?": "The system addresses four main problems: (1) Vendor submission delays for COC and required documents, (2) Weak penalty enforcement for SLA breaches, (3) Overloaded QI monitoring making it difficult to meet audit targets, and (4) Limited process visibility with lack of integrated dashboard and real-time tracking.",
+    
+    "What is the purpose of this system?": "The system aims to develop a Smart Vendor Project Monitoring System that automates and streamlines the process from project completion to vendor billing. It addresses common delays in document submission, inspection, and penalty enforcement through an integrated dashboard, automated reminders, and AI-assisted tracking.",
+    
+    "What are the main objectives?": "The main objectives are: (1) Automate project monitoring through centralized dashboard, (2) Implement automated email and notification system, (3) Integrate AI-powered features like chatbot and predictive analytics, (4) Develop SLA monitoring and penalty enforcement, (5) Incorporate QI workload capability tracker, (6) Enable automated report generation, and (7) Evaluate system effectiveness in improving work order closing timelines.",
+    
+    "What AI features are included?": "AI features include: Natural language chatbot for instant project inquiries, Historical query handler for project data retrieval, Predictive analytics for delay forecasting, Automated suggestions for corrective actions and process improvements, and ML models for penalty prediction and risk assessment.",
+    
+    "How does the chatbot work?": "The AI-powered chatbot allows users to make instant inquiries about projects using natural language. It can retrieve historical project data, answer questions about project status, provide information about vendors, explain system features, and guide users through various processes.",
+    
+    "What is the dashboard view like?": "The automated dashboard provides real-time project tracking with KPI visuals and status indicators. It is designed to be both large-monitor and mobile-friendly, allowing stakeholders to access project information from anywhere. The dashboard displays project statuses, vendor compliance, SLA breaches, and workload distribution.",
+    
+    "How does the system improve efficiency?": "The system improves efficiency by reducing manual tasks, automating reminders and notifications, providing real-time visibility into project status, enabling faster decision-making through analytics, reducing billing cycle times, and improving vendor compliance through consistent penalty enforcement.",
+    
+    "What is the research hypothesis?": "The null hypothesis states that implementation does not significantly improve efficiency. The alternative hypothesis states that implementation significantly improves the efficiency of work order closing, vendor compliance, and timeliness of billing compared to the current manual process.",
+    
+    "What is the implementation timeline?": "The implementation follows a 6-month timeline: Month 1 - Requirement Analysis & Data Collection, Month 2 - System Design, Month 3 - Development, Month 4 - Pilot Testing, Month 5 - Deployment, Month 6 - Evaluation & Final Report.",
+    
+    "What are the implementation phases?": "Phase 1: Requirement Analysis & System Design, Phase 2: System Development, Phase 3: Pilot Testing & Feedback, Phase 4: Full Deployment & Training, Phase 5: Post-Implementation Evaluation. Each phase has specific deliverables and outcomes.",
+    
+    "What is the research design methodology?": "The study employs a Developmental Research Design (R&D) combined with a Descriptive-Evaluative Approach. The R&D design is appropriate for the design, development, and testing of the system, while the Descriptive-Evaluative component measures and describes the system's impact.",
+    
+    "How is data gathered for evaluation?": "Data is gathered through four stages: (1) Pre-Development Stage with interviews, surveys, and historical data collection, (2) System Development Stage using Agile approach with feedback loops, (3) System Testing & Implementation Stage with pilot deployment, and (4) Evaluation Stage with post-implementation surveys and KPI analysis.",
+    
+    "What instruments are used for evaluation?": "Evaluation instruments include: Survey Questionnaire for user satisfaction, System Usage Logs to track real-time usage and compliance rates, KPI Metrics comparing pre- and post-implementation data, and Interview Guide for collecting qualitative insights during pilot testing.",
+    
+    "Who is the target user base?": "Target users include: Team Leaders, WO Supervisors, Quality Inspectors, Vendor Representatives, Clerks, Engineering Aides, Sector Managers, Engineers, and System Administrators. The system is specifically designed for personnel involved in work order closing and vendor management.",
+    
+    "What is the sampling technique used?": "Purposive Sampling is used since only participants directly involved in work order closing and vendor management are included. This includes Team Leaders, WO Supervisors, Quality Inspectors, Vendor Representatives, Clerks, and Engineering Aides.",
+    
+    "What are the expected benefits?": "Expected benefits include: Reduced vendor billing delays, Improved compliance and accountability, Enhanced visibility and real-time monitoring, Reduced manual workload for QI teams, Faster decision-making through data-driven insights, Consistent penalty enforcement, and Better resource allocation.",
+    
+    "How does the system handle backjobs?": "The automated notification system sends scheduled reminders to vendors and internal teams to ensure faster resolution of backjobs. The dashboard provides visibility into pending work and overdue tasks, allowing teams to prioritize and address backjobs systematically.",
+    
+    "What is QI workload management?": "The system incorporates a workload capability tracker for QI teams that calculates audit targets based on historical performance data. It summarizes reasons for unmet targets and supports data-driven corrective measures, helping to manage and optimize QI workload effectively.",
+    
+    "How does automation improve the work order closing process?": "Automation streamlines the work order closing process by eliminating manual tracking, automating document submission reminders, providing real-time status updates, automatically flagging delays and SLA breaches, generating reports automatically, and reducing the time from project completion to vendor billing.",
+    
+    "What is the theoretical framework?": "The theoretical framework is based on four key areas: (1) Automation in Vendor Management showing 25-45% efficiency gains, (2) AI in Project Tracking and Predictive Monitoring for real-time monitoring and alerts, (3) Automation in Billing and Invoice Systems to reduce errors and processing time, and (4) SLA Monitoring, Escalation & Penalty Automation to ensure compliance.",
+    
+    "What does the literature review show?": "The literature review shows that automation reduces manual tasks and compliance gaps with international studies demonstrating 25-45% efficiency gains. AI enables real-time monitoring and predictive alerts, billing automation reduces errors and processing time, and SLA monitoring with automation reduces vendor delays.",
+    
+    "What is the conceptual framework?": "The conceptual framework integrates automation and AI to transform the manual, fragmented work order closing process into an efficient, automated system. It connects input factors (vendor data, project data, historical data) through processing (automation, AI, analytics) to outputs (improved efficiency, compliance, timely billing).",
+    
+    "How does the system prevent repeated delays?": "The system prevents repeated delays through consistent penalty enforcement, automated reminders before deadlines, real-time tracking and escalation of overdue tasks, vendor compliance scoring that affects future assignments, and predictive analytics that identify at-risk projects early for proactive intervention.",
+    
+    "What makes this system 'smart'?": "The system is 'smart' because it uses AI and machine learning for predictive analytics, automated decision-making for escalations and notifications, intelligent workload distribution for QI teams, pattern recognition to identify delay trends, natural language processing for the chatbot, and continuous learning from historical data to improve predictions.",
+    
+    "Why is real-time monitoring important?": "Real-time monitoring is important because it enables immediate visibility into project status, allows for proactive issue resolution before delays occur, supports faster decision-making, improves stakeholder communication, helps identify bottlenecks quickly, and ensures accountability at all levels of the process.",
+    
+    "How does the system support data-driven decisions?": "The system supports data-driven decisions by providing comprehensive analytics on project performance, vendor compliance trends, delay patterns, resource utilization, historical comparisons, predictive insights, and automated reports that highlight key metrics and areas requiring attention.",
+    
+    "What is the impact on billing timelines?": "The system significantly reduces billing timelines by automating the process from project completion to invoice generation, eliminating manual document tracking, reducing approval cycles through automated workflows, ensuring all requirements are met before billing, and providing clear visibility into billing status.",
+    
+    "How are COC documents tracked?": "Certificate of Completion (COC) documents are tracked through the document management system. The system monitors submission deadlines, sends automated reminders to vendors, flags overdue COCs, tracks approval workflows, and ensures COC completion before proceeding with billing.",
+    
+    "What happens when SLA is breached?": "When SLA is breached, the system automatically flags the violation, sends notifications to relevant stakeholders, escalates according to predefined rules, calculates applicable penalties, generates penalty memos, and updates vendor compliance scores. The breach is also recorded in analytics for trend analysis.",
+    
+    "Can I customize notification preferences?": "Yes, users can configure their notification preferences including which events trigger notifications (SLA breaches, deadlines, submissions), delivery method (email, SMS, push notification), frequency of reminders, and escalation thresholds. This ensures users receive relevant notifications without being overwhelmed.",
+    
+    "How does the system ensure accountability?": "The system ensures accountability through detailed audit logs tracking all actions, role-based permissions limiting access, automated escalations when deadlines are missed, penalty enforcement for non-compliance, performance scoring for vendors and personnel, and transparent reporting visible to all stakeholders.",
+    
+    "What is the vendor portal?": "The vendor portal is a dedicated interface where vendor representatives can view assigned projects, upload required documents, track submission deadlines, receive notifications and reminders, submit penalty disputes, view compliance scores, and access project-specific information and requirements.",
+    
+    "How does mobile-friendly access help?": "Mobile-friendly access allows stakeholders to monitor projects and receive notifications on-the-go, approve documents from anywhere, check project status in the field, respond to escalations quickly, and access critical information without being tied to a desktop, improving response times and flexibility.",
+    
+    "What training is provided?": "During Phase 4 (Full Deployment & Training), comprehensive user training is conducted covering system navigation, role-specific features, best practices, troubleshooting, and process workflows. Training materials include user guides, video tutorials, and hands-on sessions to ensure effective system adoption.",
+    
+    "How is system effectiveness measured?": "System effectiveness is measured by comparing KPIs before and after implementation including work order closing times, billing cycle duration, SLA compliance rates, number of delayed projects, penalty enforcement consistency, QI audit completion rates, vendor compliance scores, and user satisfaction metrics."
+  }
+}

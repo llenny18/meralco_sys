@@ -10,6 +10,738 @@ from datetime import date, timedelta
 from .models import *
 from .serializers import *
 from rest_framework.permissions import AllowAny
+from rest_framework import status, viewsets
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.authtoken.models import Token
+from django.contrib.auth import login, logout
+from django.utils import timezone
+from .models import User, UserSession
+from .serializers import (
+    LoginSerializer, 
+    UserLoginResponseSerializer,
+    LogoutSerializer,
+    ChangePasswordSerializer,
+    RegisterUserSerializer
+)
+
+
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.authtoken.models import Token
+from django.contrib.auth import authenticate
+from django.utils import timezone
+from .models import User, UserSession, UserRole
+from .serializers import (
+    LoginSerializer, 
+    UserLoginResponseSerializer,
+    LogoutSerializer,
+    ChangePasswordSerializer,
+    RegisterUserSerializer
+)
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from datetime import datetime
+from .ml_service import ml_service
+from .chatbot_service import chatbot_service
+from .serializers import (
+    DelayPredictionSerializer,
+    PenaltyPredictionSerializer,
+    ChatRequestSerializer
+)
+
+
+
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from django.db.models import Count, Sum, Avg, Q, F
+from django.db.models.functions import TruncMonth
+from django.utils import timezone
+from datetime import date, timedelta
+from .models import *
+from .serializers import *
+
+
+class DashboardViewSet(viewsets.ViewSet):
+    """Dashboard analytics and statistics"""
+    permission_classes = [AllowAny]
+
+    @action(detail=False, methods=['get'], url_path='stats')
+    def stats(self, request):
+        """Get overall dashboard statistics"""
+        try:
+            stats = {
+                'total_projects': Project.objects.count(),
+                'active_projects': Project.objects.exclude(
+                    status__status_name__in=['Completed', 'Cancelled', 'Billed']
+                ).count(),
+                'delayed_projects': Project.objects.filter(is_delayed=True).count(),
+                'completed_projects': Project.objects.filter(
+                    status__status_name='Completed'
+                ).count(),
+                'total_vendors': Vendor.objects.count(),
+                'active_vendors': Vendor.objects.filter(is_active=True).count(),
+                'blacklisted_vendors': Vendor.objects.filter(is_blacklisted=True).count(),
+                'pending_inspections': QIInspection.objects.filter(is_completed=False).count(),
+                'overdue_documents': DocumentCompliance.objects.filter(
+                    is_overdue=True, is_submitted=False
+                ).count(),
+                'sla_breaches': SLATracking.objects.filter(is_breached=True).count(),
+                'total_penalties': float(Penalty.objects.aggregate(
+                    total=Sum('penalty_amount')
+                )['total'] or 0),
+                'pending_invoices': Invoice.objects.exclude(payment_status='Paid').count(),
+            }
+            return Response(stats)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='project_status_summary')
+    def project_status_summary(self, request):
+        """Get project status distribution"""
+        try:
+            total_projects = Project.objects.count()
+            status_summary = ProjectStatus.objects.annotate(
+                project_count=Count('projects')
+            ).values('status_name', 'project_count', 'status_color').order_by('status_order')
+            
+            status_list = list(status_summary)
+            for item in status_list:
+                if total_projects > 0:
+                    item['percentage'] = round(
+                        (item['project_count'] / total_projects) * 100, 2
+                    )
+                else:
+                    item['percentage'] = 0
+            
+            return Response(status_list)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='vendor_performance')
+    def vendor_performance(self, request):
+        """Get vendor performance summary"""
+        try:
+            limit = int(request.query_params.get('limit', 10))
+            
+            vendors = Vendor.objects.filter(is_active=True).annotate(
+                total_projects=Count('projects'),
+                delayed_projects=Count('projects', filter=Q(projects__is_delayed=True)),
+                total_penalties=Sum('penalties__penalty_amount', 
+                                   filter=~Q(penalties__penalty_status='Waived')),
+                sla_breaches=Count('projects__sla_tracking', 
+                                  filter=Q(projects__sla_tracking__is_breached=True))
+            ).values(
+                'vendor_id', 'vendor_code', 'vendor_name', 'compliance_score',
+                'total_projects', 'delayed_projects', 'total_penalties', 'sla_breaches'
+            )[:limit]
+            
+            vendors_list = list(vendors)
+            for vendor in vendors_list:
+                if vendor['total_projects'] > 0:
+                    on_time = vendor['total_projects'] - vendor['delayed_projects']
+                    vendor['on_time_percentage'] = round(
+                        (on_time / vendor['total_projects']) * 100, 2
+                    )
+                else:
+                    vendor['on_time_percentage'] = 0
+                vendor['total_penalties'] = float(vendor['total_penalties'] or 0)
+                vendor['compliance_score'] = float(vendor['compliance_score'] or 0)
+            
+            return Response(vendors_list)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='delay_analysis')
+    def delay_analysis(self, request):
+        """Get delay factor analysis"""
+        try:
+            analysis = ProjectDelay.objects.values(
+                'factor__factor_name',
+                'factor__factor_category'
+            ).annotate(
+                occurrence_count=Count('delay_id'),
+                total_delay_days=Sum('delay_days'),
+                avg_delay_days=Avg('delay_days')
+            ).order_by('-occurrence_count')[:10]
+            
+            result = []
+            for item in analysis:
+                result.append({
+                    'factor__factor_name': item['factor__factor_name'],
+                    'factor__factor_category': item['factor__factor_category'],
+                    'occurrence_count': item['occurrence_count'],
+                    'total_delay_days': item['total_delay_days'],
+                    'avg_delay_days': float(item['avg_delay_days'] or 0)
+                })
+            
+            return Response(result)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='monthly_trends')
+    def monthly_trends(self, request):
+        """Get monthly project trends"""
+        try:
+            twelve_months_ago = timezone.now() - timedelta(days=365)
+            
+            trends = Project.objects.filter(
+                created_at__gte=twelve_months_ago
+            ).annotate(
+                month=TruncMonth('created_at')
+            ).values('month').annotate(
+                total=Count('project_id'),
+                completed=Count('project_id', filter=Q(status__status_name='Completed')),
+                delayed=Count('project_id', filter=Q(is_delayed=True))
+            ).order_by('month')
+            
+            return Response(list(trends))
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='project_priority_distribution')
+    def project_priority_distribution(self, request):
+        """Get project distribution by priority"""
+        try:
+            total_projects = Project.objects.count()
+            
+            distribution = Project.objects.values('priority').annotate(
+                count=Count('project_id')
+            ).order_by('-count')
+            
+            result = []
+            for item in distribution:
+                percentage = (item['count'] / total_projects * 100) if total_projects > 0 else 0
+                result.append({
+                    'priority': item['priority'],
+                    'count': item['count'],
+                    'percentage': round(percentage, 2)
+                })
+            
+            return Response(result)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='upcoming_deadlines')
+    def upcoming_deadlines(self, request):
+        """Get upcoming deadlines (next 7 days)"""
+        try:
+            today = date.today()
+            next_week = today + timedelta(days=7)
+            
+            # SLA deadlines
+            sla_deadlines = SLATracking.objects.filter(
+                due_date__gte=today,
+                due_date__lte=next_week,
+                completion_date__isnull=True
+            ).select_related('project').values(
+                'project__project_code',
+                'project__project_name',
+                'due_date',
+                'project__priority'
+            )
+            
+            result = []
+            for sla in sla_deadlines:
+                days_remaining = (sla['due_date'] - today).days
+                result.append({
+                    'project_code': sla['project__project_code'],
+                    'project_name': sla['project__project_name'],
+                    'deadline_type': 'SLA Deadline',
+                    'due_date': sla['due_date'].isoformat(),
+                    'days_remaining': days_remaining,
+                    'priority': sla['project__priority']
+                })
+            
+            # Document deadlines
+            doc_deadlines = DocumentCompliance.objects.filter(
+                due_date__gte=today,
+                due_date__lte=next_week,
+                is_submitted=False
+            ).select_related('project').values(
+                'project__project_code',
+                'project__project_name',
+                'due_date',
+                'project__priority'
+            )
+            
+            for doc in doc_deadlines:
+                days_remaining = (doc['due_date'] - today).days
+                result.append({
+                    'project_code': doc['project__project_code'],
+                    'project_name': doc['project__project_name'],
+                    'deadline_type': 'Document Deadline',
+                    'due_date': doc['due_date'].isoformat(),
+                    'days_remaining': days_remaining,
+                    'priority': doc['project__priority']
+                })
+            
+            # Sort by days remaining
+            result.sort(key=lambda x: x['days_remaining'])
+            
+            return Response(result[:10])
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='financial_overview')
+    def financial_overview(self, request):
+        """Get financial overview"""
+        try:
+            overview = {
+                'total_contract_value': float(Project.objects.aggregate(
+                    total=Sum('contract_value')
+                )['total'] or 0),
+                'completed_contract_value': float(Project.objects.filter(
+                    status__status_name='Completed'
+                ).aggregate(total=Sum('contract_value'))['total'] or 0),
+                'total_penalties': float(Penalty.objects.exclude(
+                    penalty_status='Waived'
+                ).aggregate(total=Sum('penalty_amount'))['total'] or 0),
+                'total_invoiced': float(Invoice.objects.aggregate(
+                    total=Sum('invoice_amount')
+                )['total'] or 0),
+                'total_paid': float(Invoice.objects.filter(
+                    payment_status='Paid'
+                ).aggregate(total=Sum('net_amount'))['total'] or 0),
+                'outstanding_payments': float(Invoice.objects.exclude(
+                    payment_status='Paid'
+                ).aggregate(total=Sum('net_amount'))['total'] or 0),
+            }
+            
+            return Response(overview)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='sector_summary')
+    def sector_summary(self, request):
+        """Get project summary by sector"""
+        try:
+            sector_summary = Sector.objects.annotate(
+                total_projects=Count('projects'),
+                active_projects=Count('projects', 
+                    filter=~Q(projects__status__status_name__in=['Completed', 'Cancelled', 'Billed'])),
+                delayed_projects=Count('projects', filter=Q(projects__is_delayed=True))
+            ).values(
+                'sector_code', 'sector_name', 'total_projects', 
+                'active_projects', 'delayed_projects'
+            ).order_by('-total_projects')
+            
+            return Response(list(sector_summary))
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def health_check(request):
+    return Response({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat()
+    })
+
+@api_view(['POST'])
+def predict_delay(request):
+    serializer = DelayPredictionSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        prediction = ml_service.predict_delay(serializer.validated_data)
+        return Response(prediction)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+def predict_penalty(request):
+    serializer = PenaltyPredictionSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        prediction = ml_service.predict_penalty(
+            serializer.validated_data['violation_type'],
+            serializer.validated_data['delay_days']
+        )
+        return Response(prediction)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from rest_framework import status
+from .chatbot_service import chatbot_service
+from .serializers import ChatRequestSerializer
+import logging
+
+logger = logging.getLogger(__name__)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def chat(request):
+    """
+    Chat endpoint for AI assistant
+    
+    Expected payload:
+    {
+        "question": "What is the Smart Vendor Monitoring System?"
+    }
+    
+    Returns:
+    {
+        "question": "What is the Smart Vendor Monitoring System?",
+        "answer": "The Smart Vendor Monitoring System is...",
+        "confidence": 0.85,
+        "matched_question": "What is the Smart Vendor Monitoring System?"
+    }
+    """
+    serializer = ChatRequestSerializer(data=request.data)
+    
+    if not serializer.is_valid():
+        return Response(
+            {
+                'error': 'Invalid request',
+                'details': serializer.errors
+            }, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        question = serializer.validated_data['question']
+        
+        # Log the incoming question
+        logger.info(f"Chat question received: {question}")
+        print(f"\n{'='*80}")
+        print(f"📥 INCOMING QUESTION: {question}")
+        print(f"{'='*80}")
+        
+        # Get answer from chatbot service
+        answer = chatbot_service.answer(question)
+        
+        # Log the response
+        logger.info(f"Chat answer generated: {answer[:100]}...")
+        print(f"📤 RESPONSE: {answer[:200]}...")
+        print(f"{'='*80}\n")
+        
+        return Response({
+            'question': question,
+            'answer': answer,
+            'timestamp': request.META.get('HTTP_DATE', None)
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Chat error: {str(e)}", exc_info=True)
+        print(f"❌ ERROR in chat endpoint: {e}")
+        
+        return Response(
+            {
+                'error': 'Internal server error',
+                'message': 'Sorry, I encountered an error processing your question.',
+                'details': str(e) if request.user.is_staff else None
+            }, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def chat_health(request):
+    """Check if chatbot is loaded and working"""
+    try:
+        # Test the chatbot
+        test_answer = chatbot_service.answer("test")
+        
+        return Response({
+            'status': 'healthy',
+            'chatbot_loaded': True,
+            'knowledge_base_size': len(chatbot_service.kb_questions),
+            'model': 'all-MiniLM-L6-v2',
+            'test_response': test_answer[:100] + "..."
+        })
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'chatbot_loaded': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def chat_debug(request):
+    """
+    Debug endpoint to see similarity scores for a question
+    Only use in development!
+    """
+    question = request.data.get('question', '')
+    
+    if not question:
+        return Response({'error': 'question required'}, status=400)
+    
+    try:
+        # Get similar questions
+        similar = chatbot_service.get_similar_questions(question, top_k=10)
+        
+        return Response({
+            'question': question,
+            'similar_questions': similar,
+            'threshold': 0.35
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+def get_client_ip(request):
+    """Get client IP address from request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+
+class AuthViewSet(viewsets.ViewSet):
+    """
+    Authentication ViewSet for login, logout, and password management
+    """
+    
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def login(self, request):
+        """
+        User login endpoint
+        
+        Expected payload:
+        {
+            "username": "admin",
+            "password": "admin123",
+            "user_type": "admin"
+        }
+        """
+        serializer = LoginSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            user = serializer.validated_data['user']
+            
+            # Update last login - FIX: Use update() to avoid datetime conversion issues
+            User.objects.filter(pk=user.pk).update(last_login=timezone.now())
+            
+            # Refresh user instance to get updated last_login
+            user.refresh_from_db()
+            
+            # Create or get token
+            token, created = Token.objects.get_or_create(user=user)
+            
+            # Create user session
+            user_agent = request.META.get('HTTP_USER_AGENT', '')
+            ip_address = get_client_ip(request)
+            
+            try:
+                UserSession.objects.create(
+                    user=user,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    is_active=True
+                )
+            except Exception as e:
+                # Log error but don't fail login if session creation fails
+                print(f"Session creation warning: {e}")
+            
+            # Get user data
+            user_serializer = UserLoginResponseSerializer(user)
+            
+            # Determine redirect path based on role
+            redirect_paths = {
+                'System Administrator': '/admin/dashboard',
+                'Team Leader': '/leader/dashboard',
+                'Sector Manager': '/sector-manager/dashboard',
+                'Engineer': '/engineer/dashboard',
+                'Vendor Representative': '/vendor/dashboard',
+                'Quality Inspector': '/qi/dashboard',
+                'Clerk': '/clerk/dashboard',
+                'Engineering Aide': '/aide/dashboard',
+                'WO Supervisor': '/supervisor/dashboard'
+            }
+            
+            role_name = user.role.role_name if user.role else 'user'
+            redirect_path = redirect_paths.get(role_name, '/dashboard')
+            
+            return Response({
+                'success': True,
+                'message': 'Login successful',
+                'token': token.key,
+                'user': user_serializer.data,
+                'redirect_path': redirect_path
+            }, status=status.HTTP_200_OK)
+        
+        return Response({
+            'success': False,
+            'message': 'Invalid credentials or user type mismatch',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def logout(self, request):
+        """
+        User logout endpoint
+        Requires authentication token
+        """
+        try:
+            # Deactivate current session
+            ip_address = get_client_ip(request)
+            active_sessions = UserSession.objects.filter(
+                user=request.user,
+                is_active=True,
+                ip_address=ip_address
+            )
+            
+            for session in active_sessions:
+                session.is_active = False
+                session.logout_time = timezone.now()
+                session.save()
+            
+            # Delete token
+            request.user.auth_token.delete()
+            
+            return Response({
+                'success': True,
+                'message': 'Logout successful'
+            }, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': 'Logout failed',
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def change_password(self, request):
+        """
+        Change user password endpoint
+        Requires authentication token
+        
+        Expected payload:
+        {
+            "old_password": "current_password",
+            "new_password": "new_password",
+            "confirm_password": "new_password"
+        }
+        """
+        serializer = ChangePasswordSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            user = request.user
+            
+            # Check old password
+            if not user.check_password(serializer.validated_data['old_password']):
+                return Response({
+                    'success': False,
+                    'message': 'Old password is incorrect'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Set new password
+            user.set_password(serializer.validated_data['new_password'])
+            user.save()
+            
+            # Update token
+            Token.objects.filter(user=user).delete()
+            token = Token.objects.create(user=user)
+            
+            return Response({
+                'success': True,
+                'message': 'Password changed successfully',
+                'token': token.key
+            }, status=status.HTTP_200_OK)
+        
+        return Response({
+            'success': False,
+            'message': 'Password change failed',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        """
+        Get current authenticated user details
+        """
+        serializer = UserLoginResponseSerializer(request.user)
+        return Response({
+            'success': True,
+            'user': serializer.data
+        }, status=status.HTTP_200_OK)
+    
+    
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def register(self, request):
+        """
+        User registration endpoint (optional - can be restricted)
+        
+        Expected payload:
+        {
+            "username": "newuser",
+            "email": "user@example.com",
+            "first_name": "John",
+            "last_name": "Doe",
+            "password": "password123",
+            "confirm_password": "password123",
+            "role_name": "engineer",
+            "phone_number": "+1234567890"
+        }
+        """
+        serializer = RegisterUserSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            user = serializer.save()
+            token = Token.objects.create(user=user)
+            user_data = UserLoginResponseSerializer(user).data
+            
+            return Response({
+                'success': True,
+                'message': 'User registered successfully',
+                'token': token.key,
+                'user': user_data
+            }, status=status.HTTP_201_CREATED)
+        
+        return Response({
+            'success': False,
+            'message': 'Registration failed',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Standalone view for getting user roles
+from rest_framework.decorators import api_view, permission_classes
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_user_roles(request):
+    """
+    Get list of available user roles for the login dropdown
+    """
+    roles = UserRole.objects.values('role_id', 'role_name', 'role_description')
+    
+    # Map to frontend format
+    user_types = [
+        {
+            'value': role['role_name'],
+            'label': role['role_name'].replace('-', ' ').title()
+        }
+        for role in roles
+    ]
+    
+    return Response({
+        'success': True,
+        'user_types': user_types
+    }, status=status.HTTP_200_OK)
+
 
 # ============================================
 # USER MANAGEMENT VIEWSETS
@@ -830,133 +1562,3 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
     filterset_fields = ['setting_type', 'is_editable']
     search_fields = ['setting_key', 'setting_description']
 
-
-# ============================================
-# DASHBOARD & ANALYTICS VIEWSETS
-# ============================================
-
-class DashboardViewSet(viewsets.ViewSet):
-    """Dashboard analytics and statistics"""
-    permission_classes = [AllowAny]
-
-    @action(detail=False, methods=['get'])
-    def stats(self, request):
-        """Get overall dashboard statistics"""
-        stats = {
-            'total_projects': Project.objects.count(),
-            'active_projects': Project.objects.exclude(
-                status__status_name__in=['Completed', 'Cancelled', 'Billed']
-            ).count(),
-            'delayed_projects': Project.objects.filter(is_delayed=True).count(),
-            'completed_projects': Project.objects.filter(
-                status__status_name='Completed'
-            ).count(),
-            'total_vendors': Vendor.objects.count(),
-            'active_vendors': Vendor.objects.filter(is_active=True).count(),
-            'blacklisted_vendors': Vendor.objects.filter(is_blacklisted=True).count(),
-            'pending_inspections': QIInspection.objects.filter(is_completed=False).count(),
-            'overdue_documents': DocumentCompliance.objects.filter(
-                is_overdue=True, is_submitted=False
-            ).count(),
-            'sla_breaches': SLATracking.objects.filter(is_breached=True).count(),
-            'total_penalties': Penalty.objects.aggregate(
-                total=Sum('penalty_amount')
-            )['total'] or 0,
-            'pending_invoices': Invoice.objects.exclude(payment_status='Paid').count(),
-        }
-        serializer = DashboardStatsSerializer(stats)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['get'])
-    def project_status_summary(self, request):
-        """Get project status distribution"""
-        total_projects = Project.objects.count()
-        status_summary = ProjectStatus.objects.annotate(
-            project_count=Count('projects')
-        ).values('status_name', 'project_count').order_by('status_order')
-        
-        status_list = list(status_summary)
-        for item in status_list:
-            if total_projects > 0:
-                item['percentage'] = round(
-                    (item['project_count'] / total_projects) * 100, 2
-                )
-            else:
-                item['percentage'] = 0
-        
-        serializer = ProjectStatusSummarySerializer(status_list, many=True)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['get'])
-    def vendor_performance(self, request):
-        """Get vendor performance summary"""
-        vendors = Vendor.objects.filter(is_active=True).annotate(
-            total_projects=Count('projects'),
-            delayed_projects=Count('projects', filter=Q(projects__is_delayed=True)),
-            total_penalties=Sum('penalties__penalty_amount', 
-                               filter=~Q(penalties__penalty_status='Waived')),
-            sla_breaches=Count('projects__sla_tracking', 
-                              filter=Q(projects__sla_tracking__is_breached=True))
-        ).values(
-            'id', 'vendor_code', 'vendor_name', 'compliance_score',
-            'total_projects', 'delayed_projects', 'total_penalties', 'sla_breaches'
-        )
-        
-        vendors_list = list(vendors)
-        for vendor in vendors_list:
-            if vendor['total_projects'] > 0:
-                on_time = vendor['total_projects'] - vendor['delayed_projects']
-                vendor['on_time_percentage'] = round(
-                    (on_time / vendor['total_projects']) * 100, 2
-                )
-            else:
-                vendor['on_time_percentage'] = 0
-            vendor['total_penalties'] = vendor['total_penalties'] or 0
-        
-        vendors_list = sorted(vendors_list, key=lambda x: x['compliance_score'], reverse=True)
-        
-        serializer = VendorPerformanceSummarySerializer(vendors_list, many=True)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['get'])
-    def delay_analysis(self, request):
-        """Get delay factor analysis"""
-        analysis = ProjectDelay.objects.values(
-            'factor__factor_name',
-            'factor__factor_category'
-        ).annotate(
-            occurrence_count=Count('id'),
-            total_delay_days=Sum('delay_days'),
-            avg_delay_days=Avg('delay_days')
-        ).order_by('-occurrence_count')[:10]
-        
-        serializer = DelayAnalysisSerializer(analysis, many=True)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['get'])
-    def monthly_trends(self, request):
-        """Get monthly project trends"""
-        trends = Project.objects.annotate(
-            month=TruncMonth('created_at')
-        ).values('month').annotate(
-            total=Count('id'),
-            completed=Count('id', filter=Q(status__status_name='Completed')),
-            delayed=Count('id', filter=Q(is_delayed=True))
-        ).order_by('month')
-        
-        return Response(list(trends))
-
-    @action(detail=False, methods=['get'])
-    def sector_summary(self, request):
-        """Get project summary by sector"""
-        sector_summary = Sector.objects.annotate(
-            total_projects=Count('projects'),
-            active_projects=Count('projects', 
-                filter=~Q(projects__status__status_name__in=['Completed', 'Cancelled', 'Billed'])),
-            delayed_projects=Count('projects', filter=Q(projects__is_delayed=True))
-        ).values(
-            'sector_code', 'sector_name', 'total_projects', 
-            'active_projects', 'delayed_projects'
-        )
-        
-        return Response(list(sector_summary))

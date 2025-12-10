@@ -1,0 +1,1176 @@
+NAVIGATION STRUCTURE BY USER LEVEL
+1. VENDOR REPRESENTATIVES
+Access Level: External User - Limited Access
+Nav Bar: Vendor Portal
+
+Dashboard - vendor-dashboard.tsx
+
+Endpoint: dashboard (filtered by vendor)
+Display: Project summary cards, compliance overview
+
+
+My Projects - vendor-projects.tsx
+
+Endpoint: projects
+Columns: ['project_code', 'project_name', 'status', 'start_date', 'completion_date', 'assigned_engineer']
+
+
+Document Upload - vendor-documents.tsx
+
+Endpoint: project-documents
+Columns: ['project', 'doc_type', 'document_name', 'upload_date', 'approval_status', 'version_number']
+
+
+Document Compliance - vendor-compliance.tsx
+
+Endpoint: document-compliance
+Columns: ['project', 'doc_type', 'is_submitted', 'submission_date', 'is_approved', 'due_date', 'is_overdue']
+
+
+Billing Summary - vendor-billing.tsx
+
+Endpoint: invoices
+Columns: ['invoice_number', 'invoice_date', 'due_date', 'invoice_amount', 'penalty_amount', 'net_amount', 'payment_status']
+
+
+Payments - vendor-payments.tsx
+
+Endpoint: payments
+Columns: ['invoice', 'payment_amount', 'payment_date', 'payment_method', 'payment_reference']
+
+
+Disputes - vendor-disputes.tsx
+
+Endpoint: vendor-disputes
+Columns: ['dispute_subject', 'dispute_type', 'dispute_status', 'submitted_date', 'resolution_date']
+
+
+Feedback - vendor-feedback.tsx
+
+Endpoint: vendor-feedback
+Columns: ['feedback_type', 'feedback_subject', 'rating', 'status', 'created_at']
+
+
+Notifications - vendor-notifications.tsx
+
+Endpoint: notifications
+Columns: ['notification_type', 'subject', 'message', 'status', 'sent_at', 'read_at']
+
+
+Knowledge Base - vendor-knowledge-base.tsx
+
+Static content page (templates, FAQs, guides)
+
+
+___________________________________________next_______________________________________________
+
+2. CLERKS
+Access Level: Internal User - Data Entry & Documentation
+Nav Bar: Document Management
+
+Dashboard - clerk-dashboard.tsx
+
+Custom dashboard with document status overview
+
+
+Projects - clerk-projects.tsx
+
+Endpoint: projects
+Columns: ['project_code', 'project_name', 'vendor', 'status', 'assigned_engineer', 'start_date', 'completion_date']
+
+
+Documents - clerk-documents.tsx
+
+Endpoint: project-documents
+Columns: ['project', 'doc_type', 'document_name', 'uploaded_by', 'upload_date', 'approval_status', 'is_current_version']
+
+
+Document Types - clerk-document-types.tsx
+
+Endpoint: document-types
+Columns: ['doc_type_name', 'doc_type_description', 'is_required', 'created_at']
+
+
+Document Compliance - clerk-compliance.tsx
+
+Endpoint: document-compliance
+Columns: ['project', 'doc_type', 'is_submitted', 'submission_date', 'is_approved', 'is_overdue', 'overdue_days']
+
+
+Notifications - clerk-notifications.tsx
+
+Endpoint: notifications
+Columns: ['recipient_user', 'notification_type', 'subject', 'status', 'sent_at', 'delivered_at']
+
+
+Change Logs - clerk-change-logs.tsx
+
+Endpoint: change-logs
+Columns: ['table_name', 'record_id', 'change_type', 'field_name', 'old_value', 'new_value', 'changed_by', 'created_at']
+
+
+Calendar - clerk-calendar.tsx
+
+Custom calendar component with tasks and deadlines
+
+
+Reports - clerk-reports.tsx
+
+Custom reports generation page
+
+
+___________________________________________next_______________________________________________
+
+
+3. ENGINEERING AIDE
+Access Level: Internal User - Support & Coordination
+Nav Bar: Project Coordination
+
+Dashboard - aide-dashboard.tsx
+
+Custom dashboard with KPIs and real-time tracking
+
+
+Projects - aide-projects.tsx
+
+Endpoint: projects
+Columns: ['project_code', 'project_name', 'vendor', 'sector', 'status', 'priority', 'start_date', 'completion_date', 'is_delayed']
+
+
+Workflow - aide-workflow.tsx
+
+Endpoint: project-workflows
+Columns: ['project', 'stage', 'assigned_user', 'start_date', 'due_date', 'completion_date', 'status', 'is_current_stage']
+
+
+Workflow Stages - aide-workflow-stages.tsx
+
+Endpoint: workflow-stages
+Columns: ['stage_name', 'stage_description', 'stage_order', 'default_duration_days', 'is_active']
+
+
+Documents - aide-documents.tsx
+
+Endpoint: project-documents
+Columns: ['project', 'doc_type', 'document_name', 'uploaded_by', 'upload_date', 'approval_status']
+
+
+Document Compliance - aide-compliance.tsx
+
+Endpoint: document-compliance
+Columns: ['project', 'doc_type', 'is_submitted', 'submission_date', 'is_approved', 'due_date', 'is_overdue']
+
+
+Notifications - aide-notifications.tsx
+
+Endpoint: notifications
+Columns: ['recipient_user', 'notification_type', 'subject', 'status', 'sent_at', 'read_at']
+
+
+Calendar - aide-calendar.tsx
+
+Custom calendar with auto-scheduling features
+
+
+Change History - aide-change-logs.tsx
+
+Endpoint: change-logs
+Columns: ['table_name', 'record_id', 'change_type', 'field_name', 'changed_by', 'created_at']
+
+
+Reports - aide-reports.tsx
+
+Custom reports page
+
+
+___________________________________________next_______________________________________________
+
+
+4. QUALITY INSPECTORS (QI)
+Access Level: Internal User - Inspection & Audit
+Nav Bar: Quality Inspection
+
+Dashboard - qi-dashboard.tsx
+
+Custom dashboard with QI workload and targets
+
+
+My Inspections - qi-inspections.tsx
+
+Endpoint: qi-inspections
+Columns: ['project', 'inspection_type', 'scheduled_date', 'inspection_date', 'inspection_result', 'is_completed']
+
+
+Inspection Types - qi-inspection-types.tsx
+
+Endpoint: inspection-types
+Columns: ['inspection_name', 'inspection_description', 'estimated_duration_hours', 'created_at']
+
+
+Daily Targets - qi-daily-targets.tsx
+
+Endpoint: qi-daily-targets
+Columns: ['target_date', 'target_audits', 'actual_audits', 'target_met', 'reason_not_met', 'reason_category']
+
+
+Performance - qi-performance.tsx
+
+Endpoint: qi-performance
+Columns: ['evaluation_period_start', 'evaluation_period_end', 'total_inspections', 'on_time_percentage', 'targets_met', 'targets_missed', 'quality_rating']
+
+
+Projects - qi-projects.tsx
+
+Endpoint: projects
+Columns: ['project_code', 'project_name', 'vendor', 'sector', 'status', 'assigned_qi']
+
+
+Workflow - qi-workflow.tsx
+
+Endpoint: project-workflows
+Columns: ['project', 'stage', 'assigned_user', 'due_date', 'status', 'is_current_stage']
+
+
+Calendar - qi-calendar.tsx
+
+Custom calendar with inspection scheduling
+
+
+Notifications - qi-notifications.tsx
+
+Endpoint: notifications
+Columns: ['notification_type', 'subject', 'message', 'status', 'sent_at']
+
+
+Reports - qi-reports.tsx
+
+Custom QI workload reports
+
+
+___________________________________________next_______________________________________________
+
+
+5. ENGINEERS / DESIGN ENGINEERS (DEs)
+Access Level: Internal User - Technical Review & Approval
+Nav Bar: Engineering Management
+
+Dashboard - engineer-dashboard.tsx
+
+Custom dashboard with KPIs and pending approvals
+
+
+Projects - engineer-projects.tsx
+
+Endpoint: projects
+Columns: ['project_code', 'project_name', 'vendor', 'sector', 'status', 'assigned_engineer', 'priority', 'risk_score', 'start_date', 'completion_date']
+
+
+Project Milestones - engineer-milestones.tsx
+
+Endpoint: project-milestones
+Columns: ['project', 'milestone_name', 'target_date', 'completion_date', 'is_completed', 'milestone_order']
+
+
+Documents - engineer-documents.tsx
+
+Endpoint: project-documents
+Columns: ['project', 'doc_type', 'document_name', 'uploaded_by', 'upload_date', 'approval_status', 'approved_by']
+
+
+Workflow - engineer-workflow.tsx
+
+Endpoint: project-workflows
+Columns: ['project', 'stage', 'assigned_user', 'start_date', 'due_date', 'completion_date', 'status']
+
+
+SLA Tracking - engineer-sla-tracking.tsx
+
+Endpoint: sla-tracking
+Columns: ['project', 'sla_rule', 'start_date', 'due_date', 'completion_date', 'status', 'is_breached', 'breach_days']
+
+
+Vendor Performance - engineer-vendor-performance.tsx
+
+Endpoint: vendor-performance
+Columns: ['vendor', 'evaluation_date', 'on_time_rate', 'quality_score', 'compliance_score', 'overall_rating']
+
+
+Analytics - engineer-analytics.tsx
+
+Custom analytics page with charts
+
+
+Change History - engineer-change-logs.tsx
+
+Endpoint: change-logs
+Columns: ['table_name', 'record_id', 'change_type', 'field_name', 'old_value', 'new_value', 'changed_by', 'created_at']
+
+
+AI Assistant - engineer-ai-chatbot.tsx
+
+Custom AI chatbot interface
+
+
+Predictive Analytics - engineer-predictive.tsx
+
+Custom predictive analytics page
+
+
+Reports - engineer-reports.tsx
+
+Custom reports generation
+
+
+___________________________________________next_______________________________________________
+
+
+6. WORK ORDER (WO) SUPERVISORS
+Access Level: Internal User - Supervision & Coordination
+Nav Bar: Supervision & Control
+Main Menu:
+
+Dashboard - supervisor-dashboard.tsx
+
+Comprehensive dashboard with all KPIs
+
+
+
+Projects Section
+
+All Projects - supervisor-projects.tsx
+
+Endpoint: projects
+Columns: ['project_code', 'project_name', 'vendor', 'sector', 'status', 'assigned_engineer', 'assigned_qi', 'priority', 'risk_score', 'is_delayed', 'delay_days']
+
+
+Project Milestones - supervisor-milestones.tsx
+
+Endpoint: project-milestones
+Columns: ['project', 'milestone_name', 'target_date', 'completion_date', 'is_completed']
+
+
+Project Team - supervisor-project-team.tsx
+
+Endpoint: project-team
+Columns: ['project', 'user', 'role_in_project', 'assigned_date', 'is_active']
+
+
+Project Delays - supervisor-project-delays.tsx
+
+Endpoint: project-delays
+Columns: ['project', 'factor', 'delay_days', 'delay_start_date', 'delay_end_date', 'responsible_party']
+
+
+
+Workflow Section
+
+Workflow Management - supervisor-workflow.tsx
+
+Endpoint: project-workflows
+Columns: ['project', 'stage', 'assigned_user', 'start_date', 'due_date', 'completion_date', 'status', 'is_current_stage']
+
+
+Workflow Stages - supervisor-workflow-stages.tsx
+
+Endpoint: workflow-stages
+Columns: ['stage_name', 'stage_order', 'default_duration_days', 'is_active']
+
+
+
+SLA & Compliance Section
+
+SLA Rules - supervisor-sla-rules.tsx
+
+Endpoint: sla-rules
+Columns: ['rule_name', 'stage', 'deadline_days', 'warning_threshold_days', 'is_active']
+
+
+SLA Tracking - supervisor-sla-tracking.tsx
+
+Endpoint: sla-tracking
+Columns: ['project', 'sla_rule', 'start_date', 'due_date', 'completion_date', 'status', 'is_breached', 'breach_days']
+
+
+Document Compliance - supervisor-compliance.tsx
+
+Endpoint: document-compliance
+Columns: ['project', 'doc_type', 'is_submitted', 'submission_date', 'is_approved', 'due_date', 'is_overdue', 'overdue_days']
+
+
+
+Penalty Management Section
+
+Penalty Rules - supervisor-penalty-rules.tsx
+
+Endpoint: penalty-rules
+Columns: ['rule_name', 'violation_type', 'penalty_formula', 'minimum_penalty', 'maximum_penalty', 'grace_period_days', 'is_active']
+
+
+Penalties - supervisor-penalties.tsx
+
+Endpoint: penalties
+Columns: ['project', 'vendor', 'penalty_rule', 'violation_date', 'delay_days', 'penalty_amount', 'penalty_status', 'issue_date']
+
+
+
+Quality Inspection Section
+
+QI Inspections - supervisor-qi-inspections.tsx
+
+Endpoint: qi-inspections
+Columns: ['project', 'inspection_type', 'assigned_qi', 'scheduled_date', 'inspection_date', 'inspection_result', 'is_completed']
+
+
+QI Daily Targets - supervisor-qi-targets.tsx
+
+Endpoint: qi-daily-targets
+Columns: ['qi_user', 'target_date', 'target_audits', 'actual_audits', 'target_met', 'reason_not_met']
+
+
+QI Performance - supervisor-qi-performance.tsx
+
+Endpoint: qi-performance
+Columns: ['qi_user', 'evaluation_period_start', 'evaluation_period_end', 'total_inspections', 'on_time_percentage', 'quality_rating']
+
+
+
+Vendor Management Section
+
+Vendors - supervisor-vendors.tsx
+
+Endpoint: vendors
+Columns: ['vendor_code', 'vendor_name', 'company_name', 'email', 'phone_number', 'compliance_score', 'is_active', 'is_blacklisted']
+
+
+Vendor Performance - supervisor-vendor-performance.tsx
+
+Endpoint: vendor-performance
+Columns: ['vendor', 'evaluation_date', 'on_time_rate', 'document_submission_rate', 'quality_score', 'compliance_score', 'overall_rating']
+
+
+Vendor Disputes - supervisor-vendor-disputes.tsx
+
+Endpoint: vendor-disputes
+Columns: ['vendor', 'project', 'dispute_subject', 'dispute_status', 'submitted_date', 'assigned_to', 'resolution_date']
+
+
+Vendor Feedback - supervisor-vendor-feedback.tsx
+
+Endpoint: vendor-feedback
+Columns: ['vendor', 'feedback_type', 'feedback_subject', 'rating', 'status', 'reviewed_by']
+
+
+
+Billing Section
+
+Invoices - supervisor-invoices.tsx
+
+Endpoint: invoices
+Columns: ['invoice_number', 'project', 'vendor', 'invoice_date', 'due_date', 'invoice_amount', 'penalty_amount', 'net_amount', 'payment_status']
+
+
+Payments - supervisor-payments.tsx
+
+Endpoint: payments
+Columns: ['invoice', 'payment_amount', 'payment_date', 'payment_method', 'payment_reference', 'processed_by']
+
+
+
+Escalation Section
+
+Escalation Rules - supervisor-escalation-rules.tsx
+
+Endpoint: escalation-rules
+Columns: ['rule_name', 'trigger_condition', 'delay_threshold_days', 'escalate_to_role', 'is_active']
+
+
+Escalations - supervisor-escalations.tsx
+
+Endpoint: escalations
+Columns: ['project', 'escalation_rule', 'escalated_from_user', 'escalated_to_user', 'escalation_date', 'status', 'resolution_date']
+
+
+
+Analytics Section
+
+Analytics Dashboard - supervisor-analytics.tsx
+
+Custom analytics with charts and insights
+
+
+Delay Factors - supervisor-delay-factors.tsx
+
+Endpoint: delay-factors
+Columns: ['factor_name', 'factor_category', 'factor_description', 'is_active']
+
+
+Predictive Analytics - supervisor-predictive.tsx
+
+Custom predictive analytics page
+
+
+
+Documents Section
+
+Project Documents - supervisor-documents.tsx
+
+Endpoint: project-documents
+Columns: ['project', 'doc_type', 'document_name', 'uploaded_by', 'upload_date', 'approval_status', 'approved_by']
+
+
+Document Types - supervisor-document-types.tsx
+
+Endpoint: document-types
+Columns: ['doc_type_name', 'doc_type_description', 'is_required']
+
+
+
+Notifications Section
+
+Notifications - supervisor-notifications.tsx
+
+Endpoint: notifications
+Columns: ['recipient_user', 'notification_type', 'subject', 'status', 'sent_at', 'delivered_at', 'read_at']
+
+
+Notification Templates - supervisor-notification-templates.tsx
+
+Endpoint: notification-templates
+Columns: ['template_name', 'template_subject', 'notification_type', 'is_active']
+
+
+
+System Logs Section
+
+Change Logs - supervisor-change-logs.tsx
+
+Endpoint: change-logs
+Columns: ['table_name', 'record_id', 'change_type', 'field_name', 'old_value', 'new_value', 'changed_by', 'created_at']
+
+
+Audit Logs - supervisor-audit-logs.tsx
+
+Endpoint: audit-logs
+Columns: ['user', 'action_type', 'action_description', 'entity_type', 'status', 'created_at']
+
+
+
+Utilities
+
+Calendar - supervisor-calendar.tsx
+
+Custom calendar with drag-and-drop task reassignment
+
+
+AI Assistant - supervisor-ai-chatbot.tsx
+
+Advanced AI chatbot
+
+
+Reports - supervisor-reports.tsx
+
+Comprehensive reports generation
+
+
+___________________________________________next_______________________________________________
+
+
+7. TEAM LEADERS
+Access Level: Internal User - Team Management & Strategy
+Nav Bar: Strategic Management
+Dashboard Section:
+
+Executive Dashboard - leader-dashboard.tsx
+
+Comprehensive executive dashboard
+
+
+TV Dashboard - leader-tv-dashboard.tsx
+
+Large screen dashboard for office displays
+
+
+
+Projects & Operations
+
+All Projects - leader-projects.tsx
+
+Endpoint: projects
+Columns: ['project_code', 'project_name', 'vendor', 'sector', 'status', 'assigned_engineer', 'assigned_qi', 'wo_supervisor', 'priority', 'risk_score']
+
+
+Sectors - leader-sectors.tsx
+
+Endpoint: sectors
+Columns: ['sector_code', 'sector_name', 'sector_manager', 'location', 'is_active']
+
+
+Project Status - leader-project-status.tsx
+
+Endpoint: project-statuses
+Columns: ['status_name', 'status_description', 'status_order', 'status_color', 'is_active']
+
+
+
+Analytics & Insights
+
+Analytics Dashboard - leader-analytics.tsx
+
+Comprehensive analytics with all metrics
+
+
+Vendor Analytics - leader-vendor-analytics.tsx
+
+Endpoint: vendor-performance
+Columns: ['vendor', 'evaluation_date', 'on_time_rate', 'document_submission_rate', 'quality_score', 'compliance_score', 'overall_rating']
+
+
+Delay Analysis - leader-delay-analysis.tsx
+
+Endpoint: project-delays
+Columns: ['project', 'factor', 'delay_days', 'responsible_party', 'delay_start_date']
+
+
+Predictive Analytics - leader-predictive.tsx
+
+Full predictive analytics module
+
+
+
+SLA & Compliance
+
+SLA Overview - leader-sla-overview.tsx
+
+Endpoint: sla-tracking
+Columns: ['project', 'sla_rule', 'due_date', 'completion_date', 'status', 'is_breached', 'breach_days']
+
+
+SLA Rules Management - leader-sla-rules.tsx
+
+Endpoint: sla-rules
+Columns: ['rule_name', 'stage', 'deadline_days', 'warning_threshold_days', 'is_active']
+
+
+
+Penalties & Billing
+
+Penalty Overview - leader-penalties.tsx
+
+Endpoint: penalties
+Columns: ['project', 'vendor', 'penalty_rule', 'violation_date', 'penalty_amount', 'penalty_status']
+
+
+Penalty Rules - leader-penalty-rules.tsx
+
+Endpoint: penalty-rules
+Columns: ['rule_name', 'violation_type', 'penalty_formula', 'minimum_penalty', 'maximum_penalty']
+
+
+Billing Overview - leader-billing.tsx
+
+Endpoint: invoices
+Columns: ['invoice_number', 'project', 'vendor', 'invoice_date', 'invoice_amount', 'payment_status']
+
+
+
+QI Management
+
+QI Performance Overview - leader-qi-overview.tsx
+
+Endpoint: qi-performance
+Columns: ['qi_user', 'evaluation_period_start', 'evaluation_period_end', 'total_inspections', 'on_time_percentage', 'targets_met', 'targets_missed']
+
+
+QI Workload Analysis - leader-qi-workload.tsx
+
+Endpoint: qi-daily-targets
+Columns: ['qi_user', 'target_date', 'target_audits', 'actual_audits', 'target_met', 'reason_not_met']
+
+
+
+Escalations
+
+Escalation Management - leader-escalations.tsx
+
+Endpoint: escalations
+Columns: ['project', 'escalation_rule', 'escalated_to_user', 'escalation_date', 'status', 'resolution_date']
+
+
+Escalation Rules - leader-escalation-rules.tsx
+
+Endpoint: escalation-rules
+Columns: ['rule_name', 'trigger_condition', 'delay_threshold_days', 'escalate_to_role', 'is_active']
+
+
+
+User Management
+
+Users - leader-users.tsx
+
+Endpoint: users
+Columns: ['username', 'email', 'role', 'is_active', 'phone_number', 'last_login']
+
+
+User Roles - leader-user-roles.tsx
+
+Endpoint: user-roles
+Columns: ['role_name', 'role_description', 'created_at']
+
+
+Permissions - leader-permissions.tsx
+
+Endpoint: permissions
+Columns: ['permission_name', 'permission_description', 'module_name']
+
+
+Role Permissions - leader-role-permissions.tsx
+
+Endpoint: role-permissions
+Columns: ['role', 'permission', 'created_at']
+
+
+
+Vendors
+
+Vendor Management - leader-vendors.tsx
+
+Endpoint: vendors
+Columns: ['vendor_code', 'vendor_name', 'company_name', 'compliance_score', 'is_active', 'is_blacklisted']
+
+
+Vendor Contacts - leader-vendor-contacts.tsx
+
+Endpoint: vendor-contacts
+Columns: ['vendor', 'contact_name', 'contact_position', 'contact_email', 'is_primary']
+
+
+
+Reports & Logs
+
+Custom Reports - leader-reports.tsx
+
+Custom report generation with all options
+
+
+Historical Data - leader-historical.tsx
+
+Custom historical comparison page
+
+
+Change Logs - leader-change-logs.tsx
+
+Endpoint: change-logs
+Columns: ['table_name', 'record_id', 'change_type', 'changed_by', 'created_at']
+
+
+Audit Logs - leader-audit-logs.tsx
+
+Endpoint: audit-logs
+Columns: ['user', 'action_type', 'entity_type', 'status', 'created_at']
+
+
+
+AI & Insights
+
+AI Trend Suggestions - leader-ai-trends.tsx
+
+Custom AI insights page
+
+
+AI Assistant - leader-ai-chatbot.tsx
+
+Advanced AI chatbot
+
+
+___________________________________________next_______________________________________________
+
+
+8. SECTOR MANAGERS
+Access Level: Executive User - Strategic Oversight
+Nav Bar: Executive Overview
+
+Executive Dashboard - sector-manager-dashboard.tsx
+
+High-level executive dashboard
+
+
+Sector Overview - sector-manager-sectors.tsx
+
+Endpoint: sectors
+Columns: ['sector_code', 'sector_name', 'sector_manager', 'location', 'is_active']
+
+
+Project Portfolio - sector-manager-projects.tsx
+
+Endpoint: projects
+Columns: ['project_code', 'project_name', 'vendor', 'status', 'priority', 'contract_value', 'completion_date']
+
+
+Performance Analytics - sector-manager-analytics.tsx
+
+Custom executive analytics
+
+
+Vendor Performance - sector-manager-vendor-performance.tsx
+
+Endpoint: vendor-performance
+Columns: ['vendor', 'evaluation_date', 'overall_rating', 'compliance_score']
+
+
+SLA Compliance - sector-manager-sla.tsx
+
+Endpoint: sla-tracking
+Columns: ['project', 'sla_rule', 'status', 'is_breached']
+
+
+Financial Overview - sector-manager-financial.tsx
+
+Endpoint: invoices
+Columns: ['invoice_number', 'vendor', 'invoice_amount', 'payment_status']
+
+
+Penalties Overview - sector-manager-penalties.tsx
+
+Endpoint: penalties
+Columns: ['project', 'vendor', 'penalty_amount', 'penalty_status']
+
+
+Strategic Reports - sector-manager-reports.tsx
+
+Executive summary reports
+
+
+Historical Analysis - sector-manager-historical.tsx
+
+Year-over-year analysis
+
+
+AI Insights - sector-manager-ai-insights.tsx
+
+Strategic AI recommendations
+
+
+TV Dashboard - sector-manager-tv-dashboard.tsx
+
+Visual metrics board
+
+
+___________________________________________next_______________________________________________
+
+
+9. SYSTEM ADMINISTRATORS
+Access Level: Full System Access
+Nav Bar: System Administration
+Dashboard:
+
+Admin Dashboard - admin-dashboard.tsx
+
+System overview dashboard
+
+
+
+User Management
+
+Users - admin-users.tsx
+
+Endpoint: users
+Columns: ['username', 'email', 'role', 'is_active', 'is_super_user', 'is_staff', 'last_login', 'date_joined']
+
+
+User Roles - admin-user-roles.tsx
+
+Endpoint: user-roles
+Columns: ['role_name', 'role_description', 'created_at', 'updated_at']
+
+
+Permissions - admin-permissions.tsx
+
+Endpoint: permissions
+Columns: ['permission_name', 'permission_description', 'module_name', 'created_at']
+
+
+Role Permissions - admin-role-permissions.tsx
+
+Endpoint: role-permissions
+Columns: ['role', 'permission', 'created_at']
+
+
+User Sessions - admin-user-sessions.tsx
+
+Endpoint: user-sessions
+Columns: ['user', 'login_time', 'logout_time', 'ip_address', 'is_active']
+
+
+
+Vendor Management
+
+Vendors - admin-vendors.tsx
+
+Endpoint: vendors
+Columns: ['vendor_code', 'vendor_name', 'company_name', 'email', 'phone_number', 'compliance_score', 'is_active', 'is_blacklisted']
+
+
+Vendor Contacts - admin-vendor-contacts.tsx
+
+Endpoint: vendor-contacts
+Columns: ['vendor', 'contact_name', 'contact_position', 'contact_email', 'contact_phone', 'is_primary']
+
+
+Vendor Performance - admin-vendor-performance.tsx
+
+Endpoint: vendor-performance
+Columns: ['vendor', 'evaluation_date', 'on_time_rate', 'quality_score', 'compliance_score', 'overall_rating']
+
+Project Management
+
+Projects - admin-projects.tsx
+
+Endpoint: projects
+Columns: ['project_code', 'project_name', 'vendor', 'sector', 'status', 'assigned_engineer', 'assigned_qi', 'wo_supervisor', 'priority', 'risk_score', 'is_delayed']
+
+
+Sectors - admin-sectors.tsx
+
+Endpoint: sectors
+Columns: ['sector_code', 'sector_name', 'sector_manager', 'location', 'is_active', 'created_at']
+
+
+Project Statuses - admin-project-statuses.tsx
+
+Endpoint: project-statuses
+Columns: ['status_name', 'status_description', 'status_order', 'status_color', 'is_active']
+
+
+Project Milestones - admin-project-milestones.tsx
+
+Endpoint: project-milestones
+Columns: ['project', 'milestone_name', 'target_date', 'completion_date', 'is_completed', 'milestone_order']
+
+
+Project Team - admin-project-team.tsx
+
+Endpoint: project-team
+Columns: ['project', 'user', 'role_in_project', 'assigned_date', 'removed_date', 'is_active']
+
+
+
+Workflow Management
+
+Workflow Stages - admin-workflow-stages.tsx
+
+Endpoint: workflow-stages
+Columns: ['stage_name', 'stage_description', 'stage_order', 'default_duration_days', 'is_active']
+
+
+Project Workflows - admin-project-workflows.tsx
+
+Endpoint: project-workflows
+Columns: ['project', 'stage', 'assigned_user', 'start_date', 'due_date', 'completion_date', 'status', 'is_current_stage']
+
+
+
+Document Management
+
+Document Types - admin-document-types.tsx
+
+Endpoint: document-types
+Columns: ['doc_type_name', 'doc_type_description', 'is_required', 'created_at']
+
+
+Project Documents - admin-project-documents.tsx
+
+Endpoint: project-documents
+Columns: ['project', 'doc_type', 'document_name', 'document_path', 'uploaded_by', 'upload_date', 'version_number', 'approval_status', 'approved_by']
+
+
+Document Compliance - admin-document-compliance.tsx
+
+Endpoint: document-compliance
+Columns: ['project', 'doc_type', 'is_submitted', 'submission_date', 'is_approved', 'due_date', 'is_overdue', 'overdue_days']
+
+
+
+SLA Management
+
+SLA Rules - admin-sla-rules.tsx
+
+Endpoint: sla-rules
+Columns: ['rule_name', 'rule_description', 'stage', 'deadline_days', 'warning_threshold_days', 'is_active']
+
+
+SLA Tracking - admin-sla-tracking.tsx
+
+Endpoint: sla-tracking
+Columns: ['project', 'sla_rule', 'start_date', 'due_date', 'completion_date', 'status', 'is_breached', 'breach_days', 'waived_by']
+
+
+
+Quality Inspection
+
+Inspection Types - admin-inspection-types.tsx
+
+Endpoint: inspection-types
+Columns: ['inspection_name', 'inspection_description', 'estimated_duration_hours', 'created_at']
+
+
+QI Inspections - admin-qi-inspections.tsx
+
+Endpoint: qi-inspections
+Columns: ['project', 'inspection_type', 'assigned_qi', 'scheduled_date', 'inspection_date', 'inspection_result', 'is_completed']
+
+
+QI Daily Targets - admin-qi-daily-targets.tsx
+
+Endpoint: qi-daily-targets
+Columns: ['qi_user', 'target_date', 'target_audits', 'actual_audits', 'target_met', 'reason_not_met', 'reason_category']
+
+
+QI Performance - admin-qi-performance.tsx
+
+Endpoint: qi-performance
+Columns: ['qi_user', 'evaluation_period_start', 'evaluation_period_end', 'total_inspections', 'on_time_percentage', 'targets_met', 'targets_missed', 'quality_rating']
+
+
+
+Penalty Management
+
+Penalty Rules - admin-penalty-rules.tsx
+
+Endpoint: penalty-rules
+Columns: ['rule_name', 'rule_description', 'violation_type', 'penalty_formula', 'minimum_penalty', 'maximum_penalty', 'grace_period_days', 'is_active']
+
+
+Penalties - admin-penalties.tsx
+
+Endpoint: penalties
+Columns: ['project', 'vendor', 'penalty_rule', 'violation_date', 'delay_days', 'penalty_amount', 'penalty_status', 'issue_date', 'payment_date', 'waived_by']
+
+
+
+Billing Management
+
+Invoices - admin-invoices.tsx
+
+Endpoint: invoices
+Columns: ['invoice_number', 'project', 'vendor', 'invoice_date', 'due_date', 'invoice_amount', 'penalty_amount', 'net_amount', 'payment_status', 'payment_date']
+
+
+Payments - admin-payments.tsx
+
+Endpoint: payments
+Columns: ['invoice', 'payment_amount', 'payment_date', 'payment_method', 'payment_reference', 'processed_by', 'created_at']
+
+
+
+Notification Management
+
+Notification Templates - admin-notification-templates.tsx
+
+Endpoint: notification-templates
+Columns: ['template_name', 'template_subject', 'notification_type', 'is_active', 'created_at', 'updated_at']
+
+
+Notifications - admin-notifications.tsx
+
+Endpoint: notifications
+Columns: ['recipient_user', 'recipient_email', 'notification_type', 'subject', 'status', 'sent_at', 'delivered_at', 'read_at', 'error_message']
+
+
+
+Escalation Management
+
+Escalation Rules - admin-escalation-rules.tsx
+
+Endpoint: escalation-rules
+Columns: ['rule_name', 'rule_description', 'trigger_condition', 'delay_threshold_days', 'escalate_to_role', 'notification_template', 'is_active']
+
+
+Escalations - admin-escalations.tsx
+
+Endpoint: escalations
+Columns: ['project', 'escalation_rule', 'escalated_from_user', 'escalated_to_user', 'escalation_reason', 'escalation_date', 'status', 'resolution_date', 'resolved_by']
+
+
+
+Analytics
+
+Delay Factors - admin-delay-factors.tsx
+
+Endpoint: delay-factors
+Columns: ['factor_name', 'factor_category', 'factor_description', 'is_active', 'created_at']
+
+
+Project Delays - admin-project-delays.tsx
+
+Endpoint: project-delays
+Columns: ['project', 'factor', 'delay_days', 'delay_start_date', 'delay_end_date', 'responsible_party', 'notes', 'reported_by']
+
+
+
+Vendor Portal
+
+Vendor Disputes - admin-vendor-disputes.tsx
+
+Endpoint: vendor-disputes
+Columns: ['vendor', 'project', 'dispute_type', 'dispute_subject', 'dispute_status', 'submitted_date', 'assigned_to', 'resolution', 'resolved_by', 'resolution_date']
+
+
+Vendor Feedback - admin-vendor-feedback.tsx
+
+Endpoint: vendor-feedback
+Columns: ['vendor', 'feedback_type', 'feedback_subject', 'rating', 'status', 'reviewed_by', 'review_date', 'response']
+
+
+
+Audit & Logs
+
+Change Logs - admin-change-logs.tsx
+
+Endpoint: change-logs
+Columns: ['table_name', 'record_id', 'change_type', 'field_name', 'old_value', 'new_value', 'changed_by', 'change_reason', 'ip_address', 'created_at']
+
+
+System Audit Logs - admin-audit-logs.tsx
+
+Endpoint: audit-logs
+Columns: ['user', 'action_type', 'action_description', 'entity_type', 'entity_id', 'ip_address', 'user_agent', 'status', 'error_message', 'created_at']
+
+
+
+System Configuration
+
+System Settings - admin-system-settings.tsx
+
+Endpoint: system-settings
+Columns: ['setting_key', 'setting_value', 'setting_type', 'setting_description', 'is_editable', 'created_at', 'updated_at']
+
+
+
+Database Management
+
+Database Backup - admin-database-backup.tsx
+
+Custom page for backup/restore operations
+
+
+Data Archiving - admin-data-archiving.tsx
+
+Custom page for archiving old records
+
+
+Performance Monitor - admin-performance.tsx
+
+Custom page for system performance monitoring
+
+
+
+Integration Management
+
+API Integration - admin-api-integration.tsx
+
+Custom page for managing API integrations
+
+
+Teams/Slack Settings - admin-integrations.tsx
+
+Custom page for third-party integrations

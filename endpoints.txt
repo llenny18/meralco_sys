@@ -1,0 +1,215 @@
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+// 1. User Roles
+const ENDPOINT = 'user-roles';
+const COLUMNS = ['role_name', 'role_description', 'created_at', 'updated_at'];
+
+// 2. Users
+const ENDPOINT = 'users';
+const COLUMNS = ['username', 'email', 'role', 'is_active', 'phone_number'];
+
+// 3. Permissions
+const ENDPOINT = 'permissions';
+const COLUMNS = ['permission_name', 'permission_description', 'module_name', 'created_at'];
+
+// 4. Role Permissions
+const ENDPOINT = 'role-permissions';
+const COLUMNS = ['role', 'permission', 'created_at'];
+
+// 5. User Sessions
+const ENDPOINT = 'user-sessions';
+const COLUMNS = ['user', 'login_time', 'logout_time', 'ip_address', 'is_active'];
+
+// ============================================
+// VENDOR MANAGEMENT
+// ============================================
+
+// 6. Vendors
+const ENDPOINT = 'vendors';
+const COLUMNS = ['vendor_code', 'vendor_name', 'company_name', 'email', 'phone_number', 'is_active'];
+
+// 7. Vendor Contacts
+const ENDPOINT = 'vendor-contacts';
+const COLUMNS = ['vendor', 'contact_name', 'contact_position', 'contact_email', 'contact_phone', 'is_primary'];
+
+// 8. Vendor Performance
+const ENDPOINT = 'vendor-performance';
+const COLUMNS = ['vendor', 'evaluation_date', 'on_time_rate', 'quality_score', 'compliance_score', 'overall_rating'];
+
+// ============================================
+// PROJECT MANAGEMENT
+// ============================================
+
+// 9. Sectors
+const ENDPOINT = 'sectors';
+const COLUMNS = ['sector_code', 'sector_name', 'sector_manager', 'location', 'is_active'];
+
+// 10. Project Statuses
+const ENDPOINT = 'project-statuses';
+const COLUMNS = ['status_name', 'status_description', 'status_order', 'status_color', 'is_active'];
+
+// 11. Projects
+const ENDPOINT = 'projects';
+const COLUMNS = ['project_code', 'project_name', 'vendor', 'sector', 'status', 'priority', 'start_date', 'completion_date'];
+
+// 12. Project Milestones
+const ENDPOINT = 'project-milestones';
+const COLUMNS = ['project', 'milestone_name', 'target_date', 'completion_date', 'is_completed', 'milestone_order'];
+
+// 13. Project Team
+const ENDPOINT = 'project-team';
+const COLUMNS = ['project', 'user', 'role_in_project', 'assigned_date', 'is_active'];
+
+// ============================================
+// WORKFLOW MANAGEMENT
+// ============================================
+
+// 14. Workflow Stages
+const ENDPOINT = 'workflow-stages';
+const COLUMNS = ['stage_name', 'stage_description', 'stage_order', 'default_duration_days', 'is_active'];
+
+// 15. Project Workflows
+const ENDPOINT = 'project-workflows';
+const COLUMNS = ['project', 'stage', 'assigned_user', 'start_date', 'due_date', 'status', 'is_current_stage'];
+
+// ============================================
+// DOCUMENT MANAGEMENT
+// ============================================
+
+// 16. Document Types
+const ENDPOINT = 'document-types';
+const COLUMNS = ['doc_type_name', 'doc_type_description', 'is_required', 'created_at'];
+
+// 17. Project Documents
+const ENDPOINT = 'project-documents';
+const COLUMNS = ['project', 'doc_type', 'document_name', 'uploaded_by', 'upload_date', 'approval_status', 'version_number'];
+
+// 18. Document Compliance
+const ENDPOINT = 'document-compliance';
+const COLUMNS = ['project', 'doc_type', 'is_submitted', 'submission_date', 'is_approved', 'is_overdue', 'overdue_days'];
+
+// ============================================
+// SLA MANAGEMENT
+// ============================================
+
+// 19. SLA Rules
+const ENDPOINT = 'sla-rules';
+const COLUMNS = ['rule_name', 'rule_description', 'stage', 'deadline_days', 'warning_threshold_days', 'is_active'];
+
+// 20. SLA Tracking
+const ENDPOINT = 'sla-tracking';
+const COLUMNS = ['project', 'sla_rule', 'start_date', 'due_date', 'completion_date', 'status', 'is_breached', 'breach_days'];
+
+// ============================================
+// QUALITY INSPECTION
+// ============================================
+
+// 21. Inspection Types
+const ENDPOINT = 'inspection-types';
+const COLUMNS = ['inspection_name', 'inspection_description', 'estimated_duration_hours', 'created_at'];
+
+// 22. QI Inspections
+const ENDPOINT = 'qi-inspections';
+const COLUMNS = ['project', 'inspection_type', 'assigned_qi', 'inspection_date', 'scheduled_date', 'inspection_result', 'is_completed'];
+
+// 23. QI Daily Targets
+const ENDPOINT = 'qi-daily-targets';
+const COLUMNS = ['qi_user', 'target_date', 'target_audits', 'actual_audits', 'target_met', 'reason_not_met'];
+
+// 24. QI Performance
+const ENDPOINT = 'qi-performance';
+const COLUMNS = ['qi_user', 'evaluation_period_start', 'evaluation_period_end', 'total_inspections', 'on_time_percentage', 'quality_rating'];
+
+// ============================================
+// PENALTY MANAGEMENT
+// ============================================
+
+// 25. Penalty Rules
+const ENDPOINT = 'penalty-rules';
+const COLUMNS = ['rule_name', 'violation_type', 'penalty_formula', 'minimum_penalty', 'maximum_penalty', 'is_active'];
+
+// 26. Penalties
+const ENDPOINT = 'penalties';
+const COLUMNS = ['project', 'vendor', 'penalty_rule', 'violation_date', 'delay_days', 'penalty_amount', 'penalty_status'];
+
+// ============================================
+// BILLING MANAGEMENT
+// ============================================
+
+// 27. Invoices
+const ENDPOINT = 'invoices';
+const COLUMNS = ['invoice_number', 'project', 'vendor', 'invoice_date', 'due_date', 'invoice_amount', 'payment_status'];
+
+// 28. Payments
+const ENDPOINT = 'payments';
+const COLUMNS = ['invoice', 'payment_amount', 'payment_date', 'payment_method', 'payment_reference', 'processed_by'];
+
+// ============================================
+// NOTIFICATION MANAGEMENT
+// ============================================
+
+// 29. Notification Templates
+const ENDPOINT = 'notification-templates';
+const COLUMNS = ['template_name', 'template_subject', 'notification_type', 'is_active', 'created_at'];
+
+// 30. Notifications
+const ENDPOINT = 'notifications';
+const COLUMNS = ['recipient_user', 'notification_type', 'subject', 'status', 'sent_at', 'read_at'];
+
+// ============================================
+// ESCALATION MANAGEMENT
+// ============================================
+
+// 31. Escalation Rules
+const ENDPOINT = 'escalation-rules';
+const COLUMNS = ['rule_name', 'trigger_condition', 'delay_threshold_days', 'escalate_to_role', 'is_active'];
+
+// 32. Escalations
+const ENDPOINT = 'escalations';
+const COLUMNS = ['project', 'escalation_rule', 'escalated_to_user', 'escalation_date', 'status', 'resolution_date'];
+
+// ============================================
+// ANALYTICS
+// ============================================
+
+// 33. Delay Factors
+const ENDPOINT = 'delay-factors';
+const COLUMNS = ['factor_name', 'factor_category', 'factor_description', 'is_active', 'created_at'];
+
+// 34. Project Delays
+const ENDPOINT = 'project-delays';
+const COLUMNS = ['project', 'factor', 'delay_days', 'delay_start_date', 'delay_end_date', 'responsible_party'];
+
+// ============================================
+// VENDOR PORTAL
+// ============================================
+
+// 35. Vendor Disputes
+const ENDPOINT = 'vendor-disputes';
+const COLUMNS = ['vendor', 'project', 'dispute_type', 'dispute_subject', 'dispute_status', 'submitted_date', 'resolution_date'];
+
+// 36. Vendor Feedback
+const ENDPOINT = 'vendor-feedback';
+const COLUMNS = ['vendor', 'feedback_type', 'feedback_subject', 'rating', 'status', 'created_at'];
+
+// ============================================
+// AUDIT & LOGS
+// ============================================
+
+// 37. Change Logs
+const ENDPOINT = 'change-logs';
+const COLUMNS = ['table_name', 'record_id', 'change_type', 'field_name', 'old_value', 'new_value', 'changed_by', 'created_at'];
+
+// 38. System Audit Logs
+const ENDPOINT = 'audit-logs';
+const COLUMNS = ['user', 'action_type', 'action_description', 'entity_type', 'status', 'created_at'];
+
+// ============================================
+// SYSTEM CONFIGURATION
+// ============================================
+
+// 39. System Settings
+const ENDPOINT = 'system-settings';
+const COLUMNS = ['setting_key', 'setting_value', 'setting_type', 'setting_description', 'is_editable'];

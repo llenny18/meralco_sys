@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import NextLink from 'next/link';
 
@@ -58,11 +58,22 @@ const UserBoxDescription = styled(Typography)(
 `
 );
 
+
 function HeaderUserbox() {
+   const [storedRole, setStoredRole] = useState<string | null>(null);
+  const [storedEmail, setStoredEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const role = localStorage.getItem("userRole");
+    const email = localStorage.getItem("email");
+
+    setStoredRole(role ? `Role: ${role.toUpperCase()}` : null);
+    setStoredEmail(email);
+  }, []);
   const user = {
-    name: 'ADMIN Name',
+    name: storedEmail,
     avatar: 'https://cdn-icons-png.flaticon.com/512/9187/9187532.png',
-    jobtitle: 'Administrator 1'
+    jobtitle: storedRole
   };
 
   const ref = useRef<any>(null);
@@ -122,25 +133,16 @@ function HeaderUserbox() {
               <ListItemText primary="My Profile" />
             </ListItem>
           </NextLink>
-          <NextLink href="/applications/messenger" passHref>
-            <ListItem button>
-              <InboxTwoToneIcon fontSize="small" />
-              <ListItemText primary="Messenger" />
-            </ListItem>
-          </NextLink>
-          <NextLink href="/management/profile/settings" passHref>
-            <ListItem button>
-              <AccountTreeTwoToneIcon fontSize="small" />
-              <ListItemText primary="Account Settings" />
-            </ListItem>
-          </NextLink>
+        
         </List>
         <Divider />
         <Box sx={{ m: 1 }}>
+          <NextLink href="/logout" passHref>
           <Button color="primary" fullWidth>
             <LockOpenTwoToneIcon sx={{ mr: 1 }} />
             Sign out
           </Button>
+       </NextLink>
         </Box>
       </Popover>
     </>

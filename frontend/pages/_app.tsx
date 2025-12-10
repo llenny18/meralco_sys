@@ -13,6 +13,7 @@ import createEmotionCache from 'src/createEmotionCache';
 import { SidebarProvider } from 'src/contexts/SidebarContext';
 import AdapterDateFns from '@mui/lab/AdapterDateFns';
 import LocalizationProvider from '@mui/lab/LocalizationProvider';
+import ChatBot from '@/bot';
 
 const clientSideEmotionCache = createEmotionCache();
 
@@ -36,7 +37,7 @@ function TokyoApp(props: TokyoAppProps) {
   return (
     <CacheProvider value={emotionCache}>
       <Head>
-        <title>Tokyo Free Black NextJS Typescript Admin Dashboard</title>
+        <title>MERALCO - Smart Vendor Sys</title>
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no"
@@ -47,6 +48,7 @@ function TokyoApp(props: TokyoAppProps) {
           <LocalizationProvider dateAdapter={AdapterDateFns}>
             <CssBaseline />
             {getLayout(<Component {...pageProps} />)}
+            <ChatBot apiBaseUrl="http://127.0.0.1:8000" />
           </LocalizationProvider>
         </ThemeProvider>
       </SidebarProvider>

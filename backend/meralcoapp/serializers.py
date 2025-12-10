@@ -2,6 +2,130 @@ from rest_framework import serializers
 from django.utils import timezone
 from .models import *
 
+from rest_framework import serializers
+from django.contrib.auth import authenticate
+from django.contrib.auth.hashers import make_password
+from .models import User, UserRole, UserSession
+
+
+class DelayPredictionSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    priority = serializers.CharField()
+    risk_score = serializers.CharField()
+    days_since_start = serializers.IntegerField()
+    contract_value = serializers.FloatField()
+    compliance_score = serializers.FloatField()
+
+class PenaltyPredictionSerializer(serializers.Serializer):
+    violation_type = serializers.CharField()
+    delay_days = serializers.IntegerField()
+
+class ChatRequestSerializer(serializers.Serializer):
+    question = serializers.CharField(max_length=500)
+
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+    password = serializers.CharField(required=True, write_only=True)
+    user_type = serializers.CharField(required=True)
+
+    def validate(self, attrs):
+        username = attrs.get('username')
+        password = attrs.get('password')
+        user_type = attrs.get('user_type')
+
+        if username and password:
+            # Authenticate user
+            user = authenticate(username=username, password=password)
+            
+            if not user:
+                raise serializers.ValidationError('Invalid credentials.')
+            
+            if not user.is_active:
+                raise serializers.ValidationError('User account is disabled.')
+            
+            # Check if user role matches the selected user type
+            if user.role and user.role.role_name != user_type:
+                raise serializers.ValidationError('User type mismatch.')
+            
+            attrs['user'] = user
+            return attrs
+        else:
+            raise serializers.ValidationError('Must include "username" and "password".')
+
+
+class UserLoginResponseSerializer(serializers.ModelSerializer):
+    role_name = serializers.CharField(source='role.role_name', read_only=True)
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['user_id', 'username', 'email', 'first_name', 'last_name', 
+                  'full_name', 'role', 'role_name', 'phone_number']
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
+
+class LogoutSerializer(serializers.Serializer):
+    pass
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True, write_only=True)
+    new_password = serializers.CharField(required=True, write_only=True)
+    confirm_password = serializers.CharField(required=True, write_only=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError("New passwords don't match.")
+        
+        if len(attrs['new_password']) < 6:
+            raise serializers.ValidationError("Password must be at least 6 characters long.")
+        
+        return attrs
+
+
+class RegisterUserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=True)
+    confirm_password = serializers.CharField(write_only=True, required=True)
+    role_name = serializers.CharField(write_only=True, required=True)
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'first_name', 'last_name', 'password', 
+                  'confirm_password', 'role_name', 'phone_number']
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['confirm_password']:
+            raise serializers.ValidationError("Passwords don't match.")
+        
+        if len(attrs['password']) < 6:
+            raise serializers.ValidationError("Password must be at least 6 characters long.")
+        
+        # Check if role exists
+        role_name = attrs.pop('role_name')
+        try:
+            role = UserRole.objects.get(role_name=role_name)
+            attrs['role'] = role
+        except UserRole.DoesNotExist:
+            raise serializers.ValidationError("Invalid role specified.")
+        
+        attrs.pop('confirm_password')
+        return attrs
+
+    def create(self, validated_data):
+        user = User.objects.create(
+            username=validated_data['username'],
+            email=validated_data.get('email', ''),
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', ''),
+            role=validated_data.get('role'),
+            phone_number=validated_data.get('phone_number', '')
+        )
+        user.set_password(validated_data['password'])
+        user.save()
+        return user
+
 
 # ============================================
 # USER MANAGEMENT SERIALIZERS
@@ -565,3 +689,111 @@ class DelayAnalysisSerializer(serializers.Serializer):
     occurrence_count = serializers.IntegerField()
     total_delay_days = serializers.IntegerField()
     avg_delay_days = serializers.DecimalField(max_digits=10, decimal_places=2)
+    
+
+from rest_framework import serializers
+
+# Dashboard Statistics Serializers
+class DashboardStatsSerializer(serializers.Serializer):
+    total_projects = serializers.IntegerField()
+    active_projects = serializers.IntegerField()
+    delayed_projects = serializers.IntegerField()
+    completed_projects = serializers.IntegerField()
+    total_vendors = serializers.IntegerField()
+    active_vendors = serializers.IntegerField()
+    blacklisted_vendors = serializers.IntegerField()
+    pending_inspections = serializers.IntegerField()
+    overdue_documents = serializers.IntegerField()
+    sla_breaches = serializers.IntegerField()
+    total_penalties = serializers.DecimalField(max_digits=15, decimal_places=2)
+    pending_invoices = serializers.IntegerField()
+
+
+class ProjectStatusSummarySerializer(serializers.Serializer):
+    status_name = serializers.CharField()
+    project_count = serializers.IntegerField()
+    percentage = serializers.FloatField()
+
+
+class VendorPerformanceSummarySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    vendor_code = serializers.CharField()
+    vendor_name = serializers.CharField()
+    compliance_score = serializers.DecimalField(max_digits=5, decimal_places=2)
+    total_projects = serializers.IntegerField()
+    delayed_projects = serializers.IntegerField()
+    total_penalties = serializers.DecimalField(max_digits=15, decimal_places=2)
+    sla_breaches = serializers.IntegerField()
+    on_time_percentage = serializers.FloatField()
+
+
+class DelayAnalysisSerializer(serializers.Serializer):
+    factor__factor_name = serializers.CharField()
+    factor__factor_category = serializers.CharField()
+    occurrence_count = serializers.IntegerField()
+    total_delay_days = serializers.IntegerField()
+    avg_delay_days = serializers.FloatField()
+
+
+class MonthlyTrendSerializer(serializers.Serializer):
+    month = serializers.DateField()
+    total = serializers.IntegerField()
+    completed = serializers.IntegerField()
+    delayed = serializers.IntegerField()
+
+
+class SectorSummarySerializer(serializers.Serializer):
+    sector_code = serializers.CharField()
+    sector_name = serializers.CharField()
+    total_projects = serializers.IntegerField()
+    active_projects = serializers.IntegerField()
+    delayed_projects = serializers.IntegerField()
+
+
+class PenaltySummarySerializer(serializers.Serializer):
+    total_penalties = serializers.IntegerField()
+    total_amount = serializers.DecimalField(max_digits=15, decimal_places=2)
+    issued = serializers.IntegerField()
+    paid = serializers.IntegerField()
+    waived = serializers.IntegerField()
+    disputed = serializers.IntegerField()
+
+
+class InvoiceSummarySerializer(serializers.Serializer):
+    total_invoices = serializers.IntegerField()
+    total_amount = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_penalties = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_net = serializers.DecimalField(max_digits=15, decimal_places=2)
+    paid = serializers.DecimalField(max_digits=15, decimal_places=2)
+    outstanding = serializers.DecimalField(max_digits=15, decimal_places=2)
+
+
+class RecentActivitySerializer(serializers.Serializer):
+    activity_type = serializers.CharField()
+    description = serializers.CharField()
+    timestamp = serializers.DateTimeField()
+    user = serializers.CharField()
+    project_code = serializers.CharField(allow_null=True)
+
+
+class ProjectPriorityDistributionSerializer(serializers.Serializer):
+    priority = serializers.CharField()
+    count = serializers.IntegerField()
+    percentage = serializers.FloatField()
+
+
+class QIPerformanceSummarySerializer(serializers.Serializer):
+    qi_name = serializers.CharField()
+    total_inspections = serializers.IntegerField()
+    completed_inspections = serializers.IntegerField()
+    pending_inspections = serializers.IntegerField()
+    completion_rate = serializers.FloatField()
+
+
+class UpcomingDeadlinesSerializer(serializers.Serializer):
+    project_code = serializers.CharField()
+    project_name = serializers.CharField()
+    deadline_type = serializers.CharField()
+    due_date = serializers.DateField()
+    days_remaining = serializers.IntegerField()
+    priority = serializers.CharField()
