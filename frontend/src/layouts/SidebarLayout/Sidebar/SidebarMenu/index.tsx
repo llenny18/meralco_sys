@@ -422,19 +422,7 @@ export function VendorSidebarMenu() {
                 </Button>
               </NextLink>
             </ListItem>
-            <ListItem component="div">
-              <NextLink href="/vendor/notifications" passHref>
-                <Button
-                  className={currentRoute === '/vendor/notifications' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<NotificationsTwoToneIcon />}
-                >
-                  Notifications
-                </Button>
-              </NextLink>
-            </ListItem>
+            
             <ListItem component="div">
               <NextLink href="/vendor/payments" passHref>
                 <Button
@@ -461,19 +449,7 @@ export function VendorSidebarMenu() {
                 </Button>
               </NextLink>
             </ListItem>
-            <ListItem component="div">
-              <NextLink href="/vendor/profile" passHref>
-                <Button
-                  className={currentRoute === '/vendor/profile' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<AccountCircleTwoToneIcon />}
-                >
-                  My Profile
-                </Button>
-              </NextLink>
-            </ListItem>
+       
           </List>
         </SubMenuWrapper>
       </List>
@@ -569,32 +545,8 @@ export function ClerkSidebarMenu() {
                 </Button>
               </NextLink>
             </ListItem>
-            <ListItem component="div">
-              <NextLink href="/clerk/notifications" passHref>
-                <Button
-                  className={currentRoute === '/clerk/notifications' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<NotificationsTwoToneIcon />}
-                >
-                  Notifications
-                </Button>
-              </NextLink>
-            </ListItem>
-            <ListItem component="div">
-              <NextLink href="/clerk/profile" passHref>
-                <Button
-                  className={currentRoute === '/clerk/profile' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<AccountCircleTwoToneIcon />}
-                >
-                  Profile
-                </Button>
-              </NextLink>
-            </ListItem>
+          
+           
             <ListItem component="div">
               <NextLink href="/clerk/projects" passHref>
                 <Button
@@ -688,32 +640,7 @@ export function EngineeringAideSidebarMenu() {
                 </Button>
               </NextLink>
             </ListItem>
-            <ListItem component="div">
-              <NextLink href="/aide/notifications" passHref>
-                <Button
-                  className={currentRoute === '/aide/notifications' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<NotificationsTwoToneIcon />}
-                >
-                  Notifications
-                </Button>
-              </NextLink>
-            </ListItem>
-            <ListItem component="div">
-              <NextLink href="/aide/profile" passHref>
-                <Button
-                  className={currentRoute === '/aide/profile' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<AccountCircleTwoToneIcon />}
-                >
-                  Profile
-                </Button>
-              </NextLink>
-            </ListItem>
+          
             <ListItem component="div">
               <NextLink href="/aide/projects" passHref>
                 <Button
@@ -833,19 +760,7 @@ export function QualityInspectorSidebarMenu() {
                 </Button>
               </NextLink>
             </ListItem>
-            <ListItem component="div">
-              <NextLink href="/qi/notifications" passHref>
-                <Button
-                  className={currentRoute === '/qi/notifications' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<NotificationsTwoToneIcon />}
-                >
-                  Notifications
-                </Button>
-              </NextLink>
-            </ListItem>
+            
             <ListItem component="div">
               <NextLink href="/qi/performance" passHref>
                 <Button
@@ -885,19 +800,7 @@ export function QualityInspectorSidebarMenu() {
                 </Button>
               </NextLink>
             </ListItem>
-            <ListItem component="div">
-              <NextLink href="/qi/profile" passHref>
-                <Button
-                  className={currentRoute === '/qi/profile' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<AccountCircleTwoToneIcon />}
-                >
-                  My Profile
-                </Button>
-              </NextLink>
-            </ListItem>
+          
           </List>
         </SubMenuWrapper>
       </List>
@@ -914,6 +817,21 @@ export function EngineerSidebarMenu() {
   const { closeSidebar } = useContext(SidebarContext);
   const router = useRouter();
   const currentRoute = router.pathname;
+  const [openSections, setOpenSections] = useState({
+    projects: false,
+    compliance: false,
+    financial: false,
+    qi: false,
+    vendors: false,
+    workflow: false,
+  });
+
+  const toggleSection = (section) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
 
   return (
     <MenuWrapper>
@@ -927,33 +845,419 @@ export function EngineerSidebarMenu() {
       >
         <SubMenuWrapper>
           <List component="div">
-             <ListItem component="div">
+            <ListItem component="div">
+              <NextLink href="/supervisor" passHref>
+                <Button
+                  className={currentRoute === '/supervisor' ? 'active' : ''}
+                  disableRipple
+                  component="a"
+                  onClick={closeSidebar}
+                  startIcon={<DashboardTwoToneIcon />}
+                >
+                  Supervisor Dashboard
+                </Button>
+              </NextLink>
+            </ListItem>
+
+            <ListItem component="div">
               <NextLink href="/engineer/dashboard" passHref>
                 <Button
                   className={currentRoute === '/engineer/dashboard' ? 'active' : ''}
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<DashboardTwoToneIcon />}
+                  startIcon={<BarChartTwoToneIcon />}
                 >
                   Dashboard
                 </Button>
               </NextLink>
             </ListItem>
+
+            
+
+            {/* Projects Section */}
             <ListItem component="div">
-              <NextLink href="/engineer/change-logs" passHref>
-                <Button
-                  className={currentRoute === '/engineer/change-logs' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<HistoryTwoToneIcon />}
-                >
-                  Change Logs
-                </Button>
-              </NextLink>
+              <Button
+                className={currentRoute.includes('/engineer/project') ? 'active' : ''}
+                disableRipple
+                onClick={() => toggleSection('projects')}
+                startIcon={<FolderTwoToneIcon />}
+                endIcon={openSections.projects ? <ExpandLessTwoToneIcon /> : <ExpandMoreTwoToneIcon />}
+              >
+                Projects
+              </Button>
             </ListItem>
-           
+            <Collapse in={openSections.projects}>
+              <List component="div" disablePadding>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/projects" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/projects' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                    >
+                      All Projects
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/milestones" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/milestones' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<FlagTwoToneIcon />}
+                    >
+                      Milestones
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/milestone-templates" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/milestone-templates' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<ViewModuleTwoToneIcon />}
+                    >
+                      Milestone Templates
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/project-schedules" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/project-schedules' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<ScheduleTwoToneIcon />}
+                    >
+                      Project Schedules
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/project-delays" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/project-delays' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<AccessTimeTwoToneIcon />}
+                    >
+                      Project Delays
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/delay-factors" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/delay-factors' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<HourglassEmptyTwoToneIcon />}
+                    >
+                      Delay Factors
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/status-updates" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/status-updates' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<UpdateTwoToneIcon />}
+                    >
+                      Status Updates
+                    </Button>
+                  </NextLink>
+                </ListItem>
+              </List>
+            </Collapse>
+
+            {/* Compliance & SLA Section */}
+            <ListItem component="div">
+              <Button
+                className={currentRoute.includes('/engineer/sla') || currentRoute.includes('/engineer/compliance') || currentRoute.includes('/engineer/escalation') ? 'active' : ''}
+                disableRipple
+                onClick={() => toggleSection('compliance')}
+                startIcon={<CheckCircleTwoToneIcon />}
+                endIcon={openSections.compliance ? <ExpandLessTwoToneIcon /> : <ExpandMoreTwoToneIcon />}
+              >
+                Compliance & SLA
+              </Button>
+            </ListItem>
+            <Collapse in={openSections.compliance}>
+              <List component="div" disablePadding>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/compliance" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/compliance' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                    >
+                      Compliance
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/sla-rules" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/sla-rules' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<RuleTwoToneIcon />}
+                    >
+                      SLA Rules
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/sla-tracking" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/sla-tracking' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<TrackChangesTwoToneIcon />}
+                    >
+                      SLA Tracking
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/escalation-rules" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/escalation-rules' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<TrendingUpTwoToneIcon />}
+                    >
+                      Escalation Rules
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/escalations" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/escalations' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<NotificationImportantTwoToneIcon />}
+                    >
+                      Escalations
+                    </Button>
+                  </NextLink>
+                </ListItem>
+              </List>
+            </Collapse>
+
+            {/* Financial Section */}
+            <ListItem component="div">
+              <Button
+                className={currentRoute.includes('/engineer/payment') || currentRoute.includes('/engineer/invoice') || currentRoute.includes('/engineer/penalt') ? 'active' : ''}
+                disableRipple
+                onClick={() => toggleSection('financial')}
+                startIcon={<PaymentTwoToneIcon />}
+                endIcon={openSections.financial ? <ExpandLessTwoToneIcon /> : <ExpandMoreTwoToneIcon />}
+              >
+                Financial
+              </Button>
+            </ListItem>
+            <Collapse in={openSections.financial}>
+              <List component="div" disablePadding>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/payments" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/payments' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                    >
+                      Payments
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/invoices" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/invoices' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<LocalAtmTwoToneIcon />}
+                    >
+                      Invoices
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/penalties" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/penalties' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<MoneyOffTwoToneIcon />}
+                    >
+                      Penalties
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/penalty-rules" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/penalty-rules' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<GavelTwoToneIcon />}
+                    >
+                      Penalty Rules
+                    </Button>
+                  </NextLink>
+                </ListItem>
+              </List>
+            </Collapse>
+
+            {/* QI Section */}
+            <ListItem component="div">
+              <Button
+                className={currentRoute.includes('/engineer/qi') ? 'active' : ''}
+                disableRipple
+                onClick={() => toggleSection('qi')}
+                startIcon={<TrendingUpTwoToneIcon />}
+                endIcon={openSections.qi ? <ExpandLessTwoToneIcon /> : <ExpandMoreTwoToneIcon />}
+              >
+                Quality Indicators
+              </Button>
+            </ListItem>
+            <Collapse in={openSections.qi}>
+              <List component="div" disablePadding>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/qis" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/qis' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                    >
+                      QIs
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/qi-performance" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/qi-performance' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<SpeedTwoToneIcon />}
+                    >
+                      QI Performance
+                    </Button>
+                  </NextLink>
+                </ListItem>
+              </List>
+            </Collapse>
+
+            {/* Vendors Section */}
+            <ListItem component="div">
+              <Button
+                className={currentRoute.includes('/engineer/vendor') ? 'active' : ''}
+                disableRipple
+                onClick={() => toggleSection('vendors')}
+                startIcon={<BusinessTwoToneIcon />}
+                endIcon={openSections.vendors ? <ExpandLessTwoToneIcon /> : <ExpandMoreTwoToneIcon />}
+              >
+                Vendors
+              </Button>
+            </ListItem>
+            <Collapse in={openSections.vendors}>
+              <List component="div" disablePadding>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/vendors" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/vendors' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                    >
+                      All Vendors
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/vendor-feedback" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/vendor-feedback' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<FeedbackTwoToneIcon />}
+                    >
+                      Vendor Feedback
+                    </Button>
+                  </NextLink>
+                </ListItem>
+              </List>
+            </Collapse>
+
+            {/* Workflow Section */}
+            <ListItem component="div">
+              <Button
+                className={currentRoute.includes('/engineer/workflow') ? 'active' : ''}
+                disableRipple
+                onClick={() => toggleSection('workflow')}
+                startIcon={<AccountTreeTwoToneIcon />}
+                endIcon={openSections.workflow ? <ExpandLessTwoToneIcon /> : <ExpandMoreTwoToneIcon />}
+              >
+                Workflow
+              </Button>
+            </ListItem>
+            <Collapse in={openSections.workflow}>
+              <List component="div" disablePadding>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/workflow" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/workflow' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                    >
+                      Workflow
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/engineer/workflow-stages" passHref>
+                    <Button
+                      className={currentRoute === '/engineer/workflow-stages' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<LayersTwoToneIcon />}
+                    >
+                      Workflow Stages
+                    </Button>
+                  </NextLink>
+                </ListItem>
+              </List>
+            </Collapse>
+
+            {/* Documents Section */}
             <ListItem component="div">
               <NextLink href="/engineer/documents" passHref>
                 <Button
@@ -967,84 +1271,51 @@ export function EngineerSidebarMenu() {
                 </Button>
               </NextLink>
             </ListItem>
+
             <ListItem component="div">
-              <NextLink href="/engineer/milestones" passHref>
+              <NextLink href="/engineer/document-types" passHref>
                 <Button
-                  className={currentRoute === '/engineer/milestones' ? 'active' : ''}
+                  className={currentRoute === '/engineer/document-types' ? 'active' : ''}
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<FlagTwoToneIcon />}
+                  startIcon={<LayersTwoToneIcon />}
                 >
-                  Milestones
+                  Document Types
                 </Button>
               </NextLink>
             </ListItem>
+
+            {/* Logs Section */}
             <ListItem component="div">
-              <NextLink href="/engineer/projects" passHref>
+              <NextLink href="/engineer/audit-logs" passHref>
                 <Button
-                  className={currentRoute === '/engineer/projects' ? 'active' : ''}
+                  className={currentRoute === '/engineer/audit-logs' ? 'active' : ''}
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<FolderTwoToneIcon />}
+                  startIcon={<AssessmentTwoToneIcon />}
                 >
-                  Projects
+                  Audit Logs
                 </Button>
               </NextLink>
             </ListItem>
+
             <ListItem component="div">
-              <NextLink href="/engineer/sla-tracking" passHref>
+              <NextLink href="/engineer/change-logs" passHref>
                 <Button
-                  className={currentRoute === '/engineer/sla-tracking' ? 'active' : ''}
+                  className={currentRoute === '/engineer/change-logs' ? 'active' : ''}
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<TrackChangesTwoToneIcon />}
+                  startIcon={<HistoryTwoToneIcon />}
                 >
-                  SLA Tracking
+                  Change Logs
                 </Button>
               </NextLink>
             </ListItem>
-            <ListItem component="div">
-              <NextLink href="/engineer/vendor-performance" passHref>
-                <Button
-                  className={currentRoute === '/engineer/vendor-performance' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<SpeedTwoToneIcon />}
-                >
-                  Vendor Performance
-                </Button>
-              </NextLink>
-            </ListItem>
-            <ListItem component="div">
-              <NextLink href="/engineer/workflow" passHref>
-                <Button
-                  className={currentRoute === '/engineer/workflow' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<AccountTreeTwoToneIcon />}
-                >
-                  Workflow
-                </Button>
-              </NextLink>
-            </ListItem>
-            <ListItem component="div">
-              <NextLink href="/engineer/profile" passHref>
-                <Button
-                  className={currentRoute === '/engineer/profile' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<AccountCircleTwoToneIcon />}
-                >
-                  My Profile
-                </Button>
-              </NextLink>
-            </ListItem>
+
+           
           </List>
         </SubMenuWrapper>
       </List>
@@ -1117,19 +1388,7 @@ export function WOSupervisorSidebarMenu() {
               </NextLink>
             </ListItem>
 
-            <ListItem component="div">
-              <NextLink href="/supervisor/notifications" passHref>
-                <Button
-                  className={currentRoute === '/supervisor/notifications' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<NotificationsTwoToneIcon />}
-                >
-                  Notifications
-                </Button>
-              </NextLink>
-            </ListItem>
+           
 
             {/* Projects Section */}
             <ListItem component="div">
@@ -1571,19 +1830,7 @@ export function WOSupervisorSidebarMenu() {
               </NextLink>
             </ListItem>
 
-            <ListItem component="div">
-              <NextLink href="/supervisor/profile" passHref>
-                <Button
-                  className={currentRoute === '/supervisor/profile' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<AccountCircleTwoToneIcon />}
-                >
-                  My Profile
-                </Button>
-              </NextLink>
-            </ListItem>
+           
           </List>
         </SubMenuWrapper>
       </List>
@@ -1911,19 +2158,7 @@ export function TeamLeaderSidebarMenu() {
                 </Button>
               </NextLink>
             </ListItem>
-            <ListItem component="div">
-              <NextLink href="/leader/profile" passHref>
-                <Button
-                  className={currentRoute === '/leader/profile' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<AccountCircleTwoToneIcon />}
-                >
-                  My Profile
-                </Button>
-              </NextLink>
-            </ListItem>
+            
           </List>
         </SubMenuWrapper>
       </List>
@@ -2157,18 +2392,7 @@ export function SystemAdminSidebarMenu() {
             </ListItem>
             <Collapse in={openMenus.delays}>
               <List component="div" disablePadding>
-                <ListItem component="div" sx={{ pl: 4 }}>
-                  <NextLink href="/admin/delay-logs" passHref>
-                    <Button
-                      className={currentRoute === '/admin/delay-logs' ? 'active' : ''}
-                      disableRipple
-                      component="a"
-                      onClick={closeSidebar}
-                    >
-                      Delay Logs
-                    </Button>
-                  </NextLink>
-                </ListItem>
+               
                 <ListItem component="div" sx={{ pl: 4 }}>
                   <NextLink href="/admin/project-delays" passHref>
                     <Button
@@ -2251,19 +2475,7 @@ export function SystemAdminSidebarMenu() {
               </NextLink>
             </ListItem>
 
-            <ListItem component="div">
-              <NextLink href="/admin/notifications" passHref>
-                <Button
-                  className={currentRoute === '/admin/notifications' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<NotificationsActiveTwoToneIcon />}
-                >
-                  Notifications
-                </Button>
-              </NextLink>
-            </ListItem>
+        
 
             <ListItem component="div">
               <NextLink href="/admin/payments" passHref>
@@ -2357,19 +2569,7 @@ export function SystemAdminSidebarMenu() {
               </List>
             </Collapse>
 
-            <ListItem component="div">
-              <NextLink href="/admin/profile" passHref>
-                <Button
-                  className={currentRoute === '/admin/profile' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<AccountCircleTwoToneIcon />}
-                >
-                  Profile
-                </Button>
-              </NextLink>
-            </ListItem>
+        
 
             <ListItem component="div">
               <Button

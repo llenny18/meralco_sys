@@ -114,7 +114,7 @@ function ChangeLogs() {
         <Grid container direction="row" justifyContent="center" alignItems="stretch" spacing={3}>
           <Grid item xs={12}>
             <Card>
-              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="Change Logs Management" />
+              <CardHeader  title="Change Logs Management" />
               <Divider />
               <CardContent>
                 {successMessage && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>{successMessage}</Alert>}

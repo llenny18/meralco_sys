@@ -1,4 +1,4 @@
-// pages/engineer/engineer-workflow.tsx
+// pages/engineer/engineer-milestones.tsx
 import { FC, useState, useEffect, ChangeEvent } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -11,10 +11,10 @@ import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
-const ENDPOINT = 'project-workflows';
-const COLUMNS = ['project', 'stage', 'assigned_user', 'start_date', 'due_date', 'completion_date', 'status'];
+const ENDPOINT = 'project-milestones';
+const COLUMNS = ['project', 'milestone_name', 'target_date', 'completion_date', 'is_completed', 'milestone_order'];
 
-function EngineerWorkflow() {
+function EngineerMilestones() {
   const router = useRouter();
 
   useEffect(() => {
@@ -29,7 +29,7 @@ function EngineerWorkflow() {
     }
 
     // Optional: Check if user has admin role
-    if (userRole !== 'admin') {
+    if (userRole !== 'engineer') {
       // Redirect non-admin users to their appropriate dashboard
       router.push('/unauthorized'); // or router.push('/dashboard');
     }
@@ -101,12 +101,12 @@ function EngineerWorkflow() {
 
   return (
     <>
-      <Head><title>Workflow - Engineer Portal</title></Head>
+      <Head><title>Project Milestones - Engineer Portal</title></Head>
       <PageTitleWrapper>
         <Grid container justifyContent="space-between" alignItems="center">
           <Grid item>
-            <Typography variant="h3" component="h3" gutterBottom>🔄 Workflow</Typography>
-            <Typography variant="subtitle2">Monitor project workflows</Typography>
+            <Typography variant="h3" component="h3" gutterBottom>🎯 Project Milestones</Typography>
+            <Typography variant="subtitle2">Track project milestones</Typography>
           </Grid>
         </Grid>
       </PageTitleWrapper>
@@ -114,7 +114,7 @@ function EngineerWorkflow() {
         <Grid container direction="row" justifyContent="center" alignItems="stretch" spacing={3}>
           <Grid item xs={12}>
             <Card>
-              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="Workflow Management" />
+              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="Project Milestones Management" />
               <Divider />
               <CardContent>
                 {successMessage && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>{successMessage}</Alert>}
@@ -200,5 +200,5 @@ function EngineerWorkflow() {
   );
 }
 
-EngineerWorkflow.getLayout = (page) => <SidebarLayout userRole="engineer">{page}</SidebarLayout>;
-export default EngineerWorkflow;
+EngineerMilestones.getLayout = (page) => <SidebarLayout userRole="engineer">{page}</SidebarLayout>;
+export default EngineerMilestones;

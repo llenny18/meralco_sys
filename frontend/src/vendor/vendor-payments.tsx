@@ -29,7 +29,7 @@ function VendorPayments() {
     }
 
     // Optional: Check if user has admin role
-    if (userRole !== 'admin') {
+    if (userRole !== 'vendor') {
       // Redirect non-admin users to their appropriate dashboard
       router.push('/unauthorized'); // or router.push('/dashboard');
     }

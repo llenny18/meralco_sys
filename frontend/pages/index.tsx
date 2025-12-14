@@ -38,7 +38,7 @@ function Overview() {
   return (
     <OverviewWrapper>
       <Head>
-        <title>MERALCO - Smart Vendor Sys</title>
+        <title>AIMS WO</title>
       </Head>
       <HeaderWrapper>
         <Container maxWidth="lg">

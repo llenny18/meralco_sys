@@ -2,13 +2,13 @@ import Head from 'next/head';
 import SidebarLayout from '@/layouts/SidebarLayout';
 import { Grid, Container } from '@mui/material';
 
-import EngineerSlaTracking from '@/engineer/engineer-sla-tracking';
+import SupervisorSlaTracking from '@/engineer/supervisor-sla-tracking';
 
-function EngineerSlaTrackingPage() {
+function SupervisorSlaTrackingPage() {
   return (
     <>
       <Head>
-        <title>SLA Tracking - Engineer Portal</title>
+        <title>SLA Tracking - WO Supervisor</title>
       </Head>
       <Container maxWidth="lg">
         <Grid
@@ -19,7 +19,7 @@ function EngineerSlaTrackingPage() {
           spacing={3}
         >
           <Grid item xs={12}>
-            <EngineerSlaTracking />
+            <SupervisorSlaTracking />
           </Grid>
         </Grid>
       </Container>
@@ -27,8 +27,8 @@ function EngineerSlaTrackingPage() {
   );
 }
 
-EngineerSlaTrackingPage.getLayout = (page) => (
-  <SidebarLayout userRole="engineer">{page}</SidebarLayout>
+SupervisorSlaTrackingPage.getLayout = (page) => (
+  <SidebarLayout userRole="supervisor">{page}</SidebarLayout>
 );
 
-export default EngineerSlaTrackingPage;
+export default SupervisorSlaTrackingPage;

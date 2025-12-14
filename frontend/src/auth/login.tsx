@@ -250,7 +250,7 @@ export default function LoginPage() {
               textAlign: 'center',
               letterSpacing: '2px'
             }}>
-              MERALCO
+              AIMS WO
             </h1>
             <p style={{
               margin: 0,
@@ -463,7 +463,7 @@ export default function LoginPage() {
             color: '#7ea8c4',
             letterSpacing: '0.5px'
           }}>
-            © 2024 MERALCO SYS v2.0 | SECURE AUTHENTICATION
+            © 2024 AIMS WO SYS v2.0 | SECURE AUTHENTICATION
           </div>
         </div>
       </div>

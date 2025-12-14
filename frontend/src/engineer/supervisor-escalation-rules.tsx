@@ -1,4 +1,4 @@
-// pages/engineer/engineer-change-logs.tsx
+// pages/supervisor/supervisor-escalation-rules.tsx
 import { FC, useState, useEffect, ChangeEvent } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -11,10 +11,10 @@ import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
-const ENDPOINT = 'change-logs';
-const COLUMNS = ['table_name', 'record_id', 'change_type', 'field_name', 'old_value', 'new_value', 'changed_by', 'created_at'];
+const ENDPOINT = 'escalation-rules';
+const COLUMNS = ['rule_name', 'trigger_condition', 'delay_threshold_days', 'escalate_to_role', 'is_active'];
 
-function EngineerChangeLogs() {
+function SupervisorEscalationRules() {
   const router = useRouter();
 
   useEffect(() => {
@@ -29,7 +29,7 @@ function EngineerChangeLogs() {
     }
 
     // Optional: Check if user has admin role
-    if (userRole !== 'admin') {
+    if (userRole !== 'engineer') {
       // Redirect non-admin users to their appropriate dashboard
       router.push('/unauthorized'); // or router.push('/dashboard');
     }
@@ -101,12 +101,12 @@ function EngineerChangeLogs() {
 
   return (
     <>
-      <Head><title>Change History - Engineer Portal</title></Head>
+      <Head><title>Escalation Rules - WO Supervisor</title></Head>
       <PageTitleWrapper>
         <Grid container justifyContent="space-between" alignItems="center">
           <Grid item>
-            <Typography variant="h3" component="h3" gutterBottom>📋 Change History</Typography>
-            <Typography variant="subtitle2">View change history</Typography>
+            <Typography variant="h3" component="h3" gutterBottom>⚠️ Escalation Rules</Typography>
+            <Typography variant="subtitle2">Configure escalation rules</Typography>
           </Grid>
         </Grid>
       </PageTitleWrapper>
@@ -114,7 +114,7 @@ function EngineerChangeLogs() {
         <Grid container direction="row" justifyContent="center" alignItems="stretch" spacing={3}>
           <Grid item xs={12}>
             <Card>
-              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="Change History Management" />
+              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="Escalation Rules Management" />
               <Divider />
               <CardContent>
                 {successMessage && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>{successMessage}</Alert>}
@@ -200,5 +200,5 @@ function EngineerChangeLogs() {
   );
 }
 
-EngineerChangeLogs.getLayout = (page) => <SidebarLayout userRole="engineer">{page}</SidebarLayout>;
-export default EngineerChangeLogs;
+SupervisorEscalationRules.getLayout = (page) => <SidebarLayout userRole="supervisor">{page}</SidebarLayout>;
+export default SupervisorEscalationRules;

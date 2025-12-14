@@ -1,5 +1,5 @@
 // pages/qi/dashboard.tsx
-import { FC } from 'react';
+import { FC, useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import SidebarLayout from '@/layouts/SidebarLayout';
@@ -111,7 +111,7 @@ function QIDashboard() {
     }
 
     // Optional: Check if user has admin role
-    if (userRole !== 'admin') {
+    if (userRole !== 'quality-inspector') {
       // Redirect non-admin users to their appropriate dashboard
       router.push('/unauthorized'); // or router.push('/dashboard');
     }

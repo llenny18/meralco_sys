@@ -37,7 +37,7 @@ function TokyoApp(props: TokyoAppProps) {
   return (
     <CacheProvider value={emotionCache}>
       <Head>
-        <title>MERALCO - Smart Vendor Sys</title>
+        <title>AIMS WO</title>
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no"

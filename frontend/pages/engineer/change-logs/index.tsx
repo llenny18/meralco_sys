@@ -2,13 +2,13 @@ import Head from 'next/head';
 import SidebarLayout from '@/layouts/SidebarLayout';
 import { Grid, Container } from '@mui/material';
 
-import EngineerChangeLogs from '@/engineer/engineer-change-logs';
+import SupervisorChangeLogs from '@/engineer/supervisor-change-logs';
 
-function EngineerChangeLogsPage() {
+function SupervisorChangeLogsPage() {
   return (
     <>
       <Head>
-        <title>Change History - Engineer Portal</title>
+        <title>Change Logs - WO Supervisor</title>
       </Head>
       <Container maxWidth="lg">
         <Grid
@@ -19,7 +19,7 @@ function EngineerChangeLogsPage() {
           spacing={3}
         >
           <Grid item xs={12}>
-            <EngineerChangeLogs />
+            <SupervisorChangeLogs />
           </Grid>
         </Grid>
       </Container>
@@ -27,8 +27,8 @@ function EngineerChangeLogsPage() {
   );
 }
 
-EngineerChangeLogsPage.getLayout = (page) => (
-  <SidebarLayout userRole="engineer">{page}</SidebarLayout>
+SupervisorChangeLogsPage.getLayout = (page) => (
+  <SidebarLayout userRole="supervisor">{page}</SidebarLayout>
 );
 
-export default EngineerChangeLogsPage;
+export default SupervisorChangeLogsPage;

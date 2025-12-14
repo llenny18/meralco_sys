@@ -1,4 +1,4 @@
-// pages/engineer/engineer-vendor-performance.tsx
+// pages/supervisor/supervisor-qi-performance.tsx
 import { FC, useState, useEffect, ChangeEvent } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -11,10 +11,10 @@ import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
-const ENDPOINT = 'vendor-performance';
-const COLUMNS = ['vendor', 'evaluation_date', 'on_time_rate', 'quality_score', 'compliance_score', 'overall_rating'];
+const ENDPOINT = 'qi-performance';
+const COLUMNS = ['qi_user', 'evaluation_period_start', 'evaluation_period_end', 'total_inspections', 'on_time_percentage', 'quality_rating'];
 
-function EngineerVendorPerformance() {
+function SupervisorQiPerformance() {
   const router = useRouter();
 
   useEffect(() => {
@@ -29,7 +29,7 @@ function EngineerVendorPerformance() {
     }
 
     // Optional: Check if user has admin role
-    if (userRole !== 'admin') {
+    if (userRole !== 'engineer') {
       // Redirect non-admin users to their appropriate dashboard
       router.push('/unauthorized'); // or router.push('/dashboard');
     }
@@ -101,12 +101,12 @@ function EngineerVendorPerformance() {
 
   return (
     <>
-      <Head><title>Vendor Performance - Engineer Portal</title></Head>
+      <Head><title>QI Performance - WO Supervisor</title></Head>
       <PageTitleWrapper>
         <Grid container justifyContent="space-between" alignItems="center">
           <Grid item>
-            <Typography variant="h3" component="h3" gutterBottom>⭐ Vendor Performance</Typography>
-            <Typography variant="subtitle2">Evaluate vendor performance</Typography>
+            <Typography variant="h3" component="h3" gutterBottom>📊 QI Performance</Typography>
+            <Typography variant="subtitle2">Track QI performance</Typography>
           </Grid>
         </Grid>
       </PageTitleWrapper>
@@ -114,7 +114,7 @@ function EngineerVendorPerformance() {
         <Grid container direction="row" justifyContent="center" alignItems="stretch" spacing={3}>
           <Grid item xs={12}>
             <Card>
-              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="Vendor Performance Management" />
+              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="QI Performance Management" />
               <Divider />
               <CardContent>
                 {successMessage && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>{successMessage}</Alert>}
@@ -200,5 +200,5 @@ function EngineerVendorPerformance() {
   );
 }
 
-EngineerVendorPerformance.getLayout = (page) => <SidebarLayout userRole="engineer">{page}</SidebarLayout>;
-export default EngineerVendorPerformance;
+SupervisorQiPerformance.getLayout = (page) => <SidebarLayout userRole="supervisor">{page}</SidebarLayout>;
+export default SupervisorQiPerformance;

@@ -12,6 +12,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  Modal,
   Popover,
   Typography
 } from '@mui/material';
@@ -22,6 +23,26 @@ import ExpandMoreTwoToneIcon from '@mui/icons-material/ExpandMoreTwoTone';
 import AccountBoxTwoToneIcon from '@mui/icons-material/AccountBoxTwoTone';
 import LockOpenTwoToneIcon from '@mui/icons-material/LockOpenTwoTone';
 import AccountTreeTwoToneIcon from '@mui/icons-material/AccountTreeTwoTone';
+
+
+const ModalBox = styled(Box)(
+  () => `
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 420px;
+    background: #0a1a33;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.15);
+    box-shadow: 0 10px 35px rgba(0,0,0,0.4);
+    padding: 32px;
+    text-align: center;
+    color: #fff;
+    outline: none;
+`
+);
+
 
 const UserBoxButton = styled(Button)(
   ({ theme }) => `
@@ -59,9 +80,27 @@ const UserBoxDescription = styled(Typography)(
 );
 
 
+
+
 function HeaderUserbox() {
-   const [storedRole, setStoredRole] = useState<string | null>(null);
+  const [storedRole, setStoredRole] = useState<string | null>(null);
   const [storedEmail, setStoredEmail] = useState<string | null>(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+
+  const handleLogoutClick = (): void => {
+    handleClose(); // Close the popover
+    setShowLogoutModal(true); // Open logout modal
+  };
+
+  const handleLogout = (): void => {
+    localStorage.clear();
+    window.location.href = "/login";
+  };
+
+  const handleCancelLogout = (): void => {
+    setShowLogoutModal(false);
+  };
 
   useEffect(() => {
     const role = localStorage.getItem("userRole");
@@ -137,14 +176,35 @@ function HeaderUserbox() {
         </List>
         <Divider />
         <Box sx={{ m: 1 }}>
-          <NextLink href="/logout" passHref>
-          <Button color="primary" fullWidth>
-            <LockOpenTwoToneIcon sx={{ mr: 1 }} />
-            Sign out
-          </Button>
-       </NextLink>
-        </Box>
+        <Button color="primary" fullWidth onClick={handleLogoutClick}>
+          <LockOpenTwoToneIcon sx={{ mr: 1 }} />
+          Sign out
+        </Button>
+      </Box>
       </Popover>
+
+      <Modal
+        open={showLogoutModal}
+        onClose={handleCancelLogout}
+      >
+        <ModalBox>
+          <Typography variant="h4" sx={{ marginBottom: '12px' }}>
+            Confirm Logout
+          </Typography>
+          <Typography sx={{ marginBottom: '24px', color: '#b5c7de' }}>
+            Are you sure you want to log out?
+          </Typography>
+
+          <Box sx={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <Button onClick={handleLogout} /* ... styling ... */>
+              Logout
+            </Button>
+            <Button onClick={handleCancelLogout} /* ... styling ... */>
+              Cancel
+            </Button>
+          </Box>
+        </ModalBox>
+      </Modal>
     </>
   );
 }

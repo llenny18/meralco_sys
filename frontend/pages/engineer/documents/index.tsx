@@ -2,13 +2,13 @@ import Head from 'next/head';
 import SidebarLayout from '@/layouts/SidebarLayout';
 import { Grid, Container } from '@mui/material';
 
-import EngineerDocuments from '@/engineer/engineer-documents';
+import SupervisorDocuments from '@/engineer/supervisor-documents';
 
-function EngineerDocumentsPage() {
+function SupervisorDocumentsPage() {
   return (
     <>
       <Head>
-        <title>Documents - Engineer Portal</title>
+        <title>Project Documents - WO Supervisor</title>
       </Head>
       <Container maxWidth="lg">
         <Grid
@@ -19,7 +19,7 @@ function EngineerDocumentsPage() {
           spacing={3}
         >
           <Grid item xs={12}>
-            <EngineerDocuments />
+            <SupervisorDocuments />
           </Grid>
         </Grid>
       </Container>
@@ -27,8 +27,8 @@ function EngineerDocumentsPage() {
   );
 }
 
-EngineerDocumentsPage.getLayout = (page) => (
-  <SidebarLayout userRole="engineer">{page}</SidebarLayout>
+SupervisorDocumentsPage.getLayout = (page) => (
+  <SidebarLayout userRole="supervisor">{page}</SidebarLayout>
 );
 
-export default EngineerDocumentsPage;
+export default SupervisorDocumentsPage;

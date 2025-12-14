@@ -1,4 +1,4 @@
-// pages/engineer/engineer-projects.tsx
+// pages/engineer/engineer-change-logs.tsx
 import { FC, useState, useEffect, ChangeEvent } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -11,10 +11,10 @@ import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
-const ENDPOINT = 'projects';
-const COLUMNS = ['project_code', 'project_name', 'vendor', 'sector', 'status', 'assigned_engineer', 'priority', 'risk_score', 'start_date', 'completion_date'];
+const ENDPOINT = 'change-logs';
+const COLUMNS = ['table_name', 'record_id', 'change_type', 'field_name', 'old_value', 'new_value', 'changed_by', 'created_at'];
 
-function EngineerProjects() {
+function EngineerChangeLogs() {
   const router = useRouter();
 
   useEffect(() => {
@@ -29,7 +29,7 @@ function EngineerProjects() {
     }
 
     // Optional: Check if user has admin role
-    if (userRole !== 'admin') {
+    if (userRole !== 'engineer') {
       // Redirect non-admin users to their appropriate dashboard
       router.push('/unauthorized'); // or router.push('/dashboard');
     }
@@ -101,12 +101,12 @@ function EngineerProjects() {
 
   return (
     <>
-      <Head><title>Projects - Engineer Portal</title></Head>
+      <Head><title>Change History - Engineer Portal</title></Head>
       <PageTitleWrapper>
         <Grid container justifyContent="space-between" alignItems="center">
           <Grid item>
-            <Typography variant="h3" component="h3" gutterBottom>🏗️ Projects</Typography>
-            <Typography variant="subtitle2">Manage engineering projects</Typography>
+            <Typography variant="h3" component="h3" gutterBottom>📋 Change History</Typography>
+            <Typography variant="subtitle2">View change history</Typography>
           </Grid>
         </Grid>
       </PageTitleWrapper>
@@ -114,7 +114,7 @@ function EngineerProjects() {
         <Grid container direction="row" justifyContent="center" alignItems="stretch" spacing={3}>
           <Grid item xs={12}>
             <Card>
-              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="Projects Management" />
+              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="Change History Management" />
               <Divider />
               <CardContent>
                 {successMessage && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>{successMessage}</Alert>}
@@ -200,5 +200,5 @@ function EngineerProjects() {
   );
 }
 
-EngineerProjects.getLayout = (page) => <SidebarLayout userRole="engineer">{page}</SidebarLayout>;
-export default EngineerProjects;
+EngineerChangeLogs.getLayout = (page) => <SidebarLayout userRole="engineer">{page}</SidebarLayout>;
+export default EngineerChangeLogs;

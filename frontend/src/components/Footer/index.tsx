@@ -21,7 +21,7 @@ function Footer() {
       >
         <Box>
           <Typography variant="subtitle1" fontWeight={600}>
-            &copy; {new Date().getFullYear()} Manila Electric Company (MERALCO)
+            &copy; {new Date().getFullYear()} Automated and AI monitoring System in Work Order Closing (AIMS WO)
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Smart Vendor Project Management System - All Rights Reserved
@@ -36,12 +36,12 @@ function Footer() {
             <Box display="flex" alignItems="center" gap={0.5}>
               <EmailIcon fontSize="small" color="action" />
               <Link
-                href="mailto:customercare@meralco.com.ph"
+                href="mailto:customercare@AIMS WO.com.ph"
                 underline="hover"
                 color="text.secondary"
                 variant="body2"
               >
-                support@meralco.com.ph
+                support@AIMS WO.com.ph
               </Link>
             </Box>
             <Box display="flex" alignItems="center" gap={0.5}>

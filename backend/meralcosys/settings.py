@@ -22,6 +22,19 @@ CHATBOT_CONFIG_PATH = os.path.join(BASE_DIR, 'ml_models', 'knowledge_base.json')
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+
+# EMAIL CONFIG (Gmail + App Password)
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+
+EMAIL_HOST_USER = "aimsworkorder@gmail.com"       # your Gmail address
+EMAIL_HOST_PASSWORD = "httq otmj uopo nuec"     # 16-character Google App Password
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 

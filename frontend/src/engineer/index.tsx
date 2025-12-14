@@ -1,5 +1,5 @@
 // pages/vendor/dashboard.tsx
-import { FC, useState } from 'react';
+import { FC, useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import SidebarLayout from '@/layouts/SidebarLayout';
@@ -82,7 +82,7 @@ function VendorDashboard() {
     }
 
     // Optional: Check if user has admin role
-    if (userRole !== 'admin') {
+    if (userRole !== 'engineer') {
       // Redirect non-admin users to their appropriate dashboard
       router.push('/unauthorized'); // or router.push('/dashboard');
     }

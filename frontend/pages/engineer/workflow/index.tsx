@@ -2,13 +2,13 @@ import Head from 'next/head';
 import SidebarLayout from '@/layouts/SidebarLayout';
 import { Grid, Container } from '@mui/material';
 
-import EngineerWorkflow from '@/engineer/engineer-workflow';
+import SupervisorWorkflow from '@/engineer/supervisor-workflow';
 
-function EngineerWorkflowPage() {
+function SupervisorWorkflowPage() {
   return (
     <>
       <Head>
-        <title>Workflow - Engineer Portal</title>
+        <title>Workflow Management - WO Supervisor</title>
       </Head>
       <Container maxWidth="lg">
         <Grid
@@ -19,7 +19,7 @@ function EngineerWorkflowPage() {
           spacing={3}
         >
           <Grid item xs={12}>
-            <EngineerWorkflow />
+            <SupervisorWorkflow />
           </Grid>
         </Grid>
       </Container>
@@ -27,8 +27,8 @@ function EngineerWorkflowPage() {
   );
 }
 
-EngineerWorkflowPage.getLayout = (page) => (
-  <SidebarLayout userRole="engineer">{page}</SidebarLayout>
+SupervisorWorkflowPage.getLayout = (page) => (
+  <SidebarLayout userRole="supervisor">{page}</SidebarLayout>
 );
 
-export default EngineerWorkflowPage;
+export default SupervisorWorkflowPage;

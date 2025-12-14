@@ -1,11 +1,8 @@
 import Head from 'next/head';
 import SidebarLayout from '@/layouts/SidebarLayout';
-import PageHeader from '@/content/Management/Transactions/PageHeader';
-import PageTitleWrapper from '@/components/PageTitleWrapper';
 import { Grid, Container } from '@mui/material';
-import Footer from '@/components/Footer';
 
-import EngineerDashboard from '@/old/engineer';
+import AdminDashboard from '@/admin';
 
 function ApplicationsTransactions() {
   return (
@@ -13,9 +10,6 @@ function ApplicationsTransactions() {
       <Head>
         <title>Transactions - Applications</title>
       </Head>
-      <PageTitleWrapper>
-        <PageHeader />
-      </PageTitleWrapper>
       <Container maxWidth="lg">
         <Grid
           container
@@ -25,17 +19,16 @@ function ApplicationsTransactions() {
           spacing={3}
         >
           <Grid item xs={12}>
-            <EngineerDashboard />
+            <AdminDashboard />
           </Grid>
         </Grid>
       </Container>
-      <Footer />
     </>
   );
 }
 
 ApplicationsTransactions.getLayout = (page) => (
-  <SidebarLayout userRole="engineer">{page}</SidebarLayout>
+  <SidebarLayout>{page}</SidebarLayout>
 );
 
 export default ApplicationsTransactions;

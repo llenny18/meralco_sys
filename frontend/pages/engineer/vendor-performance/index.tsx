@@ -2,13 +2,13 @@ import Head from 'next/head';
 import SidebarLayout from '@/layouts/SidebarLayout';
 import { Grid, Container } from '@mui/material';
 
-import EngineerVendorPerformance from '@/engineer/engineer-vendor-performance';
+import SupervisorVendorPerformance from '@/engineer/supervisor-vendor-performance';
 
-function EngineerVendorPerformancePage() {
+function SupervisorVendorPerformancePage() {
   return (
     <>
       <Head>
-        <title>Vendor Performance - Engineer Portal</title>
+        <title>Vendor Performance - WO Supervisor</title>
       </Head>
       <Container maxWidth="lg">
         <Grid
@@ -19,7 +19,7 @@ function EngineerVendorPerformancePage() {
           spacing={3}
         >
           <Grid item xs={12}>
-            <EngineerVendorPerformance />
+            <SupervisorVendorPerformance />
           </Grid>
         </Grid>
       </Container>
@@ -27,8 +27,8 @@ function EngineerVendorPerformancePage() {
   );
 }
 
-EngineerVendorPerformancePage.getLayout = (page) => (
-  <SidebarLayout userRole="engineer">{page}</SidebarLayout>
+SupervisorVendorPerformancePage.getLayout = (page) => (
+  <SidebarLayout userRole="supervisor">{page}</SidebarLayout>
 );
 
-export default EngineerVendorPerformancePage;
+export default SupervisorVendorPerformancePage;
