@@ -73,7 +73,7 @@ function Sidebar({ menuComponent }: SidebarProps) {
     // Alternative: Fetch from API if needed
     const fetchUserRole = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/v1/auth/me');
+        const response = await fetch('https://aimswo.online/api/api/v1/auth/me');
         if (response.ok) {
           const userData = await response.json();
           setUserRole(userData.role);

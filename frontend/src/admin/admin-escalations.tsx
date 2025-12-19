@@ -10,7 +10,7 @@ import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
+const API_BASE_URL = 'https://aimswo.online/api/api/v1';
 const ENDPOINT = 'escalations';
 const COLUMNS = ['project', 'escalation_rule', 'escalated_from_user', 'escalated_to_user', 'escalation_reason', 'escalation_date', 'status', 'resolution_date', 'resolved_by'];
 

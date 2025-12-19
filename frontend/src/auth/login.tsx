@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
 // API Configuration
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = 'https://aimswo.online/api/api/v1';
 
 const USER_TYPES = [
   { value: '', label: 'Select User Type' },
@@ -158,7 +158,7 @@ export default function LoginPage() {
         type: 'error',
         title: 'Connection Error',
         message: error instanceof Error ? error.message : 'Unable to connect to the server.',
-        subtitle: 'Please ensure Django server is running on http://localhost:8000'
+        subtitle: 'Please ensure Django server is running on https://aimswo.online/api'
       });
     } finally {
       setLoading(false);

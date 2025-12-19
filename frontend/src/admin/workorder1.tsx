@@ -46,7 +46,7 @@ import CloudDownloadTwoToneIcon from '@mui/icons-material/CloudDownloadTwoTone';
 import FilterListTwoToneIcon from '@mui/icons-material/FilterListTwoTone';
 import DescriptionTwoToneIcon from '@mui/icons-material/DescriptionTwoTone';
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
+const API_BASE_URL = 'https://aimswo.online/api/api/v1';
 
 interface WorkOrder {
   wo_id?: string;
