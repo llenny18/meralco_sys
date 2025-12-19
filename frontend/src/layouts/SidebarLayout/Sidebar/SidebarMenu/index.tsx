@@ -2416,6 +2416,20 @@ export function SystemAdminSidebarMenu() {
             </ListItem>
 
             <ListItem component="div">
+              <NextLink href="/admin/daily-crew-monitoring" passHref>
+                <Button
+                  className={currentRoute === '/admin/daily-crew-monitoring' ? 'active' : ''}
+                  disableRipple
+                  component="a"
+                  onClick={closeSidebar}
+                  startIcon={<DashboardTwoToneIcon />}
+                >
+                  Daily Crew Monitoring
+                </Button>
+              </NextLink>
+            </ListItem>
+
+            <ListItem component="div">
               <NextLink href="/admin/workorder" passHref>
                 <Button
                   className={currentRoute === '/admin/workorder' ? 'active' : ''}
