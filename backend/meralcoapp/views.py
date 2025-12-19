@@ -1562,3 +1562,877 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
     filterset_fields = ['setting_type', 'is_editable']
     search_fields = ['setting_key', 'setting_description']
 
+
+
+
+from rest_framework import viewsets, status, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.db.models import Count, Sum, Avg, Q, F
+from django.utils import timezone
+from datetime import datetime, timedelta
+from django_filters.rest_framework import DjangoFilterBackend
+
+# ============================================
+# WORK ORDER VIEWSETS
+# ============================================
+
+class WorkOrderViewSet(viewsets.ModelViewSet):
+    queryset = WorkOrder.objects.all()
+    serializer_class = WorkOrderSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'priority', 'vendor', 'assigned_crew', 'supervisor', 'is_vip', 'is_delayed']
+    search_fields = ['wo_no', 'description', 'location', 'municipality']
+    ordering_fields = ['date_received_jacket', 'date_energized', 'total_resolution_days', 'created_at']
+    ordering = ['-date_received_jacket']
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return WorkOrderListSerializer
+        return WorkOrderSerializer
+    
+    @action(detail=False, methods=['get'])
+    def dashboard_stats(self, request):
+        """Get dashboard statistics for work orders"""
+        total_count = WorkOrder.objects.count()
+        
+        status_breakdown = WorkOrder.objects.values('status').annotate(
+            count=Count('wo_id')
+        )
+        
+        delayed_count = WorkOrder.objects.filter(is_delayed=True).count()
+        
+        # Average resolution time
+        avg_resolution = WorkOrder.objects.filter(
+            total_resolution_days__isnull=False
+        ).aggregate(
+            avg_days=Avg('total_resolution_days')
+        )
+        
+        # Recent work orders
+        recent_wo = WorkOrder.objects.all()[:10]
+        
+        # VIP projects
+        vip_count = WorkOrder.objects.filter(is_vip=True).count()
+        
+        return Response({
+            'total_count': total_count,
+            'status_breakdown': status_breakdown,
+            'delayed_count': delayed_count,
+            'delayed_percentage': (delayed_count / total_count * 100) if total_count > 0 else 0,
+            'average_resolution_days': avg_resolution['avg_days'],
+            'vip_count': vip_count,
+            'recent_work_orders': WorkOrderListSerializer(recent_wo, many=True).data
+        })
+    
+    @action(detail=False, methods=['get'])
+    def by_vendor(self, request):
+        """Get work orders grouped by vendor"""
+        vendor_stats = WorkOrder.objects.values(
+            'vendor__vendor_code', 
+            'vendor__vendor_name'
+        ).annotate(
+            total_wo=Count('wo_id'),
+            completed=Count('wo_id', filter=Q(status='AUDITED')),
+            delayed=Count('wo_id', filter=Q(is_delayed=True)),
+            avg_resolution_days=Avg('total_resolution_days')
+        ).order_by('-total_wo')
+        
+        return Response(vendor_stats)
+    
+    @action(detail=False, methods=['get'])
+    def by_crew(self, request):
+        """Get work orders grouped by crew"""
+        crew_stats = WorkOrder.objects.values('assigned_crew').annotate(
+            total_wo=Count('wo_id'),
+            completed=Count('wo_id', filter=Q(status='AUDITED')),
+            pending=Count('wo_id', filter=Q(status__in=['NEW', 'FOR AUDIT'])),
+            avg_resolution_days=Avg('total_resolution_days')
+        ).order_by('-total_wo')
+        
+        return Response(crew_stats)
+    
+    @action(detail=False, methods=['get'])
+    def delayed_projects(self, request):
+        """Get all delayed projects"""
+        delayed = WorkOrder.objects.filter(is_delayed=True).order_by('-delay_days')
+        serializer = self.get_serializer(delayed, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def export_excel(self, request):
+        """Export work orders to Excel format (matching your C1 sheet)"""
+        # This will be implemented with pandas/openpyxl
+        # For now, return the data structure
+        work_orders = self.get_queryset()
+        serializer = self.get_serializer(work_orders, many=True)
+        
+        return Response({
+            'message': 'Excel export endpoint',
+            'data': serializer.data,
+            'format': 'C1_sheet_format'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def upload_document(self, request, pk=None):
+        """Upload a document for this work order"""
+        work_order = self.get_object()
+        
+        serializer = WorkOrderDocumentSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(
+                work_order=work_order,
+                uploaded_by=request.user
+            )
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get'])
+    def documents(self, request, pk=None):
+        """Get all documents for this work order"""
+        work_order = self.get_object()
+        documents = work_order.wo_documents.all()
+        serializer = WorkOrderDocumentSerializer(documents, many=True)
+        return Response(serializer.data)
+
+
+class WorkOrderDocumentViewSet(viewsets.ModelViewSet):
+    queryset = WorkOrderDocument.objects.all()
+    serializer_class = WorkOrderDocumentSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['work_order', 'document_type', 'is_approved']
+    ordering = ['-upload_date']
+    
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Approve a document"""
+        document = self.get_object()
+        document.is_approved = True
+        document.approved_by = request.user
+        document.approval_date = timezone.now()
+        document.save()
+        
+        serializer = self.get_serializer(document)
+        return Response(serializer.data)
+
+
+# ============================================
+# CREW MONITORING VIEWSETS
+# ============================================
+
+class CrewTypeViewSet(viewsets.ModelViewSet):
+    queryset = CrewType.objects.all()
+    serializer_class = CrewTypeSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['crew_code', 'crew_name']
+    ordering = ['crew_code']
+
+
+class DailyCrewMonitoringViewSet(viewsets.ModelViewSet):
+    queryset = DailyCrewMonitoring.objects.all()
+    serializer_class = DailyCrewMonitoringSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['crew_type', 'monitoring_date']
+    ordering = ['-monitoring_date']
+    
+    @action(detail=False, methods=['get'])
+    def monthly_summary(self, request):
+        """Get monthly summary for all crews"""
+        month_param = request.query_params.get('month')
+        
+        if month_param:
+            try:
+                month_date = datetime.strptime(month_param, '%Y-%m-%d').date()
+            except ValueError:
+                return Response({'error': 'Invalid date format. Use YYYY-MM-DD'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+        else:
+            month_date = timezone.now().date().replace(day=1)
+        
+        # Get next month for filtering
+        if month_date.month == 12:
+            next_month = month_date.replace(year=month_date.year + 1, month=1)
+        else:
+            next_month = month_date.replace(month=month_date.month + 1)
+        
+        summary = DailyCrewMonitoring.objects.filter(
+            monitoring_date__gte=month_date,
+            monitoring_date__lt=next_month
+        ).values(
+            'crew_type__crew_code',
+            'crew_type__crew_name'
+        ).annotate(
+            total_productivity=Sum('weighted_productivity'),
+            total_peso_value=Sum('monthly_peso_value'),
+            average_daily_productivity=Avg('weighted_productivity'),
+            days_recorded=Count('monitoring_date')
+        )
+        
+        return Response(summary)
+    
+    @action(detail=False, methods=['get'])
+    def crew_comparison(self, request):
+        """Compare productivity across all crews"""
+        month_param = request.query_params.get('month')
+        
+        if month_param:
+            month_date = datetime.strptime(month_param, '%Y-%m-%d').date()
+        else:
+            month_date = timezone.now().date().replace(day=1)
+        
+        if month_date.month == 12:
+            next_month = month_date.replace(year=month_date.year + 1, month=1)
+        else:
+            next_month = month_date.replace(month=month_date.month + 1)
+        
+        comparison = DailyCrewMonitoring.objects.filter(
+            monitoring_date__gte=month_date,
+            monitoring_date__lt=next_month
+        ).values('crew_type__crew_code').annotate(
+            total_productivity=Sum('weighted_productivity'),
+            avg_productivity=Avg('weighted_productivity'),
+            total_value=Sum('daily_peso_value')
+        ).order_by('-total_productivity')
+        
+        return Response(comparison)
+
+
+# ============================================
+# QI MONITORING VIEWSETS
+# ============================================
+
+class QIWeeklyAccomplishmentViewSet(viewsets.ModelViewSet):
+    queryset = QIWeeklyAccomplishment.objects.all()
+    serializer_class = QIWeeklyAccomplishmentSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['qi_user', 'week_start_date', 'target_met']
+    ordering = ['-week_start_date']
+    
+    @action(detail=False, methods=['get'])
+    def current_week(self, request):
+        """Get current week's accomplishments for all QIs"""
+        today = timezone.now().date()
+        week_start = today - timedelta(days=today.weekday())
+        
+        current_week = QIWeeklyAccomplishment.objects.filter(
+            week_start_date=week_start
+        )
+        
+        serializer = self.get_serializer(current_week, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def qi_performance(self, request):
+        """Get performance statistics for all QIs"""
+        qi_id = request.query_params.get('qi_user')
+        
+        queryset = self.get_queryset()
+        if qi_id:
+            queryset = queryset.filter(qi_user_id=qi_id)
+        
+        stats = queryset.aggregate(
+            total_weeks=Count('id'),
+            total_inspections=Sum('total_inspections'),
+            avg_weekly_inspections=Avg('total_inspections'),
+            weeks_target_met=Count('id', filter=Q(target_met=True))
+        )
+        
+        if stats['total_weeks']:
+            stats['target_achievement_rate'] = (
+                stats['weeks_target_met'] / stats['total_weeks'] * 100
+            )
+        else:
+            stats['target_achievement_rate'] = 0
+        
+        return Response(stats)
+
+
+class QIMonthlyAccomplishmentViewSet(viewsets.ModelViewSet):
+    queryset = QIMonthlyAccomplishment.objects.all()
+    serializer_class = QIMonthlyAccomplishmentSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['qi_user', 'month', 'target_met']
+    ordering = ['-month']
+    
+    @action(detail=False, methods=['get'])
+    def current_month(self, request):
+        """Get current month's accomplishments"""
+        current_month = timezone.now().date().replace(day=1)
+        
+        accomplishments = QIMonthlyAccomplishment.objects.filter(
+            month=current_month
+        )
+        
+        serializer = self.get_serializer(accomplishments, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def yearly_summary(self, request):
+        """Get yearly summary for a QI"""
+        qi_id = request.query_params.get('qi_user')
+        year = request.query_params.get('year', timezone.now().year)
+        
+        if not qi_id:
+            return Response({'error': 'qi_user parameter required'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        start_date = datetime(int(year), 1, 1).date()
+        end_date = datetime(int(year), 12, 31).date()
+        
+        yearly_data = QIMonthlyAccomplishment.objects.filter(
+            qi_user_id=qi_id,
+            month__gte=start_date,
+            month__lte=end_date
+        ).order_by('month')
+        
+        serializer = self.get_serializer(yearly_data, many=True)
+        
+        # Calculate totals
+        totals = yearly_data.aggregate(
+            total_inspections=Sum('total_inspections'),
+            total_target=Sum('target_inspections'),
+            months_target_met=Count('id', filter=Q(target_met=True))
+        )
+        
+        return Response({
+            'monthly_data': serializer.data,
+            'yearly_totals': totals
+        })
+
+
+# ============================================
+# PCA VIEWSETS
+# ============================================
+
+class PCAGoalViewSet(viewsets.ModelViewSet):
+    queryset = PCAGoal.objects.all()
+    serializer_class = PCAGoalSerializer
+    ordering = ['-month']
+
+
+class PCASummaryViewSet(viewsets.ModelViewSet):
+    queryset = PCASummary.objects.all()
+    serializer_class = PCASummarySerializer
+    ordering = ['-month']
+    
+    @action(detail=False, methods=['get'])
+    def current_month(self, request):
+        """Get current month's PCA summary"""
+        current_month = timezone.now().date().replace(day=1)
+        
+        try:
+            summary = PCASummary.objects.get(month=current_month)
+            serializer = self.get_serializer(summary)
+            return Response(serializer.data)
+        except PCASummary.DoesNotExist:
+            return Response({'message': 'No summary for current month'}, 
+                          status=status.HTTP_404_NOT_FOUND)
+    
+    @action(detail=False, methods=['post'])
+    def generate_summary(self, request):
+        """Generate PCA summary for a specific month"""
+        month_param = request.data.get('month')
+        
+        if not month_param:
+            return Response({'error': 'month parameter required'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            month_date = datetime.strptime(month_param, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'error': 'Invalid date format. Use YYYY-MM-DD'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        # Calculate statistics from WorkOrder model
+        if month_date.month == 12:
+            next_month = month_date.replace(year=month_date.year + 1, month=1)
+        else:
+            next_month = month_date.replace(month=month_date.month + 1)
+        
+        # Get work orders for the month
+        monthly_wos = WorkOrder.objects.filter(
+            date_energized__gte=month_date,
+            date_energized__lt=next_month
+        )
+        
+        ytd_energized = WorkOrder.objects.filter(
+            date_energized__year=month_date.year,
+            date_energized__lte=month_date
+        ).count()
+        
+        completed_count = monthly_wos.filter(status='AUDITED').count()
+        cancelled_count = monthly_wos.filter(status='CANCELLED').count()
+        
+        # Get or create summary
+        summary, created = PCASummary.objects.update_or_create(
+            month=month_date,
+            defaults={
+                'ytd_energized': ytd_energized,
+                'completed_count': completed_count,
+                'cancelled_count': cancelled_count,
+                'new_work_orders_count': monthly_wos.count()
+            }
+        )
+        
+        serializer = self.get_serializer(summary)
+        return Response(serializer.data)
+
+
+# ============================================
+# VENDOR PRODUCTIVITY VIEWSETS
+# ============================================
+
+class VendorProductivityMonthlyViewSet(viewsets.ModelViewSet):
+    queryset = VendorProductivityMonthly.objects.all()
+    serializer_class = VendorProductivityMonthlySerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['vendor', 'month']
+    ordering = ['-month']
+    
+    @action(detail=False, methods=['get'])
+    def comparison(self, request):
+        """Compare all vendors for a specific month"""
+        month_param = request.query_params.get('month')
+        
+        if not month_param:
+            month_date = timezone.now().date().replace(day=1)
+        else:
+            month_date = datetime.strptime(month_param, '%Y-%m-%d').date()
+        
+        comparison = VendorProductivityMonthly.objects.filter(
+            month=month_date
+        ).select_related('vendor').order_by('-productivity_percentage')
+        
+        serializer = self.get_serializer(comparison, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def vendor_trend(self, request):
+        """Get productivity trend for a specific vendor"""
+        vendor_id = request.query_params.get('vendor')
+        months = int(request.query_params.get('months', 6))
+        
+        if not vendor_id:
+            return Response({'error': 'vendor parameter required'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        end_date = timezone.now().date().replace(day=1)
+        start_date = end_date - timedelta(days=30 * months)
+        
+        trend_data = VendorProductivityMonthly.objects.filter(
+            vendor_id=vendor_id,
+            month__gte=start_date,
+            month__lte=end_date
+        ).order_by('month')
+        
+        serializer = self.get_serializer(trend_data, many=True)
+        return Response(serializer.data)
+
+
+# ============================================
+# AGEING ANALYSIS VIEWSETS
+# ============================================
+
+class AgeingAnalysisViewSet(viewsets.ModelViewSet):
+    queryset = AgeingAnalysis.objects.all()
+    serializer_class = AgeingAnalysisSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['analysis_date', 'age_bracket', 'supervisor', 'crew']
+    ordering = ['-analysis_date', '-age_in_days']
+    
+    @action(detail=False, methods=['get'])
+    def current_analysis(self, request):
+        """Get current ageing analysis"""
+        latest_date = AgeingAnalysis.objects.latest('analysis_date').analysis_date
+        current = AgeingAnalysis.objects.filter(analysis_date=latest_date)
+        
+        serializer = self.get_serializer(current, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def summary_by_bracket(self, request):
+        """Get summary statistics by age bracket"""
+        analysis_date = request.query_params.get('date')
+        
+        if analysis_date:
+            date_filter = datetime.strptime(analysis_date, '%Y-%m-%d').date()
+        else:
+            date_filter = AgeingAnalysis.objects.latest('analysis_date').analysis_date
+        
+        summary = AgeingAnalysis.objects.filter(
+            analysis_date=date_filter
+        ).values('age_bracket').annotate(
+            count=Count('id'),
+            total_manhours=Sum('work_order__total_manhours')
+        ).order_by('age_bracket')
+        
+        return Response(summary)
+    
+    @action(detail=False, methods=['post'])
+    def generate_analysis(self, request):
+        """Generate ageing analysis for current work orders"""
+        analysis_date = timezone.now().date()
+        
+        # Get all open work orders
+        open_wos = WorkOrder.objects.filter(
+            status__in=['NEW', 'FOR AUDIT', 'NO COC']
+        )
+        
+        created_count = 0
+        
+        for wo in open_wos:
+            if wo.date_energized:
+                age_days = (analysis_date - wo.date_energized).days
+                age_months = age_days // 30
+                
+                # Determine age bracket
+                if age_months <= 3:
+                    age_bracket = '0-3'
+                elif age_months <= 6:
+                    age_bracket = '4-6'
+                elif age_months <= 9:
+                    age_bracket = '7-9'
+                else:
+                    age_bracket = '10+'
+                
+                AgeingAnalysis.objects.create(
+                    analysis_date=analysis_date,
+                    work_order=wo,
+                    age_bracket=age_bracket,
+                    age_in_days=age_days,
+                    age_in_months=age_months,
+                    supervisor=wo.supervisor,
+                    crew=wo.assigned_crew,
+                    status_at_analysis=wo.status
+                )
+                created_count += 1
+        
+        return Response({
+            'message': f'Generated ageing analysis for {created_count} work orders',
+            'analysis_date': analysis_date
+        })
+
+
+# ============================================
+# BACKJOB MONITORING VIEWSETS
+# ============================================
+
+class BackjobMonitoringViewSet(viewsets.ModelViewSet):
+    queryset = BackjobMonitoring.objects.all()
+    serializer_class = BackjobMonitoringSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'work_order', 'assigned_to', 'is_overdue']
+    search_fields = ['issue_description', 'work_order__wo_no']
+    ordering = ['-reported_date']
+    
+    @action(detail=False, methods=['get'])
+    def pending_backjobs(self, request):
+        """Get all pending backjobs"""
+        pending = BackjobMonitoring.objects.filter(
+            status__in=['PENDING', 'IN_PROGRESS']
+        ).order_by('-days_pending')
+        
+        serializer = self.get_serializer(pending, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def overdue_backjobs(self, request):
+        """Get all overdue backjobs"""
+        overdue = BackjobMonitoring.objects.filter(
+            is_overdue=True,
+            status__in=['PENDING', 'IN_PROGRESS']
+        ).order_by('-days_pending')
+        
+        serializer = self.get_serializer(overdue, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def resolve(self, request, pk=None):
+        """Mark a backjob as resolved"""
+        backjob = self.get_object()
+        
+        backjob.status = 'RESOLVED'
+        backjob.actual_resolution_date = timezone.now().date()
+        backjob.resolution_notes = request.data.get('resolution_notes', '')
+        backjob.save()
+        
+        serializer = self.get_serializer(backjob)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """Get backjob statistics"""
+        stats = {
+            'total': BackjobMonitoring.objects.count(),
+            'pending': BackjobMonitoring.objects.filter(status='PENDING').count(),
+            'in_progress': BackjobMonitoring.objects.filter(status='IN_PROGRESS').count(),
+            'resolved': BackjobMonitoring.objects.filter(status='RESOLVED').count(),
+            'overdue': BackjobMonitoring.objects.filter(is_overdue=True).count(),
+            'avg_resolution_days': BackjobMonitoring.objects.filter(
+                status='RESOLVED'
+            ).aggregate(avg=Avg('days_pending'))['avg']
+        }
+        
+        return Response(stats)
+    
+    
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+from .models import KPISnapshot, KPITarget
+from .serializers import KPISnapshotSerializer, KPITargetSerializer, KPIDashboardSerializer
+from .kpi_service import KPICalculationService
+
+class KPISnapshotViewSet(viewsets.ModelViewSet):
+    queryset = KPISnapshot.objects.all()
+    serializer_class = KPISnapshotSerializer
+    
+    @action(detail=False, methods=['post'])
+    def calculate_and_save(self, request):
+        """Calculate KPIs for a period and save snapshots"""
+        period_start = request.data.get('period_start')
+        period_end = request.data.get('period_end')
+        
+        if not period_start or not period_end:
+            return Response(
+                {'error': 'period_start and period_end are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            period_start = datetime.strptime(period_start, '%Y-%m-%d').date()
+            period_end = datetime.strptime(period_end, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Calculate all KPIs
+        kpis = KPICalculationService.calculate_all_kpis(period_start, period_end)
+        
+        # Save snapshots
+        snapshots_created = []
+        
+        kpi_mapping = {
+            'ccti': 'CCTI',
+            'pca_conversion': 'PCA_CONVERSION',
+            'ageing_completion': 'AGEING_COMPLETION',
+            'termination_apt': 'TERM_APT',
+            'prdi': 'PRDI',
+            'cost_settlement': 'COST_SETTLEMENT',
+            'quality_index': 'QUALITY_INDEX',
+            'capability_utilization': 'CAPABILITY_UTIL'
+        }
+        
+        for key, kpi_type in kpi_mapping.items():
+            kpi_data = kpis.get(key, {})
+            
+            # Get or create target
+            target = KPITarget.objects.filter(
+                kpi_type=kpi_type,
+                period_start__lte=period_start,
+                period_end__gte=period_end,
+                is_active=True
+            ).first()
+            
+            snapshot = KPISnapshot.objects.create(
+                kpi_type=kpi_type,
+                period_start=period_start,
+                period_end=period_end,
+                kpi_value=kpi_data.get('value', 0),
+                target_value=target.target_value if target else None,
+                numerator=kpi_data.get('numerator'),
+                denominator=kpi_data.get('denominator'),
+                sample_size=kpi_data.get('sample_size'),
+                calculation_details=kpi_data.get('details', {}),
+                calculated_by=request.user
+            )
+            
+            snapshots_created.append(snapshot)
+        
+        serializer = self.get_serializer(snapshots_created, many=True)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class KPITargetViewSet(viewsets.ModelViewSet):
+    queryset = KPITarget.objects.all()
+    serializer_class = KPITargetSerializer
+
+
+class KPIDashboardViewSet(viewsets.ViewSet):
+    """
+    ViewSet for KPI Dashboard data
+    """
+    
+    @action(detail=False, methods=['get'])
+    def current_period(self, request):
+        """Get KPI dashboard for current period"""
+        # Default to current month
+        today = datetime.now().date()
+        period_start = today.replace(day=1)
+        period_end = (period_start + relativedelta(months=1)) - timedelta(days=1)
+        
+        # Allow custom period
+        if request.query_params.get('period_start'):
+            period_start = datetime.strptime(
+                request.query_params['period_start'], '%Y-%m-%d'
+            ).date()
+        
+        if request.query_params.get('period_end'):
+            period_end = datetime.strptime(
+                request.query_params['period_end'], '%Y-%m-%d'
+            ).date()
+        
+        # Calculate all KPIs
+        kpis = KPICalculationService.calculate_all_kpis(period_start, period_end)
+        
+        # Get targets
+        targets = {}
+        for kpi_type_key in ['CCTI', 'PCA_CONVERSION', 'AGEING_COMPLETION', 'TERM_APT', 
+                            'PRDI', 'COST_SETTLEMENT', 'QUALITY_INDEX', 'CAPABILITY_UTIL']:
+            target = KPITarget.objects.filter(
+                kpi_type=kpi_type_key,
+                period_start__lte=period_start,
+                period_end__gte=period_end,
+                is_active=True
+            ).first()
+            
+            targets[kpi_type_key] = {
+                'value': float(target.target_value) if target else None,
+                'green': float(target.threshold_green) if target and target.threshold_green else None,
+                'yellow': float(target.threshold_yellow) if target and target.threshold_yellow else None,
+                'red': float(target.threshold_red) if target and target.threshold_red else None
+            }
+        
+        # Add targets to KPI data
+        for key, kpi_type in [('ccti', 'CCTI'), ('pca_conversion', 'PCA_CONVERSION'),
+                              ('ageing_completion', 'AGEING_COMPLETION'), ('termination_apt', 'TERM_APT'),
+                              ('prdi', 'PRDI'), ('cost_settlement', 'COST_SETTLEMENT'),
+                              ('quality_index', 'QUALITY_INDEX'), ('capability_utilization', 'CAPABILITY_UTIL')]:
+            if key in kpis:
+                kpis[key]['target'] = targets.get(kpi_type, {})
+        
+        # Get historical trends (last 6 months)
+        historical_trends = self._get_historical_trends(period_start)
+        
+        # Prepare chart data
+        chart_data = self._prepare_chart_data(kpis, historical_trends)
+        
+        dashboard_data = {
+            'period_start': period_start,
+            'period_end': period_end,
+            'total_kpis': 8,
+            'ccti': kpis.get('ccti', {}),
+            'pca_conversion': kpis.get('pca_conversion', {}),
+            'ageing_completion': kpis.get('ageing_completion', {}),
+            'pai_adherence': {},  # Placeholder - needs SAIDI data
+            'termination_apt': kpis.get('termination_apt', {}),
+            'termination_resolution': {},  # Placeholder
+            'prdi': kpis.get('prdi', {}),
+            'cost_settlement': kpis.get('cost_settlement', {}),
+            'quality_index': kpis.get('quality_index', {}),
+            'capability_utilization': kpis.get('capability_utilization', {}),
+            'historical_trends': historical_trends,
+            'chart_data': chart_data
+        }
+        
+        serializer = KPIDashboardSerializer(dashboard_data)
+        return Response(serializer.data)
+    
+    def _get_historical_trends(self, current_period_start, months=6):
+        """Get historical KPI trends"""
+        trends = {}
+        
+        for i in range(months):
+            month_start = current_period_start - relativedelta(months=i)
+            month_end = (month_start + relativedelta(months=1)) - timedelta(days=1)
+            
+            snapshots = KPISnapshot.objects.filter(
+                period_start__gte=month_start,
+                period_end__lte=month_end
+            )
+            
+            month_key = month_start.strftime('%Y-%m')
+            trends[month_key] = {}
+            
+            for snapshot in snapshots:
+                trends[month_key][snapshot.kpi_type] = {
+                    'value': float(snapshot.kpi_value),
+                    'target': float(snapshot.target_value) if snapshot.target_value else None
+                }
+        
+        return trends
+    
+    def _prepare_chart_data(self, current_kpis, historical_trends):
+        """Prepare data formatted for charts"""
+        return {
+            'kpi_summary': {
+                'labels': ['CCTI', 'PCA Conv.', 'Quality', 'Cost Settlement'],
+                'current': [
+                    current_kpis.get('ccti', {}).get('value', 0),
+                    current_kpis.get('pca_conversion', {}).get('value', 0),
+                    current_kpis.get('quality_index', {}).get('value', 0),
+                    current_kpis.get('cost_settlement', {}).get('value', 0)
+                ],
+                'target': [
+                    current_kpis.get('ccti', {}).get('target', {}).get('value', 0),
+                    current_kpis.get('pca_conversion', {}).get('target', {}).get('value', 0),
+                    current_kpis.get('quality_index', {}).get('target', {}).get('value', 0),
+                    current_kpis.get('cost_settlement', {}).get('target', {}).get('value', 0)
+                ]
+            },
+            'trend_data': historical_trends
+        }
+    
+
+    @action(detail=False, methods=['get'])
+    def kpi_detail(self, request):
+        """Get detailed breakdown for a specific KPI"""
+        kpi_type = request.query_params.get('type')
+        period_start = request.query_params.get('period_start')
+        period_end = request.query_params.get('period_end')
+
+        if not all([kpi_type, period_start, period_end]):
+            return Response(
+                {'error': 'type, period_start, and period_end are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            period_start = datetime.strptime(period_start, '%Y-%m-%d').date()
+            period_end = datetime.strptime(period_end, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Calculate specific KPI
+        kpi_methods = {
+            'CCTI': KPICalculationService.calculate_ccti,
+            'PCA_CONVERSION': KPICalculationService.calculate_pca_conversion_rate,
+            'AGEING_COMPLETION': KPICalculationService.calculate_ageing_pca_completion,
+            'TERM_APT': KPICalculationService.calculate_termination_apt,
+            'PRDI': KPICalculationService.calculate_prdi,
+            'COST_SETTLEMENT': KPICalculationService.calculate_cost_settlement,
+            'QUALITY_INDEX': KPICalculationService.calculate_quality_index,
+            'CAPABILITY_UTIL': KPICalculationService.calculate_capability_utilization
+        }
+
+        if kpi_type not in kpi_methods:
+            return Response(
+                {'error': f'Invalid KPI type. Choose from: {", ".join(kpi_methods.keys())}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        kpi_data = kpi_methods[kpi_type](period_start, period_end)
+
+        return Response({
+            'kpi_type': kpi_type,
+            'period_start': period_start,
+            'period_end': period_end,
+            'data': kpi_data
+        })

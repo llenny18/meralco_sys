@@ -602,6 +602,19 @@ export function EngineeringAideSidebarMenu() {
               </NextLink>
             </ListItem>
             <ListItem component="div">
+              <NextLink href="/aide/workorder" passHref>
+                <Button
+                  className={currentRoute === '/aide/workorder' ? 'active' : ''}
+                  disableRipple
+                  component="a"
+                  onClick={closeSidebar}
+                  startIcon={<HomeTwoToneIcon />}
+                >
+                  Work Orders
+                </Button>
+              </NextLink>
+            </ListItem>
+            <ListItem component="div">
               <NextLink href="/aide/change-logs" passHref>
                 <Button
                   className={currentRoute === '/aide/change-logs' ? 'active' : ''}
@@ -718,6 +731,20 @@ export function QualityInspectorSidebarMenu() {
                   startIcon={<DashboardTwoToneIcon />}
                 >
                   QI Dashboard
+                </Button>
+              </NextLink>
+            </ListItem>
+            
+            <ListItem component="div">
+              <NextLink href="/qi/workorder" passHref>
+                <Button
+                  className={currentRoute === '/qi/workorder' ? 'active' : ''}
+                  disableRipple
+                  component="a"
+                  onClick={closeSidebar}
+                  startIcon={<HomeTwoToneIcon />}
+                >
+                  Work Orders
                 </Button>
               </NextLink>
             </ListItem>
@@ -855,6 +882,22 @@ export function EngineerSidebarMenu() {
                   startIcon={<DashboardTwoToneIcon />}
                 >
                   Supervisor Dashboard
+                </Button>
+              </NextLink>
+            </ListItem>
+
+            
+            
+            <ListItem component="div">
+              <NextLink href="/supervisor/kpis" passHref>
+                <Button
+                  className={currentRoute === '/supervisor/kpis' ? 'active' : ''}
+                  disableRipple
+                  component="a"
+                  onClick={closeSidebar}
+                  startIcon={<DashboardTwoToneIcon />}
+                >
+                  KPI Analytics
                 </Button>
               </NextLink>
             </ListItem>
@@ -1872,6 +1915,22 @@ export function TeamLeaderSidebarMenu() {
                 </Button>
               </NextLink>
             </ListItem>
+
+            
+            <ListItem component="div">
+              <NextLink href="/leader/kpis" passHref>
+                <Button
+                  className={currentRoute === '/leader/kpis' ? 'active' : ''}
+                  disableRipple
+                  component="a"
+                  onClick={closeSidebar}
+                  startIcon={<DashboardTwoToneIcon />}
+                >
+                  KPI Analytics
+                </Button>
+              </NextLink>
+            </ListItem>
+
             <ListItem component="div">
               <NextLink href="/leader/audit-logs" passHref>
                 <Button
@@ -2200,6 +2259,22 @@ export function SectorManagerSidebarMenu() {
                 </Button>
               </NextLink>
             </ListItem>
+
+            
+            <ListItem component="div">
+              <NextLink href="/sector-manager/kpis" passHref>
+                <Button
+                  className={currentRoute === '/sector-manager/kpis' ? 'active' : ''}
+                  disableRipple
+                  component="a"
+                  onClick={closeSidebar}
+                  startIcon={<DashboardTwoToneIcon />}
+                >
+                  KPI Analytics
+                </Button>
+              </NextLink>
+            </ListItem>
+
             <ListItem component="div">
               <NextLink href="/sector-manager/penalties" passHref>
                 <Button
@@ -2326,6 +2401,33 @@ export function SystemAdminSidebarMenu() {
               </NextLink>
             </ListItem>
 
+            <ListItem component="div">
+              <NextLink href="/admin/kpis" passHref>
+                <Button
+                  className={currentRoute === '/admin/kpis' ? 'active' : ''}
+                  disableRipple
+                  component="a"
+                  onClick={closeSidebar}
+                  startIcon={<DashboardTwoToneIcon />}
+                >
+                  KPI Analytics
+                </Button>
+              </NextLink>
+            </ListItem>
+
+            <ListItem component="div">
+              <NextLink href="/admin/workorder" passHref>
+                <Button
+                  className={currentRoute === '/admin/workorder' ? 'active' : ''}
+                  disableRipple
+                  component="a"
+                  onClick={closeSidebar}
+                  startIcon={<HomeTwoToneIcon />}
+                >
+                  Work Orders
+                </Button>
+              </NextLink>
+            </ListItem>
             <ListItem component="div">
               <Button
                 disableRipple

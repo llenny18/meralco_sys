@@ -797,3 +797,383 @@ class UpcomingDeadlinesSerializer(serializers.Serializer):
     due_date = serializers.DateField()
     days_remaining = serializers.IntegerField()
     priority = serializers.CharField()
+    
+
+
+
+# serializers.py - Add these serializers
+
+from rest_framework import serializers
+from .models import *
+
+# ============================================
+# WORK ORDER SERIALIZERS
+# ============================================
+
+class WorkOrderSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
+    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
+    supervisor_name = serializers.SerializerMethodField()
+    qi_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = WorkOrder
+        fields = '__all__'
+        read_only_fields = ['wo_id', 'created_at', 'updated_at', 'days_from_energized_to_coc', 
+                           'days_from_coc_to_audit', 'days_from_audit_to_billing', 
+                           'total_resolution_days', 'is_delayed', 'delay_days']
+    
+    def get_supervisor_name(self, obj):
+        return obj.supervisor.get_full_name() if obj.supervisor else None
+    
+    def get_qi_name(self, obj):
+        return obj.assigned_qi.get_full_name() if obj.assigned_qi else None
+
+
+class WorkOrderDocumentSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.CharField(source='uploaded_by.get_full_name', read_only=True)
+    approved_by_name = serializers.CharField(source='approved_by.get_full_name', read_only=True)
+    
+    class Meta:
+        model = WorkOrderDocument
+        fields = '__all__'
+        read_only_fields = ['upload_date']
+
+
+class WorkOrderListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for list views"""
+    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
+    supervisor_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = WorkOrder
+        fields = ['wo_id', 'wo_no', 'description', 'location', 'vendor_name', 
+                 'supervisor_name', 'status', 'status_display', 'priority', 
+                 'date_energized', 'total_resolution_days', 'is_delayed', 
+                 'delay_days', 'created_at']
+    
+    def get_supervisor_name(self, obj):
+        return obj.supervisor.get_full_name() if obj.supervisor else None
+
+
+# ============================================
+# CREW MONITORING SERIALIZERS
+# ============================================
+
+class CrewTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CrewType
+        fields = '__all__'
+
+
+class DailyCrewMonitoringSerializer(serializers.ModelSerializer):
+    crew_code = serializers.CharField(source='crew_type.crew_code', read_only=True)
+    crew_name = serializers.CharField(source='crew_type.crew_name', read_only=True)
+    
+    class Meta:
+        model = DailyCrewMonitoring
+        fields = '__all__'
+        read_only_fields = ['weighted_productivity', 'monthly_peso_value', 
+                           'weekly_peso_value', 'daily_peso_value', 
+                           'created_at', 'updated_at']
+
+
+class DailyCrewMonitoringSummarySerializer(serializers.Serializer):
+    """Aggregated summary for crew monitoring"""
+    crew_code = serializers.CharField()
+    crew_name = serializers.CharField()
+    month = serializers.DateField()
+    total_productivity = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_peso_value = serializers.DecimalField(max_digits=15, decimal_places=2)
+    average_daily_productivity = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+
+# ============================================
+# QI MONITORING SERIALIZERS
+# ============================================
+
+class QIWeeklyAccomplishmentSerializer(serializers.ModelSerializer):
+    qi_name = serializers.CharField(source='qi_user.get_full_name', read_only=True)
+    
+    class Meta:
+        model = QIWeeklyAccomplishment
+        fields = '__all__'
+        read_only_fields = ['total_inspections', 'target_met', 'created_at', 'updated_at']
+
+
+class QIMonthlyAccomplishmentSerializer(serializers.ModelSerializer):
+    qi_name = serializers.CharField(source='qi_user.get_full_name', read_only=True)
+    month_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = QIMonthlyAccomplishment
+        fields = '__all__'
+        read_only_fields = ['total_inspections', 'target_met', 
+                           'achievement_percentage', 'created_at', 'updated_at']
+    
+    def get_month_display(self, obj):
+        return obj.month.strftime('%B %Y')
+
+
+
+# serializers.py - Add these serializers
+
+from rest_framework import serializers
+from .models import *
+
+# ============================================
+# WORK ORDER SERIALIZERS
+# ============================================
+
+class WorkOrderSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
+    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
+    supervisor_name = serializers.SerializerMethodField()
+    qi_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = WorkOrder
+        fields = '__all__'
+        read_only_fields = ['wo_id', 'created_at', 'updated_at', 'days_from_energized_to_coc', 
+                           'days_from_coc_to_audit', 'days_from_audit_to_billing', 
+                           'total_resolution_days', 'is_delayed', 'delay_days']
+    
+    def get_supervisor_name(self, obj):
+        return obj.supervisor.get_full_name() if obj.supervisor else None
+    
+    def get_qi_name(self, obj):
+        return obj.assigned_qi.get_full_name() if obj.assigned_qi else None
+
+
+class WorkOrderDocumentSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.CharField(source='uploaded_by.get_full_name', read_only=True)
+    approved_by_name = serializers.CharField(source='approved_by.get_full_name', read_only=True)
+    
+    class Meta:
+        model = WorkOrderDocument
+        fields = '__all__'
+        read_only_fields = ['upload_date']
+
+
+class WorkOrderListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for list views"""
+    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
+    supervisor_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = WorkOrder
+        fields = ['wo_id', 'wo_no', 'description', 'location', 'vendor_name', 
+                 'supervisor_name', 'status', 'status_display', 'priority', 
+                 'date_energized', 'total_resolution_days', 'is_delayed', 
+                 'delay_days', 'created_at']
+    
+    def get_supervisor_name(self, obj):
+        return obj.supervisor.get_full_name() if obj.supervisor else None
+
+
+# ============================================
+# CREW MONITORING SERIALIZERS
+# ============================================
+
+class CrewTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CrewType
+        fields = '__all__'
+
+
+class DailyCrewMonitoringSerializer(serializers.ModelSerializer):
+    crew_code = serializers.CharField(source='crew_type.crew_code', read_only=True)
+    crew_name = serializers.CharField(source='crew_type.crew_name', read_only=True)
+    
+    class Meta:
+        model = DailyCrewMonitoring
+        fields = '__all__'
+        read_only_fields = ['weighted_productivity', 'monthly_peso_value', 
+                           'weekly_peso_value', 'daily_peso_value', 
+                           'created_at', 'updated_at']
+
+
+class DailyCrewMonitoringSummarySerializer(serializers.Serializer):
+    """Aggregated summary for crew monitoring"""
+    crew_code = serializers.CharField()
+    crew_name = serializers.CharField()
+    month = serializers.DateField()
+    total_productivity = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_peso_value = serializers.DecimalField(max_digits=15, decimal_places=2)
+    average_daily_productivity = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+
+# ============================================
+# QI MONITORING SERIALIZERS
+# ============================================
+
+class QIWeeklyAccomplishmentSerializer(serializers.ModelSerializer):
+    qi_name = serializers.CharField(source='qi_user.get_full_name', read_only=True)
+    
+    class Meta:
+        model = QIWeeklyAccomplishment
+        fields = '__all__'
+        read_only_fields = ['total_inspections', 'target_met', 'created_at', 'updated_at']
+
+
+class QIMonthlyAccomplishmentSerializer(serializers.ModelSerializer):
+    qi_name = serializers.CharField(source='qi_user.get_full_name', read_only=True)
+    month_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = QIMonthlyAccomplishment
+        fields = '__all__'
+        read_only_fields = ['total_inspections', 'target_met', 
+                           'achievement_percentage', 'created_at', 'updated_at']
+    
+    def get_month_display(self, obj):
+        return obj.month.strftime('%B %Y')
+
+
+
+
+# ============================================
+# PCA SERIALIZERS
+# ============================================
+
+class PCAGoalSerializer(serializers.ModelSerializer):
+    month_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = PCAGoal
+        fields = '__all__'
+    
+    def get_month_display(self, obj):
+        return obj.month.strftime('%B %Y')
+
+
+class PCASummarySerializer(serializers.ModelSerializer):
+    month_display = serializers.SerializerMethodField()
+    goal = PCAGoalSerializer(source='month', read_only=True)
+    class Meta:
+        model = PCASummary
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_month_display(self, obj):
+        return obj.month.strftime('%B %Y')
+
+# ============================================
+# VENDOR PRODUCTIVITY SERIALIZERS
+# ============================================
+class VendorProductivityMonthlySerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
+    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
+    month_display = serializers.SerializerMethodField()
+    class Meta:
+        model = VendorProductivityMonthly
+        fields = '__all__'
+        read_only_fields = ['actual_capability_percentage', 'productivity_percentage', 
+                        'created_at', 'updated_at']
+
+    def get_month_display(self, obj):
+        return obj.month.strftime('%B %Y')
+    
+# ============================================
+# AGEING ANALYSIS SERIALIZERS
+# ============================================
+class AgeingAnalysisSerializer(serializers.ModelSerializer):
+    wo_no = serializers.CharField(source='work_order.wo_no', read_only=True)
+    wo_description = serializers.CharField(source='work_order.description', read_only=True)
+    supervisor_name = serializers.SerializerMethodField()
+    age_bracket_display = serializers.CharField(source='get_age_bracket_display', read_only=True)
+    class Meta:
+        model = AgeingAnalysis
+        fields = '__all__'
+
+    def get_supervisor_name(self, obj):
+        return obj.supervisor.get_full_name() if obj.supervisor else None
+    
+class AgeingSummarySerializer(serializers.Serializer):
+    """Summary statistics for ageing analysis"""
+    age_bracket = serializers.CharField()
+    count = serializers.IntegerField()
+    total_manhours = serializers.DecimalField(max_digits=15, decimal_places=2)
+    
+# ============================================
+# BACKJOB MONITORING SERIALIZERS
+# ============================================
+class BackjobMonitoringSerializer(serializers.ModelSerializer):
+    wo_no = serializers.CharField(source='work_order.wo_no', read_only=True)
+    wo_description = serializers.CharField(source='work_order.description', read_only=True)
+    assigned_to_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    class Meta:
+        model = BackjobMonitoring
+        fields = '__all__'
+        read_only_fields = ['days_pending', 'is_overdue', 'created_at', 'updated_at']
+
+    def get_assigned_to_name(self, obj):
+        return obj.assigned_to.get_full_name() if obj.assigned_to else None
+    
+    
+from rest_framework import serializers
+from .models import KPISnapshot, KPITarget
+
+class KPISnapshotSerializer(serializers.ModelSerializer):
+    kpi_type_display = serializers.CharField(source='get_kpi_type_display', read_only=True)
+    status = serializers.SerializerMethodField()
+    variance = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = KPISnapshot
+        fields = '__all__'
+    
+    def get_status(self, obj):
+        """Determine status based on target comparison"""
+        if not obj.target_value:
+            return 'NEUTRAL'
+        
+        # For most KPIs, higher is better
+        if obj.kpi_value >= obj.target_value:
+            return 'GREEN'
+        elif obj.kpi_value >= obj.target_value * 0.9:
+            return 'YELLOW'
+        else:
+            return 'RED'
+    
+    def get_variance(self, obj):
+        """Calculate variance from target"""
+        if not obj.target_value or obj.target_value == 0:
+            return None
+        return float((obj.kpi_value - obj.target_value) / obj.target_value * 100)
+
+
+class KPITargetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = KPITarget
+        fields = '__all__'
+
+
+class KPIDashboardSerializer(serializers.Serializer):
+    """Serializer for comprehensive KPI dashboard data"""
+    
+    # Summary
+    period_start = serializers.DateField()
+    period_end = serializers.DateField()
+    total_kpis = serializers.IntegerField()
+    
+    # KPI Data
+    ccti = serializers.DictField()
+    pca_conversion = serializers.DictField()
+    ageing_completion = serializers.DictField()
+    pai_adherence = serializers.DictField()
+    termination_apt = serializers.DictField()
+    termination_resolution = serializers.DictField()
+    prdi = serializers.DictField()
+    cost_settlement = serializers.DictField()
+    quality_index = serializers.DictField()
+    capability_utilization = serializers.DictField()
+    
+    # Trends
+    historical_trends = serializers.DictField()
+    
+    # Charts Data
+    chart_data = serializers.DictField()

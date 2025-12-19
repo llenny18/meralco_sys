@@ -33,7 +33,19 @@ EMAIL_HOST_USER = "aimsworkorder@gmail.com"       # your Gmail address
 EMAIL_HOST_PASSWORD = "httq otmj uopo nuec"     # 16-character Google App Password
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
+# Add this to settings.py
+FORCE_SCRIPT_NAME = '/api'
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# Update ALLOWED_HOSTS
+ALLOWED_HOSTS = ['aimswo.online', 'www.aimswo.online', '72.61.215.239']
+
+# Static and media URLs
+STATIC_URL = '/api/static/'
+MEDIA_URL = '/api/media/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -148,10 +160,10 @@ WSGI_APPLICATION = 'meralcosys.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'meralco_sys_db',
+        'NAME': 'aimswo_db',
         'USER': 'postgres',
-        'PASSWORD': 'admin123',
-        'HOST': 'localhost',
+        'PASSWORD': 'aimsWOpass1@',
+        'HOST': '72.61.215.239',
         'PORT': '5432',
     }
 }
@@ -203,10 +215,6 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.1/howto/static-files/
-
-STATIC_URL = 'static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

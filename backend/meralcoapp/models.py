@@ -1032,3 +1032,631 @@ class SystemSetting(models.Model):
 
     def __str__(self):
         return self.setting_key
+    
+# make this new tables be created, abovemodels are already exisiting
+
+# ============================================
+# WORK ORDER MODELS (Main Database - C1 Sheet)
+# ============================================
+
+class WorkOrder(models.Model):
+    """Main work order tracking - represents C1 sheet"""
+    
+    PRIORITY_CHOICES = [
+        ('VIP', 'VIP'),
+        ('High', 'High'),
+        ('Medium', 'Medium'),
+        ('Low', 'Low'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('NEW', 'New'),
+        ('FOR AUDIT', 'For Audit'),
+        ('AUDITED', 'Audited'),
+        ('NO COC', 'No COC'),
+        ('PAID', 'Paid'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+    
+    wo_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    wo_no = models.CharField(max_length=100, unique=True)  # Work Order Number
+    
+    # Dates
+    date_received_jacket = models.DateField(null=True, blank=True)
+    date_received_awarding = models.DateField(null=True, blank=True)
+    date_energized = models.DateField(null=True, blank=True)  # Completion date
+    date_coc_received = models.DateField(null=True, blank=True)
+    date_for_audit = models.DateField(null=True, blank=True)
+    date_audited = models.DateField(null=True, blank=True)
+    
+    # Project Details
+    wo_initiator = models.CharField(max_length=50, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    location = models.CharField(max_length=255, blank=True, null=True)
+    municipality = models.CharField(max_length=100, blank=True, null=True)
+    area_of_responsibility = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Assignments
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='work_orders')
+    assigned_crew = models.CharField(max_length=50, blank=True, null=True)  # AVECO, CHALLENGER, etc.
+    supervisor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='supervised_work_orders')
+    assigned_qi = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='qi_work_orders')
+    
+    # Financial
+    total_manhours = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    total_estimated_cost = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    billed_cost = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+    
+    # Status & Priority
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='NEW')
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='Medium')
+    is_vip = models.BooleanField(default=False)
+    eam_status = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Remarks
+    vendor_remarks = models.TextField(blank=True, null=True)
+    c1_remarks = models.TextField(blank=True, null=True)
+    clerk_remarks = models.TextField(blank=True, null=True)
+    de_remarks = models.TextField(blank=True, null=True)
+    
+    # Calculated Fields
+    days_from_energized_to_coc = models.IntegerField(null=True, blank=True)
+    days_from_coc_to_audit = models.IntegerField(null=True, blank=True)
+    days_from_audit_to_billing = models.IntegerField(null=True, blank=True)
+    total_resolution_days = models.IntegerField(null=True, blank=True)
+    
+    # SLA Tracking
+    target_completion_date = models.DateField(null=True, blank=True)
+    is_delayed = models.BooleanField(default=False)
+    delay_days = models.IntegerField(default=0)
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'work_orders'
+        ordering = ['-date_received_jacket']
+        indexes = [
+            models.Index(fields=['wo_no']),
+            models.Index(fields=['status']),
+            models.Index(fields=['vendor']),
+            models.Index(fields=['assigned_crew']),
+        ]
+    
+    def __str__(self):
+        return f"{self.wo_no} - {self.description[:50]}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate days
+        if self.date_energized and self.date_coc_received:
+            self.days_from_energized_to_coc = (self.date_coc_received - self.date_energized).days
+        
+        if self.date_coc_received and self.date_for_audit:
+            self.days_from_coc_to_audit = (self.date_for_audit - self.date_coc_received).days
+        
+        if self.date_for_audit and self.date_audited:
+            self.days_from_audit_to_billing = (self.date_audited - self.date_for_audit).days
+        
+        # Calculate total resolution days
+        if self.date_energized and self.date_audited:
+            self.total_resolution_days = (self.date_audited - self.date_energized).days
+        
+        # Check if delayed (target is 60 days)
+        if self.total_resolution_days and self.total_resolution_days > 60:
+            self.is_delayed = True
+            self.delay_days = self.total_resolution_days - 60
+        
+        super().save(*args, **kwargs)
+
+
+class WorkOrderDocument(models.Model):
+    """Track documents for work orders - COC, permits, etc."""
+    
+    DOC_TYPE_CHOICES = [
+        ('COC', 'Certificate of Completion'),
+        ('PERMIT', 'Permit'),
+        ('INSPECTION', 'Inspection Report'),
+        ('INVOICE', 'Invoice'),
+        ('OTHER', 'Other'),
+    ]
+    
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name='wo_documents')
+    document_type = models.CharField(max_length=50, choices=DOC_TYPE_CHOICES)
+    document_name = models.CharField(max_length=255)
+    document_file = models.FileField(upload_to='work_orders/%Y/%m/', null=True, blank=True)
+    document_path = models.CharField(max_length=500, blank=True, null=True)
+    
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    upload_date = models.DateTimeField(auto_now_add=True)
+    
+    is_approved = models.BooleanField(default=False)
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_wo_documents')
+    approval_date = models.DateTimeField(null=True, blank=True)
+    
+    notes = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        db_table = 'work_order_documents'
+        ordering = ['-upload_date']
+    
+    def __str__(self):
+        return f"{self.work_order.wo_no} - {self.document_type}"
+
+
+# ============================================
+# CREW MONITORING MODELS (Daily Crew Sheet)
+# ============================================
+
+class CrewType(models.Model):
+    """Define crew types with their rates and productivity weights"""
+    
+    crew_code = models.CharField(max_length=50, unique=True)
+    crew_name = models.CharField(max_length=100)
+    
+    # Productivity Weights (A, B, C, D from your formula)
+    weight_a = models.IntegerField(default=4)
+    weight_b = models.IntegerField(default=6)
+    weight_c = models.IntegerField(default=4)
+    weight_d = models.IntegerField(default=3)
+    
+    # Conversion factors
+    conversion_factor = models.DecimalField(max_digits=10, decimal_places=4, default=1.8245)
+    working_hours_per_day = models.IntegerField(default=8)
+    working_days_per_month = models.IntegerField(default=26)
+    
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'crew_types'
+        ordering = ['crew_name']
+    
+    def __str__(self):
+        return f"{self.crew_code} - {self.crew_name}"
+
+
+class DailyCrewMonitoring(models.Model):
+    """Daily crew monitoring - represents monthly crew tracking sheets"""
+    
+    crew_type = models.ForeignKey(CrewType, on_delete=models.CASCADE, related_name='daily_records')
+    monitoring_date = models.DateField()
+    
+    # Values for productivity calculation: (A * 4) + (B * 6) + (C * 4) + (D * 3)
+    value_a = models.IntegerField(default=0)
+    value_b = models.IntegerField(default=0)
+    value_c = models.IntegerField(default=0)
+    value_d = models.IntegerField(default=0)
+    
+    # Rate (F column)
+    daily_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+    # Calculated fields
+    weighted_productivity = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    monthly_peso_value = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    weekly_peso_value = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    daily_peso_value = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'daily_crew_monitoring'
+        unique_together = ['crew_type', 'monitoring_date']
+        ordering = ['-monitoring_date']
+        indexes = [
+            models.Index(fields=['monitoring_date']),
+            models.Index(fields=['crew_type']),
+        ]
+    
+    def __str__(self):
+        return f"{self.crew_type.crew_code} - {self.monitoring_date}"
+    
+    def save(self, *args, **kwargs):
+        # Calculate weighted productivity: (A * 4) + (B * 6) + (C * 4) + (D * 3)
+        self.weighted_productivity = (
+            (self.value_a * self.crew_type.weight_a) +
+            (self.value_b * self.crew_type.weight_b) +
+            (self.value_c * self.crew_type.weight_c) +
+            (self.value_d * self.crew_type.weight_d)
+        )
+        
+        # Calculate peso values if daily_rate is provided
+        if self.daily_rate:
+            # Monthly: (Rate * 8 * 26) / 1.8245
+            self.monthly_peso_value = (
+                self.daily_rate * 
+                self.crew_type.working_hours_per_day * 
+                self.crew_type.working_days_per_month
+            ) / self.crew_type.conversion_factor
+            
+            # Weekly: Monthly / 4
+            self.weekly_peso_value = self.monthly_peso_value / 4
+            
+            # Daily: (Rate * 8) / 1.8245
+            self.daily_peso_value = (
+                self.daily_rate * 
+                self.crew_type.working_hours_per_day
+            ) / self.crew_type.conversion_factor
+        
+        super().save(*args, **kwargs)
+
+
+# ============================================
+# QI MONITORING MODELS (Enhanced)
+# ============================================
+
+class QIWeeklyAccomplishment(models.Model):
+    """Track weekly QI accomplishments"""
+    
+    qi_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='weekly_accomplishments')
+    week_start_date = models.DateField()
+    week_end_date = models.DateField()
+    
+    # Monday through Sunday counts
+    monday_count = models.IntegerField(default=0)
+    tuesday_count = models.IntegerField(default=0)
+    wednesday_count = models.IntegerField(default=0)
+    thursday_count = models.IntegerField(default=0)
+    friday_count = models.IntegerField(default=0)
+    saturday_count = models.IntegerField(default=0)
+    sunday_count = models.IntegerField(default=0)
+    
+    # Totals
+    total_inspections = models.IntegerField(default=0)
+    target_inspections = models.IntegerField(default=0)
+    target_met = models.BooleanField(default=False)
+    
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'qi_weekly_accomplishments'
+        unique_together = ['qi_user', 'week_start_date']
+        ordering = ['-week_start_date']
+    
+    def __str__(self):
+        return f"{self.qi_user.get_full_name()} - Week of {self.week_start_date}"
+    
+    def save(self, *args, **kwargs):
+        # Calculate total
+        self.total_inspections = (
+            self.monday_count + self.tuesday_count + self.wednesday_count +
+            self.thursday_count + self.friday_count + self.saturday_count +
+            self.sunday_count
+        )
+        
+        # Check if target met
+        if self.target_inspections > 0:
+            self.target_met = self.total_inspections >= self.target_inspections
+        
+        super().save(*args, **kwargs)
+
+
+class QIMonthlyAccomplishment(models.Model):
+    """Track monthly QI accomplishments"""
+    
+    qi_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='monthly_accomplishments')
+    month = models.DateField()  # First day of month
+    
+    # Week 1-4/5 counts
+    week1_count = models.IntegerField(default=0)
+    week2_count = models.IntegerField(default=0)
+    week3_count = models.IntegerField(default=0)
+    week4_count = models.IntegerField(default=0)
+    week5_count = models.IntegerField(default=0)
+    
+    # Totals
+    total_inspections = models.IntegerField(default=0)
+    target_inspections = models.IntegerField(default=0)
+    target_met = models.BooleanField(default=False)
+    achievement_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'qi_monthly_accomplishments'
+        unique_together = ['qi_user', 'month']
+        ordering = ['-month']
+    
+    def __str__(self):
+        return f"{self.qi_user.get_full_name()} - {self.month.strftime('%B %Y')}"
+    
+    def save(self, *args, **kwargs):
+        # Calculate total
+        self.total_inspections = (
+            self.week1_count + self.week2_count + self.week3_count +
+            self.week4_count + self.week5_count
+        )
+        
+        # Calculate achievement percentage
+        if self.target_inspections > 0:
+            self.achievement_percentage = (self.total_inspections / self.target_inspections) * 100
+            self.target_met = self.total_inspections >= self.target_inspections
+        
+        super().save(*args, **kwargs)
+
+
+# ============================================
+# PCA (Project Completion Analytics) MODELS
+# ============================================
+
+class PCAGoal(models.Model):
+    """PCA monthly goals and targets"""
+    
+    month = models.DateField(unique=True)  # First day of month
+    target_completion_count = models.IntegerField(default=0)
+    target_conversion_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)  # Percentage
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'pca_goals'
+        ordering = ['-month']
+    
+    def __str__(self):
+        return f"PCA Goal - {self.month.strftime('%B %Y')}"
+
+
+class PCASummary(models.Model):
+    """PCA Summary - Project Completion Analytics"""
+    
+    month = models.DateField(unique=True)
+    
+    # Counts
+    ytd_energized = models.IntegerField(default=0)
+    carry_over_from_previous_year = models.IntegerField(default=0)
+    cancelled_count = models.IntegerField(default=0)
+    new_work_orders_count = models.IntegerField(default=0)
+    
+    # Completion metrics
+    completed_count = models.IntegerField(default=0)
+    completion_vs_goal = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)  # Percentage
+    conversion_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)  # Percentage
+    performance_completion_index = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    
+    # By supervisor/crew
+    crew_breakdown = models.JSONField(default=dict, blank=True)  # Store per-crew statistics
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'pca_summary'
+        ordering = ['-month']
+        verbose_name_plural = 'PCA Summaries'
+    
+    def __str__(self):
+        return f"PCA Summary - {self.month.strftime('%B %Y')}"
+
+
+# ============================================
+# VENDOR PRODUCTIVITY MODELS
+# ============================================
+
+class VendorProductivityMonthly(models.Model):
+    """Track vendor productivity per month"""
+    
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='monthly_productivity')
+    month = models.DateField()  # First day of month
+    
+    # Accomplishment
+    ytd_accomplishment = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)  # manhours
+    monthly_accomplishment = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)  # manhours
+    
+    # Capability
+    ytd_capability = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)  # manhours
+    monthly_capability = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)  # manhours
+    declared_manpower = models.IntegerField(default=0)  # Number of crew
+    
+    # Performance
+    actual_capability_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    productivity_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'vendor_productivity_monthly'
+        unique_together = ['vendor', 'month']
+        ordering = ['-month', 'vendor']
+    
+    def __str__(self):
+        return f"{self.vendor.vendor_code} - {self.month.strftime('%B %Y')}"
+    
+    def save(self, *args, **kwargs):
+        # Calculate percentages
+        if self.monthly_capability > 0:
+            self.actual_capability_percentage = (
+                self.monthly_accomplishment / self.monthly_capability
+            ) * 100
+        
+        if self.monthly_accomplishment > 0 and self.monthly_capability > 0:
+            self.productivity_percentage = (
+                self.monthly_accomplishment / self.monthly_capability
+            ) * 100
+        
+        super().save(*args, **kwargs)
+
+
+# ============================================
+# AGEING ANALYSIS MODELS
+# ============================================
+
+class AgeingAnalysis(models.Model):
+    """Track ageing of work orders by supervisor and crew"""
+    
+    AGE_BRACKET_CHOICES = [
+        ('0-3', '0-3 Months'),
+        ('4-6', '4-6 Months'),
+        ('7-9', '7-9 Months'),
+        ('10+', '10 Months and Above'),
+    ]
+    
+    analysis_date = models.DateField()
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name='ageing_records')
+    
+    # Classification
+    age_bracket = models.CharField(max_length=10, choices=AGE_BRACKET_CHOICES)
+    age_in_days = models.IntegerField()
+    age_in_months = models.IntegerField()
+    
+    # Assignment
+    supervisor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='ageing_supervised')
+    crew = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Status at time of analysis
+    status_at_analysis = models.CharField(max_length=50)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'ageing_analysis'
+        ordering = ['-analysis_date', '-age_in_days']
+        indexes = [
+            models.Index(fields=['analysis_date']),
+            models.Index(fields=['age_bracket']),
+        ]
+    
+    def __str__(self):
+        return f"{self.work_order.wo_no} - {self.age_bracket}"
+
+
+# ============================================
+# BACKJOB MONITORING MODEL
+# ============================================
+
+class BackjobMonitoring(models.Model):
+    """Track backjobs/issues that need resolution"""
+    
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('RESOLVED', 'Resolved'),
+        ('ESCALATED', 'Escalated'),
+    ]
+    
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name='backjobs')
+    
+    issue_description = models.TextField()
+    issue_category = models.CharField(max_length=100, blank=True, null=True)
+    reported_date = models.DateField()
+    target_resolution_date = models.DateField(null=True, blank=True)
+    actual_resolution_date = models.DateField(null=True, blank=True)
+    
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='PENDING')
+    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_backjobs')
+    
+    days_pending = models.IntegerField(default=0)
+    is_overdue = models.BooleanField(default=False)
+    
+    resolution_notes = models.TextField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'backjob_monitoring'
+        ordering = ['-reported_date']
+    
+    def __str__(self):
+        return f"{self.work_order.wo_no} - Backjob"
+    
+    def save(self, *args, **kwargs):
+        # Calculate days pending
+        if self.actual_resolution_date:
+            self.days_pending = (self.actual_resolution_date - self.reported_date).days
+        else:
+            from django.utils import timezone
+            self.days_pending = (timezone.now().date() - self.reported_date).days
+        
+        # Check if overdue
+        if self.target_resolution_date and not self.actual_resolution_date:
+            from django.utils import timezone
+            if timezone.now().date() > self.target_resolution_date:
+                self.is_overdue = True
+        
+        super().save(*args, **kwargs)
+        
+        
+
+# ============================================
+# KPI TRACKING MODELS
+# ============================================
+
+class KPISnapshot(models.Model):
+    """Store calculated KPI values for historical tracking"""
+    
+    KPI_TYPE_CHOICES = [
+        ('CCTI', 'Customer Connection Timeliness Index'),
+        ('PCA_CONVERSION', 'PCA Conversion Rate'),
+        ('AGEING_COMPLETION', 'Completion of Ageing PCAs'),
+        ('PAI_ADHERENCE', 'Adherence to Approved PAI SAIDI'),
+        ('TERM_APT', 'PCA Termination/Modification APT'),
+        ('TERM_RESOLUTION', 'PCA Termination Resolution'),
+        ('PRDI', 'Project Resolution Duration Index'),
+        ('COST_SETTLEMENT', 'WO Cost Settlement to RAB'),
+        ('QUALITY_INDEX', 'Quality Management Index'),
+        ('CAPABILITY_UTIL', 'Contractor Capability Utilization'),
+    ]
+    
+    snapshot_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    kpi_type = models.CharField(max_length=50, choices=KPI_TYPE_CHOICES)
+    period_start = models.DateField()
+    period_end = models.DateField()
+    
+    # KPI Value
+    kpi_value = models.DecimalField(max_digits=15, decimal_places=4)
+    target_value = models.DecimalField(max_digits=15, decimal_places=4, null=True, blank=True)
+    
+    # Supporting Data
+    numerator = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    denominator = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    sample_size = models.IntegerField(null=True, blank=True)
+    
+    # Metadata
+    calculation_details = models.JSONField(default=dict, blank=True)
+    notes = models.TextField(blank=True, null=True)
+    calculated_at = models.DateTimeField(auto_now_add=True)
+    calculated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    class Meta:
+        db_table = 'kpi_snapshots'
+        ordering = ['-period_end', 'kpi_type']
+        indexes = [
+            models.Index(fields=['kpi_type', 'period_end']),
+            models.Index(fields=['period_start', 'period_end']),
+        ]
+    
+    def __str__(self):
+        return f"{self.get_kpi_type_display()} - {self.period_end}"
+
+
+class KPITarget(models.Model):
+    """Store KPI targets for different periods"""
+    
+    kpi_type = models.CharField(max_length=50)
+    period_start = models.DateField()
+    period_end = models.DateField()
+    
+    target_value = models.DecimalField(max_digits=15, decimal_places=4)
+    threshold_green = models.DecimalField(max_digits=15, decimal_places=4, null=True, blank=True)
+    threshold_yellow = models.DecimalField(max_digits=15, decimal_places=4, null=True, blank=True)
+    threshold_red = models.DecimalField(max_digits=15, decimal_places=4, null=True, blank=True)
+    
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'kpi_targets'
+        ordering = ['-period_start']
+        unique_together = ['kpi_type', 'period_start', 'period_end']
+    
+    def __str__(self):
+        return f"{self.kpi_type} Target - {self.period_start} to {self.period_end}"

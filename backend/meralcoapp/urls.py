@@ -2,6 +2,17 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import *
 
+
+# Import Excel / bulk operation functions from file_handlers.py
+from .file_handlers import (
+    import_work_orders_excel,
+    export_work_orders_excel,
+    import_crew_monitoring_excel,
+    import_qi_monitoring_excel,
+    bulk_update_work_orders,
+    bulk_upload_documents
+)
+
 # Create router
 router = DefaultRouter()
 
@@ -80,6 +91,37 @@ router.register(r'system-settings', SystemSettingViewSet, basename='system-setti
 # Dashboard - IMPORTANT: Register this ViewSet
 router.register(r'dashboard', DashboardViewSet, basename='dashboard')
 
+# Work Order Management
+router.register(r'work-orders', WorkOrderViewSet, basename='work-order')
+router.register(r'work-order-documents', WorkOrderDocumentViewSet, basename='work-order-document')
+
+# Crew Monitoring
+router.register(r'crew-types', CrewTypeViewSet, basename='crew-type')
+router.register(r'daily-crew-monitoring', DailyCrewMonitoringViewSet, basename='daily-crew-monitoring')
+
+# QI Monitoring
+router.register(r'qi-weekly-accomplishments', QIWeeklyAccomplishmentViewSet, basename='qi-weekly-accomplishment')
+router.register(r'qi-monthly-accomplishments', QIMonthlyAccomplishmentViewSet, basename='qi-monthly-accomplishment')
+
+# PCA
+router.register(r'pca-goals', PCAGoalViewSet, basename='pca-goal')
+router.register(r'pca-summary', PCASummaryViewSet, basename='pca-summary')
+
+# Vendor Productivity
+router.register(r'vendor-productivity-monthly', VendorProductivityMonthlyViewSet, basename='vendor-productivity-monthly')
+
+# Ageing Analysis
+router.register(r'ageing-analysis', AgeingAnalysisViewSet, basename='ageing-analysis')
+
+# Backjob Monitoring
+router.register(r'backjob-monitoring', BackjobMonitoringViewSet, basename='backjob-monitoring')
+
+# KPIs
+router.register(r'kpi-snapshots', KPISnapshotViewSet, basename='kpi-snapshot')
+router.register(r'kpi-targets', KPITargetViewSet, basename='kpi-target')
+router.register(r'kpi-dashboard', KPIDashboardViewSet, basename='kpi-dashboard')
+
+
 # URL patterns
 urlpatterns = [
     # Include router URLs
@@ -94,6 +136,16 @@ urlpatterns = [
     # ML Predictions
     path('predict/delay/', predict_delay, name='predict-delay'),
     path('predict/penalty/', predict_penalty, name='predict-penalty'),
+    
+    # Excel Import/Export endpoints
+    path('api/v1/work-orders/import-excel/', import_work_orders_excel, name='import-work-orders'),
+    path('api/v1/work-orders/export-excel/', export_work_orders_excel, name='export-work-orders'),
+    path('api/v1/crew-monitoring/import-excel/', import_crew_monitoring_excel, name='import-crew-monitoring'),
+    path('api/v1/qi-monitoring/import-excel/', import_qi_monitoring_excel, name='import-qi-monitoring'),
+    
+    # Bulk operations
+    path('api/v1/work-orders/bulk-update/', bulk_update_work_orders, name='bulk-update-work-orders'),
+    path('api/v1/work-orders/bulk-upload-documents/', bulk_upload_documents, name='bulk-upload-documents'),
     
     # Chat endpoints
     path('chat/', chat, name='chat'),
