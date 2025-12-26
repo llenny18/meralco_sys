@@ -16,9 +16,42 @@ const USER_TYPES = [
   { value: 'supervisor', label: 'Supervisor' }
 ];
 
-// Note: The 'value' must match the role_name in your database exactly
+const sendDailyKPIEmail = async () => {
+  try {
+    const response = await fetch('http://localhost:8000/api/auto-send-daily-email/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      console.log('✅ Email sent successfully!', data);
+      console.log('Daily KPI email sent successfully!');
+    } else {
+      console.log('⚠️ Email already sent or failed:', data.message);
+      console.log(data.message);
+    }
+  } catch (error) {
+    console.error('❌ Error sending email:', error);
+    console.log('Failed to send email');
+  }
+};
 
 export default function LoginPage() {
+
+  useEffect(() => {
+    // Check if we've already sent today
+    const lastSent = localStorage.getItem('lastEmailSent');
+    const today = new Date().toDateString();
+    
+    if (lastSent !== today) {
+      sendDailyKPIEmail();
+      localStorage.setItem('lastEmailSent', today);
+    }
+  }, []);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [userType, setUserType] = useState('');

@@ -35,6 +35,7 @@ class UserRole(models.Model):
 class User(AbstractUser):
     user_id = models.AutoField(primary_key=True)
     role = models.ForeignKey(UserRole, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
+    email = models.EmailField(blank=True, null=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     last_login = models.DateTimeField(null=True, blank=True)
@@ -1660,3 +1661,31 @@ class KPITarget(models.Model):
     
     def __str__(self):
         return f"{self.kpi_type} Target - {self.period_start} to {self.period_end}"
+    
+    
+
+class EmailNotificationLog(models.Model):
+    """Track daily email notifications to prevent duplicates"""
+    
+    NOTIFICATION_TYPE_CHOICES = [
+        ('KPI_DAILY', 'Daily KPI Report'),
+        ('BACKJOB', 'Backjob Alert'),
+        ('OVERDUE_WO', 'Overdue Work Orders'),
+        ('SLA_BREACH', 'SLA Breach Alert'),
+    ]
+    
+    notification_type = models.CharField(max_length=50, choices=NOTIFICATION_TYPE_CHOICES)
+    notification_date = models.DateField()
+    sent_at = models.DateTimeField(auto_now_add=True)
+    recipient_email = models.EmailField()
+    status = models.CharField(max_length=20, default='SENT')
+    email_content = models.TextField(blank=True, null=True)
+    error_message = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        db_table = 'email_notification_log'
+        unique_together = ['notification_type', 'notification_date', 'recipient_email']
+        ordering = ['-notification_date']
+    
+    def __str__(self):
+        return f"{self.notification_type} - {self.notification_date}"

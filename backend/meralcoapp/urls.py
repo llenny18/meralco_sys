@@ -126,6 +126,7 @@ router.register(r'kpi-dashboard', KPIDashboardViewSet, basename='kpi-dashboard')
 urlpatterns = [
     # Include router URLs
     path('api/v1/', include(router.urls)),
+    path('test-email/', test_email_view, name='test-email'),
     
     # Standalone API views
     path('api/v1/user-roles-list/', get_user_roles, name='user-roles-list'),
@@ -136,6 +137,11 @@ urlpatterns = [
     # ML Predictions
     path('predict/delay/', predict_delay, name='predict-delay'),
     path('predict/penalty/', predict_penalty, name='predict-penalty'),
+    
+    # Emailings
+    path('send-daily-kpi-email/', send_daily_kpi_email, name='send_daily_kpi_email'),
+    path('check-daily-email-status/', check_daily_email_status, name='check_daily_email_status'),
+    path('auto-send-daily-email/', auto_send_daily_email, name='auto_send_daily_email'),
     
     # Excel Import/Export endpoints
     path('api/v1/work-orders/import-excel/', import_work_orders_excel, name='import-work-orders'),
