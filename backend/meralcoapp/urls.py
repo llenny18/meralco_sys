@@ -150,6 +150,7 @@ router.register(r'team-leader', TeamLeaderViewSet, basename='team-leader')
 # Sector Manager Portal
 router.register(r'sector-manager', SectorManagerViewSet, basename='sector-manager')
 
+router.register(r'calendar', CalendarDashboardViewSet, basename='calendar')
 # System Administrator Portal
 router.register(r'system-admin', SystemAdministratorViewSet, basename='system-admin')
 
@@ -198,5 +199,9 @@ urlpatterns = [
     path('send-daily-email/<int:user_id>/', send_daily_email_to_user, name='send-daily-email-user'),
     path('check-my-actions/', check_my_actions, name='check-my-actions'),
     path('check-daily-email-logs/', check_daily_email_logs, name='check-daily-email-logs'),
+    
+    # Calendar endpoints
+    path('a-calendar/events/', get_calendar_events, name='calendar-events'),
+    path('a-calendar/stats/', get_calendar_stats, name='calendar-stats'),
     
 ]

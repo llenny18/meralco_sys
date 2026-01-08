@@ -2,13 +2,13 @@ import Head from 'next/head';
 import SidebarLayout from '@/layouts/SidebarLayout';
 import { Grid, Container } from '@mui/material';
 
-import AdminDashboard from '@/admin';
+import ProjectCalendarDashboard from '@/supervisor';
 
 function ApplicationsTransactions() {
   return (
     <>
       <Head>
-        <title>Transactions - Applications</title>
+        <title>Supervisor - Dashboard</title>
       </Head>
       <Container maxWidth="lg">
         <Grid
@@ -19,7 +19,7 @@ function ApplicationsTransactions() {
           spacing={3}
         >
           <Grid item xs={12}>
-            <AdminDashboard />
+            <ProjectCalendarDashboard />
           </Grid>
         </Grid>
       </Container>

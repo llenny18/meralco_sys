@@ -415,6 +415,7 @@ class ProjectDocument(models.Model):
 
 
 class DocumentCompliance(models.Model):
+    compliance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='document_compliance')
     doc_type = models.ForeignKey(DocumentType, on_delete=models.CASCADE, related_name='compliance_records')
     is_submitted = models.BooleanField(default=False)

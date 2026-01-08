@@ -1,558 +1,817 @@
-// pages/qi/dashboard.tsx
-import { FC, useState, useEffect } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import SidebarLayout from '@/layouts/SidebarLayout';
-import PageTitleWrapper from '@/components/PageTitleWrapper';
-import { Container, Grid, Card, CardHeader, CardContent, Divider, Box, Typography, Avatar, Chip, Table, TableBody, TableCell, TableHead, TableRow, TableContainer, Button, LinearProgress, Paper, Alert } from '@mui/material';
-import Footer from '@/components/Footer';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadialBarChart, RadialBar, AreaChart, Area } from 'recharts';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
-import AssignmentIcon from '@mui/icons-material/Assignment';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import SpeedIcon from '@mui/icons-material/Speed';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import React, { useState, useEffect } from 'react';
+import {
+    Loader2,
+    AlertCircle,
+    FileText,
+    Clock,
+    ChevronLeft,
+    ChevronRight,
+    XCircle,
+    AlertTriangle,
+    TrendingUp,
+    BarChart3,
+    CheckCircle,
+    Calendar as CalendarIcon,
+    List
+} from 'lucide-react';
 
-const COLORS = ['#5569ff', '#57ca22', '#ffc107', '#ff5630', '#9c27b0'];
-
-// Mock Data
-const dailyAuditStats = {
-  targetAudits: 8,
-  completedToday: 6,
-  pendingToday: 2,
-  performanceRate: 75
-};
-
-const monthlyPerformance = [
-  { day: 1, target: 8, completed: 7, efficiency: 87 },
-  { day: 2, target: 8, completed: 8, efficiency: 100 },
-  { day: 3, target: 8, completed: 6, efficiency: 75 },
-  { day: 4, target: 8, completed: 9, efficiency: 112 },
-  { day: 5, target: 8, completed: 7, efficiency: 87 },
-  { day: 6, target: 8, completed: 8, efficiency: 100 },
-  { day: 7, target: 8, completed: 5, efficiency: 62 },
-];
-
-const inspectionTypeBreakdown = [
-  { name: 'Initial Inspection', value: 45 },
-  { name: 'Progress Check', value: 38 },
-  { name: 'Final Audit', value: 28 },
-  { name: 'Re-inspection', value: 12 },
-];
-
-const historicalPerformance = [
-  { period: '30 Days', audits: 168, target: 240, rate: 70 },
-  { period: '60 Days', audits: 342, target: 480, rate: 71 },
-  { period: '90 Days', audits: 520, target: 720, rate: 72 },
-];
-
-const weeklyTrend = [
-  { week: 'Week 1', completed: 38, target: 40, missed: 2 },
-  { week: 'Week 2', completed: 42, target: 40, missed: 0 },
-  { week: 'Week 3', completed: 35, target: 40, missed: 5 },
-  { week: 'Week 4', completed: 41, target: 40, missed: 1 },
-];
-
-const inspectionResults = [
-  { result: 'Passed', value: 78 },
-  { result: 'Passed with Notes', value: 15 },
-  { result: 'Failed', value: 7 },
-];
-
-const scheduledInspections = [
-  { id: 1, project: 'Project Alpha', type: 'Final Audit', scheduledTime: '09:00 AM', location: 'Site A', status: 'Pending' },
-  { id: 2, project: 'Project Beta', type: 'Progress Check', scheduledTime: '11:00 AM', location: 'Site B', status: 'In Progress' },
-  { id: 3, project: 'Project Gamma', type: 'Initial Inspection', scheduledTime: '02:00 PM', location: 'Site C', status: 'Pending' },
-  { id: 4, project: 'Project Delta', type: 'Re-inspection', scheduledTime: '04:00 PM', location: 'Site D', status: 'Pending' },
-];
-
-const missedTargetReasons = [
-  { reason: 'Site Not Ready', count: 8 },
-  { reason: 'Document Delays', count: 6 },
-  { reason: 'Weather Issues', count: 4 },
-  { reason: 'Sick Leave', count: 3 },
-  { reason: 'Multiple Sites', count: 5 },
-];
-
-const performanceMetrics = {
-  avgInspectionTime: 2.5,
-  inspectionsThisMonth: 125,
-  backlogItems: 18,
-  completionRate: 88
-};
-
-const projectWorkload = [
-  { project: 'Alpha', inspections: 8, completed: 7, pending: 1 },
-  { project: 'Beta', inspections: 6, completed: 5, pending: 1 },
-  { project: 'Gamma', inspections: 10, completed: 8, pending: 2 },
-  { project: 'Delta', inspections: 5, completed: 5, pending: 0 },
-  { project: 'Epsilon', inspections: 7, completed: 4, pending: 3 },
-];
-
-const dailyCapacityData = [
-  { name: 'Capacity', value: dailyAuditStats.targetAudits, fill: '#5569ff' },
-  { name: 'Completed', value: dailyAuditStats.completedToday, fill: '#57ca22' },
-];
-
-function QIDashboard() {
-  const router = useRouter();
-
-  useEffect(() => {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    const authToken = localStorage.getItem('authToken');
-    const userRole = localStorage.getItem('userRole');
-
-    // If not authenticated or missing token, redirect to login
-    if (!userRole) {
-      router.push('/login');
-      return;
-    }
-
-    // Optional: Check if user has admin role
-    if (userRole !== 'quality-inspector') {
-      // Redirect non-admin users to their appropriate dashboard
-      router.push('/unauthorized'); // or router.push('/dashboard');
-    }
-  }, [router]);
-
-  return (
-    <>
-      <Head><title>Quality Inspector Dashboard</title></Head>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center">
-          <Grid item>
-            <Typography variant="h3" component="h3" gutterBottom>
-              🔍 Quality Inspector Dashboard
-            </Typography>
-            <Typography variant="subtitle2">
-              Inspection management, audit tracking, and performance monitoring
-            </Typography>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
-        <Grid container spacing={3}>
-          {/* Daily Performance Alert */}
-          <Grid item xs={12}>
-            <Alert 
-              severity={dailyAuditStats.performanceRate >= 100 ? 'success' : dailyAuditStats.performanceRate >= 75 ? 'info' : 'warning'}
-              icon={<SpeedIcon />}
-            >
-              <Typography variant="body1" fontWeight="bold">
-                Today's Performance: {dailyAuditStats.completedToday}/{dailyAuditStats.targetAudits} audits completed ({dailyAuditStats.performanceRate}%)
-              </Typography>
-              <Typography variant="body2">
-                {dailyAuditStats.pendingToday} inspections remaining for today's target
-              </Typography>
-            </Alert>
-          </Grid>
-
-          {/* KPI Cards */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h4" gutterBottom>{dailyAuditStats.targetAudits}</Typography>
-                    <Typography variant="body2" color="text.secondary">Daily Target</Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#5569ff', width: 56, height: 56 }}>
-                    <AssignmentIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h4" gutterBottom>{dailyAuditStats.completedToday}</Typography>
-                    <Typography variant="body2" color="text.secondary">Completed Today</Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#57ca22', width: 56, height: 56 }}>
-                    <CheckCircleOutlineIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h4" gutterBottom>{performanceMetrics.inspectionsThisMonth}</Typography>
-                    <Typography variant="body2" color="text.secondary">This Month</Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#ffc107', width: 56, height: 56 }}>
-                    <TrendingUpIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h4" gutterBottom>{performanceMetrics.backlogItems}</Typography>
-                    <Typography variant="body2" color="text.secondary">Backlog Items</Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#ff5630', width: 56, height: 56 }}>
-                    <ErrorOutlineIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Daily Capacity Gauge */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title="🎯 Daily Audit Capacity vs. Actual" />
-              <Divider />
-              <CardContent>
-                <Box textAlign="center" py={2}>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <RadialBarChart 
-                      cx="50%" 
-                      cy="50%" 
-                      innerRadius="30%" 
-                      outerRadius="90%" 
-                      data={dailyCapacityData}
-                      startAngle={180}
-                      endAngle={0}
-                    >
-                      <RadialBar dataKey="value" />
-                      <Legend />
-                      <Tooltip />
-                    </RadialBarChart>
-                  </ResponsiveContainer>
-                  <Typography variant="h3" color="primary" mt={2}>
-                    {dailyAuditStats.performanceRate}%
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Performance Rate
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Inspection Type Breakdown */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title="📊 Inspection Type Distribution" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie
-                      data={inspectionTypeBreakdown}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value }) => `${name}: ${value}`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {inspectionTypeBreakdown.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* 7-Day Performance Trend */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader title="📈 7-Day Performance Trend" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={monthlyPerformance}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="day" label={{ value: 'Day', position: 'insideBottom', offset: -5 }} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Area type="monotone" dataKey="target" stackId="1" stroke="#ffc107" fill="#ffc107" name="Target" />
-                    <Area type="monotone" dataKey="completed" stackId="2" stroke="#57ca22" fill="#57ca22" name="Completed" />
-                    <Line type="monotone" dataKey="efficiency" stroke="#5569ff" strokeWidth={2} name="Efficiency %" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Weekly Performance Comparison */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title="📅 Weekly Performance Comparison" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={weeklyTrend}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="week" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="completed" fill="#57ca22" name="Completed" />
-                    <Bar dataKey="target" fill="#5569ff" name="Target" />
-                    <Bar dataKey="missed" fill="#ff5630" name="Missed" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Inspection Results Distribution */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title="✅ Inspection Results Distribution" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={inspectionResults} layout="horizontal">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="result" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="value" fill="#5569ff" name="Count" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Historical Performance (30/60/90 Days) */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader title="📊 Historical Performance Analysis" />
-              <Divider />
-              <CardContent>
-                <Grid container spacing={2}>
-                  {historicalPerformance.map((period, idx) => (
-                    <Grid item xs={12} md={4} key={idx}>
-                      <Paper elevation={2} sx={{ p: 3 }}>
-                        <Typography variant="h6" gutterBottom>{period.period}</Typography>
-                        <Box display="flex" justifyContent="space-between" mb={2}>
-                          <Typography variant="body2" color="text.secondary">Audits Completed:</Typography>
-                          <Typography variant="body1" fontWeight="bold">{period.audits}</Typography>
-                        </Box>
-                        <Box display="flex" justifyContent="space-between" mb={2}>
-                          <Typography variant="body2" color="text.secondary">Target:</Typography>
-                          <Typography variant="body1" fontWeight="bold">{period.target}</Typography>
-                        </Box>
-                        <LinearProgress 
-                          variant="determinate" 
-                          value={period.rate} 
-                          sx={{ height: 10, borderRadius: 5, mb: 1 }}
-                          color={period.rate >= 90 ? 'success' : period.rate >= 70 ? 'warning' : 'error'}
-                        />
-                        <Typography variant="h5" color={period.rate >= 90 ? 'success.main' : period.rate >= 70 ? 'warning.main' : 'error.main'} textAlign="center">
-                          {period.rate}%
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  ))}
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Missed Target Reasons */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title="📋 Reasons for Missed Targets" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={missedTargetReasons} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="reason" type="category" width={120} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#ff5630" name="Occurrences" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Project Workload */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title="📁 Project-wise Inspection Workload" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={projectWorkload}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="project" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="completed" stackId="a" fill="#57ca22" name="Completed" />
-                    <Bar dataKey="pending" stackId="a" fill="#ffc107" name="Pending" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Today's Scheduled Inspections */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader 
-                title="📅 Today's Scheduled Inspections" 
-                action={<Button size="small" startIcon={<CalendarTodayIcon />}>View Full Schedule</Button>}
-              />
-              <Divider />
-              <CardContent>
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Project</TableCell>
-                        <TableCell>Type</TableCell>
-                        <TableCell>Time</TableCell>
-                        <TableCell>Location</TableCell>
-                        <TableCell>Status</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {scheduledInspections.map((inspection) => (
-                        <TableRow key={inspection.id} hover>
-                          <TableCell>{inspection.project}</TableCell>
-                          <TableCell>{inspection.type}</TableCell>
-                          <TableCell>{inspection.scheduledTime}</TableCell>
-                          <TableCell>{inspection.location}</TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={inspection.status} 
-                              size="small"
-                              color={inspection.status === 'In Progress' ? 'primary' : 'default'}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Performance Metrics Summary */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader title="📊 Performance Metrics Summary" />
-              <Divider />
-              <CardContent>
-                <Grid container spacing={3}>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Paper elevation={0} sx={{ p: 3, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-                      <Typography variant="h3" color="primary">{performanceMetrics.avgInspectionTime}h</Typography>
-                      <Typography variant="body2" color="text.secondary">Avg Inspection Time</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Paper elevation={0} sx={{ p: 3, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-                      <Typography variant="h3" color="success">{performanceMetrics.inspectionsThisMonth}</Typography>
-                      <Typography variant="body2" color="text.secondary">Inspections This Month</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Paper elevation={0} sx={{ p: 3, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-                      <Typography variant="h3" color="warning">{performanceMetrics.backlogItems}</Typography>
-                      <Typography variant="body2" color="text.secondary">Backlog Items</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Paper elevation={0} sx={{ p: 3, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-                      <Typography variant="h3" color="secondary">{performanceMetrics.completionRate}%</Typography>
-                      <Typography variant="body2" color="text.secondary">Completion Rate</Typography>
-                    </Paper>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Quick Actions */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader title="⚡ Quick Actions" />
-              <Divider />
-              <CardContent>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button 
-                      variant="contained" 
-                      fullWidth 
-                      startIcon={<AssignmentIcon />}
-                      size="large"
-                    >
-                      Start Inspection
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button 
-                      variant="contained" 
-                      fullWidth 
-                      startIcon={<CalendarTodayIcon />}
-                      size="large"
-                      color="secondary"
-                    >
-                      View Schedule
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button 
-                      variant="contained" 
-                      fullWidth 
-                      startIcon={<VerifiedUserIcon />}
-                      size="large"
-                      color="success"
-                    >
-                      Log Performance
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button 
-                      variant="outlined" 
-                      fullWidth 
-                      size="large"
-                    >
-                      Report Issue
-                    </Button>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Container>
-      <Footer />
-    </>
-  );
+interface CalendarEvent {
+    id: string;
+    date: string;
+    type: 'project' | 'deadline' | 'inspection' | 'sla';
+    title: string;
+    description: string;
+    priority: 'Critical' | 'High' | 'Medium' | 'Low';
+    status: string;
+    project_code?: string;
+    days_remaining?: number;
+    is_overdue?: boolean;
+    assigned_to?: string;
 }
 
-QIDashboard.getLayout = (page) => <SidebarLayout userRole="qi">{page}</SidebarLayout>;
-export default QIDashboard;
+interface CalendarStats {
+    total_events: number;
+    overdue: number;
+    this_week: number;
+    by_type: {
+        project: number;
+        deadline: number;
+        sla: number;
+        inspection: number;
+    };
+    by_priority: {
+        Critical: number;
+        High: number;
+        Medium: number;
+        Low: number;
+    };
+}
+
+const ProjectCalendarDashboard: React.FC = () => {
+    const [events, setEvents] = useState<CalendarEvent[]>([]);
+    const [stats, setStats] = useState<CalendarStats | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [filterType, setFilterType] = useState<string>('all');
+    const [view, setView] = useState<'calendar' | 'list'>('calendar');
+
+    const getAuthToken = (): string | null => {
+        return 'your_actual_token_here';
+    };
+
+    useEffect(() => {
+        loadCalendarData();
+        loadStats();
+    }, [filterType]);
+
+    const loadCalendarData = async () => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const token = getAuthToken();
+            if (!token) {
+                throw new Error('No authentication token found. Please log in.');
+            }
+
+            const params = new URLSearchParams({
+                type: filterType,
+                days: '90'
+            });
+
+            const response = await fetch(
+                `http://localhost:8000/api/v1/calendar/upcoming-deadlines/?${params}`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || `Error: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            setEvents(data);
+        } catch (err) {
+            console.error('Error loading calendar:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load calendar data');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadStats = async () => {
+        try {
+            const token = getAuthToken();
+            if (!token) return;
+
+            const response = await fetch(
+                'http://localhost:8000/a-calendar/stats/',
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                setStats(data);
+            }
+        } catch (err) {
+            console.error('Error loading stats:', err);
+        }
+    };
+
+    const getDaysInMonth = (date: Date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startingDayOfWeek = firstDay.getDay();
+
+        return { daysInMonth, startingDayOfWeek, year, month };
+    };
+
+    const getEventsForDate = (date: Date) => {
+        const dateStr = date.toISOString().split('T')[0];
+        return events.filter(event => event.date === dateStr);
+    };
+
+    const navigateMonth = (direction: 'prev' | 'next') => {
+        setCurrentDate(prev => {
+            const newDate = new Date(prev);
+            if (direction === 'prev') {
+                newDate.setMonth(prev.getMonth() - 1);
+            } else {
+                newDate.setMonth(prev.getMonth() + 1);
+            }
+            return newDate;
+        });
+    };
+
+    const goToToday = () => {
+        setCurrentDate(new Date());
+        setSelectedDate(null);
+    };
+
+    const getEventColor = (type: string) => {
+        const colors = {
+            project: { bg: '#9333ea', light: '#f3e8ff', text: '#581c87' },
+            deadline: { bg: '#f97316', light: '#ffedd5', text: '#9a3412' },
+            sla: { bg: '#dc2626', light: '#fee2e2', text: '#991b1b' },
+            inspection: { bg: '#3b82f6', light: '#dbeafe', text: '#1e40af' }
+        };
+        return colors[type] || colors.project;
+    };
+
+    const getPriorityColor = (priority: string, isOverdue: boolean) => {
+        if (isOverdue) return { bg: '#fef2f2', text: '#991b1b', border: '#fca5a5' };
+        const colors = {
+            Critical: { bg: '#fef2f2', text: '#991b1b', border: '#fca5a5' },
+            High: { bg: '#fff7ed', text: '#9a3412', border: '#fdba74' },
+            Medium: { bg: '#eff6ff', text: '#1e40af', border: '#93c5fd' },
+            Low: { bg: '#f9fafb', text: '#374151', border: '#d1d5db' }
+        };
+        return colors[priority] || colors.Low;
+    };
+
+    const renderCalendarView = () => {
+        const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentDate);
+        const days = [];
+        const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+        for (let i = 0; i < startingDayOfWeek; i++) {
+            days.push(
+                <div 
+                    key={`empty-${i}`} 
+                    style={{
+                        minHeight: '120px',
+                        backgroundColor: '#f9fafb',
+                        border: '1px solid #e5e7eb'
+                    }}
+                />
+            );
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const currentDateObj = new Date(year, month, day);
+            const dayEvents = getEventsForDate(currentDateObj);
+            const isToday = currentDateObj.toDateString() === new Date().toDateString();
+            const isSelected = selectedDate && currentDateObj.toDateString() === selectedDate.toDateString();
+
+            days.push(
+                <div
+                    key={day}
+                    onClick={() => setSelectedDate(currentDateObj)}
+                    style={{
+                        minHeight: '120px',
+                        border: isToday ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                        backgroundColor: isToday ? '#eff6ff' : '#ffffff',
+                        padding: '8px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: isSelected ? '0 0 0 3px rgba(59, 130, 246, 0.5)' : 'none',
+                        position: 'relative'
+                    }}
+                    onMouseEnter={(e) => {
+                        if (!isSelected) e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                        if (!isSelected) e.currentTarget.style.boxShadow = 'none';
+                    }}
+                >
+                    <div style={{
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        marginBottom: '8px',
+                        color: isToday ? '#1e40af' : '#374151'
+                    }}>
+                        {day}
+                    </div>
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '4px',
+                        maxHeight: '70px',
+                        overflowY: 'auto'
+                    }}>
+                        {dayEvents.slice(0, 3).map((event, idx) => {
+                            const colors = getEventColor(event.type);
+                            return (
+                                <div
+                                    key={idx}
+                                    style={{
+                                        fontSize: '11px',
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        backgroundColor: colors.bg,
+                                        color: '#ffffff',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                    title={event.title}
+                                >
+                                    <div style={{
+                                        width: '6px',
+                                        height: '6px',
+                                        borderRadius: '50%',
+                                        backgroundColor: '#ffffff',
+                                        flexShrink: 0
+                                    }} />
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {event.title}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                        {dayEvents.length > 3 && (
+                            <div style={{
+                                fontSize: '11px',
+                                color: '#6b7280',
+                                fontWeight: '500',
+                                paddingLeft: '8px'
+                            }}>
+                                +{dayEvents.length - 3} more
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+            }}>
+                {weekDays.map(day => (
+                    <div 
+                        key={day} 
+                        style={{
+                            backgroundColor: '#1f2937',
+                            color: '#ffffff',
+                            padding: '12px',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            fontSize: '14px'
+                        }}
+                    >
+                        {day}
+                    </div>
+                ))}
+                {days}
+            </div>
+        );
+    };
+
+    const renderListView = () => {
+        const groupedEvents: { [key: string]: CalendarEvent[] } = {};
+
+        events.forEach(event => {
+            if (!groupedEvents[event.date]) {
+                groupedEvents[event.date] = [];
+            }
+            groupedEvents[event.date].push(event);
+        });
+
+        const sortedDates = Object.keys(groupedEvents).sort();
+
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {sortedDates.map(date => (
+                    <div 
+                        key={date} 
+                        style={{
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                            overflow: 'hidden'
+                        }}
+                    >
+                        <div style={{
+                            background: 'linear-gradient(to right, #2563eb, #1e40af)',
+                            color: '#ffffff',
+                            padding: '16px'
+                        }}>
+                            <h3 style={{
+                                fontSize: '18px',
+                                fontWeight: 'bold',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                margin: '0 0 4px 0'
+                            }}>
+                                <Clock size={20} />
+                                {new Date(date).toLocaleDateString('en-US', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                })}
+                            </h3>
+                            <p style={{
+                                fontSize: '14px',
+                                color: '#bfdbfe',
+                                margin: 0
+                            }}>
+                                {groupedEvents[date].length} event{groupedEvents[date].length !== 1 ? 's' : ''}
+                            </p>
+                        </div>
+                        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {groupedEvents[date].map((event, idx) => {
+                                const colors = getEventColor(event.type);
+                                const priorityColors = getPriorityColor(event.priority, event.is_overdue || false);
+                                
+                                return (
+                                    <div 
+                                        key={idx} 
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'flex-start',
+                                            gap: '16px',
+                                            padding: '16px',
+                                            border: '2px solid #f3f4f6',
+                                            borderRadius: '8px',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.borderColor = '#93c5fd';
+                                            e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.borderColor = '#f3f4f6';
+                                            e.currentTarget.style.boxShadow = 'none';
+                                        }}
+                                    >
+                                        <div style={{
+                                            padding: '12px',
+                                            borderRadius: '50%',
+                                            backgroundColor: colors.bg,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexShrink: 0
+                                        }}>
+                                            {event.type === 'deadline' ? <FileText size={20} color="#ffffff" /> :
+                                             event.type === 'sla' ? <AlertCircle size={20} color="#ffffff" /> :
+                                             event.type === 'inspection' ? <CheckCircle size={20} color="#ffffff" /> :
+                                             <Clock size={20} color="#ffffff" />}
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                marginBottom: '8px',
+                                                flexWrap: 'wrap'
+                                            }}>
+                                                <h4 style={{
+                                                    fontWeight: 'bold',
+                                                    color: '#1f2937',
+                                                    margin: 0
+                                                }}>
+                                                    {event.title}
+                                                </h4>
+                                                <span style={{
+                                                    padding: '4px 12px',
+                                                    borderRadius: '9999px',
+                                                    fontSize: '12px',
+                                                    fontWeight: 'bold',
+                                                    border: `2px solid ${priorityColors.border}`,
+                                                    backgroundColor: priorityColors.bg,
+                                                    color: priorityColors.text
+                                                }}>
+                                                    {event.is_overdue ? 'OVERDUE' : event.priority}
+                                                </span>
+                                            </div>
+                                            <p style={{
+                                                fontSize: '14px',
+                                                color: '#6b7280',
+                                                margin: '0 0 8px 0'
+                                            }}>
+                                                {event.description}
+                                            </p>
+                                            {event.project_code && (
+                                                <p style={{
+                                                    fontSize: '12px',
+                                                    color: '#6b7280',
+                                                    fontFamily: 'monospace',
+                                                    backgroundColor: '#f3f4f6',
+                                                    display: 'inline-block',
+                                                    padding: '4px 8px',
+                                                    borderRadius: '4px',
+                                                    margin: '0 0 4px 0'
+                                                }}>
+                                                    Project: {event.project_code}
+                                                </p>
+                                            )}
+                                            {event.assigned_to && (
+                                                <p style={{
+                                                    fontSize: '12px',
+                                                    color: '#6b7280',
+                                                    margin: '4px 0 0 0'
+                                                }}>
+                                                    Assigned to: {event.assigned_to}
+                                                </p>
+                                            )}
+                                        </div>
+                                        {event.days_remaining !== undefined && (
+                                            <div style={{ textAlign: 'right' }}>
+                                                <p style={{
+                                                    fontSize: '18px',
+                                                    fontWeight: 'bold',
+                                                    color: event.days_remaining < 0 ? '#dc2626' :
+                                                           event.days_remaining <= 2 ? '#ea580c' :
+                                                           '#16a34a',
+                                                    margin: '0 0 4px 0'
+                                                }}>
+                                                    {event.days_remaining < 0 ? 
+                                                        `${Math.abs(event.days_remaining)}d` :
+                                                        `${event.days_remaining}d`
+                                                    }
+                                                </p>
+                                                <p style={{
+                                                    fontSize: '12px',
+                                                    color: '#6b7280',
+                                                    margin: 0
+                                                }}>
+                                                    {event.days_remaining < 0 ? 'overdue' : 'remaining'}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
+                {sortedDates.length === 0 && (
+                    <div style={{
+                        backgroundColor: '#ffffff',
+                        border: '2px dashed #d1d5db',
+                        borderRadius: '8px',
+                        padding: '48px',
+                        textAlign: 'center'
+                    }}>
+                        <Clock size={64} color="#9ca3af" style={{ margin: '0 auto 16px' }} />
+                        <p style={{
+                            color: '#6b7280',
+                            fontSize: '18px',
+                            margin: 0
+                        }}>
+                            No events found
+                        </p>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    if (loading) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                background: 'linear-gradient(to bottom right, #eff6ff, #e0e7ff)',
+                padding: '24px'
+            }}>
+                <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
+                    <div style={{
+                        backgroundColor: '#ffffff',
+                        borderRadius: '8px',
+                        boxShadow: '0 10px 15px rgba(0,0,0,0.1)',
+                        padding: '48px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}>
+                        <Loader2 size={48} color="#2563eb" style={{
+                            animation: 'spin 1s linear infinite',
+                            marginBottom: '16px'
+                        }} />
+                        <p style={{ color: '#6b7280', margin: 0 }}>Loading calendar data...</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{
+            minHeight: '100vh',
+            background: 'transparent',
+            padding: '24px'
+        }}>
+            <style>{`
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
+            <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <div style={{
+                    background: 'linear-gradient(to right, #2563eb, #4f46e5)',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 15px rgba(0,0,0,0.1)',
+                    padding: '24px',
+                    color: '#ffffff'
+                }}>
+                    <h1 style={{
+                        fontSize: '30px',
+                        fontWeight: 'bold',
+                        marginBottom: '8px',
+                        margin: 0
+                    }}>
+                        Project Calendar & Deadlines
+                    </h1>
+                    <p style={{
+                        color: '#bfdbfe',
+                        margin: '8px 0 0 0'
+                    }}>
+                        Track and manage all your project deadlines in one place
+                    </p>
+                </div>
+
+                {error && (
+                    <div style={{
+                        backgroundColor: '#fef2f2',
+                        border: '2px solid #fca5a5',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                            <XCircle size={24} color="#dc2626" style={{ flexShrink: 0, marginTop: '2px' }} />
+                            <div style={{ flex: 1 }}>
+                                <h3 style={{
+                                    fontSize: '14px',
+                                    fontWeight: 'bold',
+                                    color: '#991b1b',
+                                    margin: '0 0 4px 0'
+                                }}>
+                                    Error Loading Calendar
+                                </h3>
+                                <p style={{
+                                    fontSize: '14px',
+                                    color: '#b91c1c',
+                                    margin: '0 0 12px 0'
+                                }}>
+                                    {error}
+                                </p>
+                                <button 
+                                    onClick={loadCalendarData}
+                                    style={{
+                                        padding: '8px 16px',
+                                        backgroundColor: '#dc2626',
+                                        color: '#ffffff',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        transition: 'background-color 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#b91c1c'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {stats && (
+                    <div style={{
+                        backgroundColor: '#ffffff',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                        padding: '20px',
+                        borderLeft: '4px solid #3b82f6'
+                    }}>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            marginBottom: '16px'
+                        }}>
+                            <button 
+                                style={{
+                                    padding: '8px',
+                                    color: 'black',
+                                    borderRadius: '6px',
+                                    backgroundColor: '#ffffff',
+                                    border: '1px solid #d1d5db',
+                                    cursor: 'pointer',
+                                    transition: 'background-color 0.2s'
+                                }}
+                                onClick={() => navigateMonth('prev')}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+                            >
+                                <ChevronLeft size={20} />
+                            </button>
+                            <h2 style={{
+                                fontSize: '20px',
+                                fontWeight: 'bold',
+                                color: '#1f2937',
+                                minWidth: '200px',
+                                textAlign: 'center',
+                                margin: 0
+                            }}>
+                                {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                            </h2>
+                            <button 
+                                style={{
+                                    padding: '8px',
+                                    color: 'black',
+                                    borderRadius: '6px',
+                                    backgroundColor: '#ffffff',
+                                    border: '1px solid #d1d5db',
+                                    cursor: 'pointer',
+                                    transition: 'background-color 0.2s'
+                                }}
+                                onClick={() => navigateMonth('next')}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+                            >
+                                <ChevronRight size={20} />
+                            </button>
+                            <button 
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '6px',
+                                    backgroundColor: '#2563eb',
+                                    color: '#ffffff',
+                                    fontWeight: '500',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    transition: 'background-color 0.2s'
+                                }}
+                                onClick={goToToday}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1d4ed8'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
+                            >
+                                Today
+                            </button>
+                        </div>
+                        
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px'
+                        }}>
+                            <select 
+                                value={filterType} 
+                                onChange={(e) => setFilterType(e.target.value)}
+                                style={{
+                                    padding: '8px 16px',
+                                    color: 'black',
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: '6px',
+                                    backgroundColor: '#ffffff',
+                                    fontWeight: '500',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <option value="all">All Events</option>
+                                <option value="project">Projects</option>
+                                <option value="inspection">Inspections</option>
+                            </select>
+                            
+                            <div style={{
+                                display: 'flex',
+                                gap: '4px',
+                                backgroundColor: '#e5e7eb',
+                                borderRadius: '6px',
+                                padding: '4px'
+                            }}>
+                                <button 
+                                    style={{
+                                        padding: '8px 16px',
+                                        borderRadius: '6px',
+                                        fontWeight: '500',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        backgroundColor: view === 'calendar' ? '#ffffff' : 'transparent',
+                                        color: view === 'calendar' ? '#1f2937' : '#6b7280',
+                                        boxShadow: view === 'calendar' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                    onClick={() => setView('calendar')}
+                                    onMouseEnter={(e) => {
+                                        if (view !== 'calendar') e.currentTarget.style.color = '#1f2937';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (view !== 'calendar') e.currentTarget.style.color = '#6b7280';
+                                    }}
+                                >
+                                    <CalendarIcon size={16} />
+                                    Calendar
+                                </button>
+                                <button 
+                                    style={{
+                                        padding: '8px 16px',
+                                        borderRadius: '6px',
+                                        fontWeight: '500',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        backgroundColor: view === 'list' ? '#ffffff' : 'transparent',
+                                        color: view === 'list' ? '#1f2937' : '#6b7280',
+                                        boxShadow: view === 'list' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                    onClick={() => setView('list')}
+                                    onMouseEnter={(e) => {
+                                        if (view !== 'list') e.currentTarget.style.color = '#1f2937';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (view !== 'list') e.currentTarget.style.color = '#6b7280';
+                                    }}
+                                >
+                                    <List size={16} />
+                                    List
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div style={{
+                    backgroundColor: '#ffffff',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                    padding: '24px'
+                }}>
+                    {view === 'calendar' ? renderCalendarView() : renderListView()}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default ProjectCalendarDashboard;

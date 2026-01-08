@@ -1177,3 +1177,18 @@ class KPIDashboardSerializer(serializers.Serializer):
     
     # Charts Data
     chart_data = serializers.DictField()
+    
+    
+from rest_framework import serializers
+from .models import WorkOrder, Project, SLATracking, DocumentCompliance
+
+class UpcomingDeadlineSerializer(serializers.Serializer):
+    """Serializer for upcoming deadlines across different entities"""
+    project_code = serializers.CharField()
+    project_name = serializers.CharField()
+    deadline_type = serializers.CharField()
+    due_date = serializers.DateField()
+    days_remaining = serializers.IntegerField()
+    priority = serializers.CharField()
+    status = serializers.CharField()
+    assigned_to = serializers.CharField(required=False, allow_null=True)

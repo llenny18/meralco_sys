@@ -881,7 +881,7 @@ export function EngineerSidebarMenu() {
                   onClick={closeSidebar}
                   startIcon={<DashboardTwoToneIcon />}
                 >
-                  Supervisor Dashboard
+                   Dashboard
                 </Button>
               </NextLink>
             </ListItem>
@@ -1403,19 +1403,7 @@ export function WOSupervisorSidebarMenu() {
       >
         <SubMenuWrapper>
           <List component="div">
-            <ListItem component="div">
-              <NextLink href="/supervisor" passHref>
-                <Button
-                  className={currentRoute === '/supervisor' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<DashboardTwoToneIcon />}
-                >
-                  Supervisor Dashboard
-                </Button>
-              </NextLink>
-            </ListItem>
+           
 
             <ListItem component="div">
               <NextLink href="/supervisor/dashboard" passHref>
@@ -1432,6 +1420,48 @@ export function WOSupervisorSidebarMenu() {
             </ListItem>
 
            
+            {/* Vendors Section */}
+            <ListItem component="div">
+              <Button
+                className={currentRoute.includes('/supervisor/vendor') ? 'active' : ''}
+                disableRipple
+                onClick={() => toggleSection('vendors')}
+                startIcon={<BusinessTwoToneIcon />}
+                endIcon={openSections.vendors ? <ExpandLessTwoToneIcon /> : <ExpandMoreTwoToneIcon />}
+              >
+                Vendors
+              </Button>
+            </ListItem>
+            <Collapse in={openSections.vendors}>
+              <List component="div" disablePadding>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/supervisor/vendors" passHref>
+                    <Button
+                      className={currentRoute === '/supervisor/vendors' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                    >
+                      All Vendors
+                    </Button>
+                  </NextLink>
+                </ListItem>
+                <ListItem component="div" sx={{ pl: 4 }}>
+                  <NextLink href="/supervisor/vendor-feedback" passHref>
+                    <Button
+                      className={currentRoute === '/supervisor/vendor-feedback' ? 'active' : ''}
+                      disableRipple
+                      component="a"
+                      onClick={closeSidebar}
+                      startIcon={<FeedbackTwoToneIcon />}
+                    >
+                      Vendor Feedback
+                    </Button>
+                  </NextLink>
+                </ListItem>
+              </List>
+            </Collapse>
+
 
             {/* Projects Section */}
             <ListItem component="div">
@@ -1725,48 +1755,6 @@ export function WOSupervisorSidebarMenu() {
                       startIcon={<SpeedTwoToneIcon />}
                     >
                       QI Performance
-                    </Button>
-                  </NextLink>
-                </ListItem>
-              </List>
-            </Collapse>
-
-            {/* Vendors Section */}
-            <ListItem component="div">
-              <Button
-                className={currentRoute.includes('/supervisor/vendor') ? 'active' : ''}
-                disableRipple
-                onClick={() => toggleSection('vendors')}
-                startIcon={<BusinessTwoToneIcon />}
-                endIcon={openSections.vendors ? <ExpandLessTwoToneIcon /> : <ExpandMoreTwoToneIcon />}
-              >
-                Vendors
-              </Button>
-            </ListItem>
-            <Collapse in={openSections.vendors}>
-              <List component="div" disablePadding>
-                <ListItem component="div" sx={{ pl: 4 }}>
-                  <NextLink href="/supervisor/vendors" passHref>
-                    <Button
-                      className={currentRoute === '/supervisor/vendors' ? 'active' : ''}
-                      disableRipple
-                      component="a"
-                      onClick={closeSidebar}
-                    >
-                      All Vendors
-                    </Button>
-                  </NextLink>
-                </ListItem>
-                <ListItem component="div" sx={{ pl: 4 }}>
-                  <NextLink href="/supervisor/vendor-feedback" passHref>
-                    <Button
-                      className={currentRoute === '/supervisor/vendor-feedback' ? 'active' : ''}
-                      disableRipple
-                      component="a"
-                      onClick={closeSidebar}
-                      startIcon={<FeedbackTwoToneIcon />}
-                    >
-                      Vendor Feedback
                     </Button>
                   </NextLink>
                 </ListItem>

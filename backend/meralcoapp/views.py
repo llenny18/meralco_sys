@@ -73,6 +73,113 @@ class DashboardViewSet(viewsets.ViewSet):
     """Dashboard analytics and statistics"""
     permission_classes = [AllowAny]
 
+
+
+    @action(detail=False, methods=['get'], url_path='upcoming_deadlines')
+    def upcoming_deadlines(self, request):
+        """
+        Get all upcoming deadlines from various sources:
+        - Work Orders
+        - Projects
+        - SLA Tracking
+        - Document Compliance
+        """
+        try:
+            today = timezone.now().date()
+            # Get deadlines from next 90 days
+            end_date = today + timedelta(days=90)
+            
+            deadlines = []
+            
+            # 1. Work Order Deadlines
+            work_orders = WorkOrder.objects.filter(
+                target_completion_date__range=[today, end_date],
+                status__in=['NEW', 'FOR AUDIT', 'AUDITED']
+            ).select_related('vendor', 'supervisor')
+            
+            for wo in work_orders:
+                days_remaining = (wo.target_completion_date - today).days if wo.target_completion_date else 0
+                deadlines.append({
+                    'project_code': wo.wo_no,
+                    'project_name': wo.description or 'No Description',
+                    'deadline_type': 'Work Order Completion',
+                    'due_date': wo.target_completion_date,
+                    'days_remaining': days_remaining,
+                    'priority': wo.priority,
+                    'status': wo.status,
+                    'assigned_to': wo.supervisor.get_full_name() if wo.supervisor else None
+                })
+            
+            # 2. Project Completion Dates
+            projects = Project.objects.filter(
+                completion_date__range=[today, end_date],
+                status__status_name__in=['In Progress', 'Active']
+            ).select_related('vendor', 'assigned_engineer')
+            
+            for proj in projects:
+                days_remaining = (proj.completion_date - today).days if proj.completion_date else 0
+                deadlines.append({
+                    'project_code': proj.project_code,
+                    'project_name': proj.project_name,
+                    'deadline_type': 'Project Completion',
+                    'due_date': proj.completion_date,
+                    'days_remaining': days_remaining,
+                    'priority': proj.priority,
+                    'status': proj.status.status_name if proj.status else 'Unknown',
+                    'assigned_to': proj.assigned_engineer.get_full_name() if proj.assigned_engineer else None
+                })
+            
+            # 3. SLA Tracking Deadlines
+            sla_items = SLATracking.objects.filter(
+                due_date__range=[today, end_date],
+                status='Open'
+            ).select_related('project', 'sla_rule')
+            
+            for sla in sla_items:
+                days_remaining = (sla.due_date - today).days if sla.due_date else 0
+                deadlines.append({
+                    'project_code': sla.project.project_code,
+                    'project_name': sla.project.project_name,
+                    'deadline_type': 'SLA Deadline',
+                    'due_date': sla.due_date,
+                    'days_remaining': days_remaining,
+                    'priority': 'High' if days_remaining <= 3 else 'Medium',
+                    'status': sla.status,
+                    'assigned_to': None
+                })
+            
+            # 4. Document Compliance Deadlines
+            doc_compliance = DocumentCompliance.objects.filter(
+                due_date__range=[today, end_date],
+                is_submitted=False
+            ).select_related('project', 'doc_type')
+            
+            for doc in doc_compliance:
+                days_remaining = (doc.due_date - today).days if doc.due_date else 0
+                deadlines.append({
+                    'project_code': doc.project.project_code,
+                    'project_name': doc.project.project_name,
+                    'deadline_type': f'Document: {doc.doc_type.doc_type_name}',
+                    'due_date': doc.due_date,
+                    'days_remaining': days_remaining,
+                    'priority': 'Critical' if days_remaining <= 2 else 'High',
+                    'status': 'Pending Submission',
+                    'assigned_to': None
+                })
+            
+            # Sort by days remaining (most urgent first)
+            deadlines.sort(key=lambda x: x['days_remaining'])
+            
+            # Serialize and return
+            serializer = UpcomingDeadlineSerializer(deadlines, many=True)
+            return Response(serializer.data)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=500
+            )
+            
     @action(detail=False, methods=['get'], url_path='stats')
     def stats(self, request):
         """Get overall dashboard statistics"""
@@ -5345,25 +5452,265 @@ class SystemAdministratorViewSet(viewsets.ViewSet):
 
 
 
+class CalendarDashboardViewSet(viewsets.ViewSet):
+    """Calendar and deadline dashboard"""
+    permission_classes = [AllowAny]
+
+    @action(detail=False, methods=['get'], url_path='upcoming-deadlines')
+    def upcoming_deadlines(self, request):
+        """
+        Get all upcoming deadlines from various sources with enhanced filtering
+        """
+        try:
+            today = timezone.now().date()
+            
+            # Get date range from query params (default 90 days)
+            days_ahead = int(request.query_params.get('days', 90))
+            end_date = today + timedelta(days=days_ahead)
+            
+            # Get filter parameters
+            filter_type = request.query_params.get('type', 'all')  # all, project, deadline, sla, inspection
+            priority = request.query_params.get('priority', None)
+            
+            deadlines = []
+            
+            # 1. Work Order Deadlines
+            if filter_type in ['all', 'deadline']:
+                work_orders = WorkOrder.objects.filter(
+                    target_completion_date__range=[today, end_date],
+                    status__in=['NEW', 'FOR AUDIT', 'AUDITED']
+                ).select_related('vendor', 'supervisor')
+                
+                if priority:
+                    work_orders = work_orders.filter(priority=priority)
+                
+                for wo in work_orders:
+                    days_remaining = (wo.target_completion_date - today).days if wo.target_completion_date else 0
+                    deadlines.append({
+                        'id': f'wo-{wo.wo_id}',
+                        'date': wo.target_completion_date.isoformat() if wo.target_completion_date else None,
+                        'type': 'deadline',
+                        'title': 'Work Order Completion',
+                        'description': f"{wo.wo_no} - {wo.description or 'No Description'}",
+                        'priority': wo.priority,
+                        'status': wo.status,
+                        'project_code': wo.wo_no,
+                        'days_remaining': days_remaining,
+                        'is_overdue': days_remaining < 0,
+                        'assigned_to': wo.supervisor.get_full_name() if wo.supervisor else None
+                    })
+            
+            # 2. Project Completion Dates
+            if filter_type in ['all', 'project']:
+                projects = Project.objects.filter(
+                    completion_date__range=[today, end_date],
+                    status__status_name__in=['In Progress', 'Active']
+                ).select_related('vendor', 'assigned_engineer', 'status')
+                
+                if priority:
+                    projects = projects.filter(priority=priority)
+                
+                for proj in projects:
+                    days_remaining = (proj.completion_date - today).days if proj.completion_date else 0
+                    deadlines.append({
+                        'id': f'proj-{proj.project_id}',
+                        'date': proj.completion_date.isoformat() if proj.completion_date else None,
+                        'type': 'project',
+                        'title': 'Project Completion',
+                        'description': f"{proj.project_code} - {proj.project_name}",
+                        'priority': proj.priority,
+                        'status': proj.status.status_name if proj.status else 'Unknown',
+                        'project_code': proj.project_code,
+                        'days_remaining': days_remaining,
+                        'is_overdue': days_remaining < 0,
+                        'assigned_to': proj.assigned_engineer.get_full_name() if proj.assigned_engineer else None
+                    })
+            
+            # 3. SLA Tracking Deadlines
+            if filter_type in ['all', 'sla']:
+                sla_items = SLATracking.objects.filter(
+                    due_date__range=[today, end_date],
+                    status='Open'
+                ).select_related('project', 'sla_rule')
+                
+                for sla in sla_items:
+                    days_remaining = (sla.due_date - today).days if sla.due_date else 0
+                    priority_level = 'Critical' if days_remaining <= 2 else 'High' if days_remaining <= 5 else 'Medium'
+                    
+                    deadlines.append({
+                        'id': f'sla-{sla.sla_tracking_id}',
+                        'date': sla.due_date.isoformat() if sla.due_date else None,
+                        'type': 'sla',
+                        'title': 'SLA Deadline',
+                        'description': f"{sla.project.project_code} - {sla.project.project_name}",
+                        'priority': priority_level,
+                        'status': sla.status,
+                        'project_code': sla.project.project_code,
+                        'days_remaining': days_remaining,
+                        'is_overdue': days_remaining < 0,
+                        'assigned_to': None
+                    })
+            
+            # 4. Document Compliance Deadlines
+            if filter_type in ['all', 'deadline']:
+                doc_compliance = DocumentCompliance.objects.filter(
+                    due_date__range=[today, end_date],
+                    is_submitted=False
+                ).select_related('project', 'doc_type')
+                
+                for doc in doc_compliance:
+                    days_remaining = (doc.due_date - today).days if doc.due_date else 0
+                    priority_level = 'Critical' if days_remaining <= 2 else 'High'
+                    
+                    deadlines.append({
+                        'id': f'doc-{doc.id}',
+                        'date': doc.due_date.isoformat() if doc.due_date else None,
+                        'type': 'deadline',
+                        'title': f'Document: {doc.doc_type.doc_type_name}',
+                        'description': f"{doc.project.project_code} - {doc.project.project_name}",
+                        'priority': priority_level,
+                        'status': 'Pending Submission',
+                        'project_code': doc.project.project_code,
+                        'days_remaining': days_remaining,
+                        'is_overdue': days_remaining < 0,
+                        'assigned_to': None
+                    })
+            
+            # 5. QI Inspections
+            if filter_type in ['all', 'inspection']:
+                inspections = QIInspection.objects.filter(
+                    scheduled_date__range=[today, end_date],
+                    is_completed=False
+                ).select_related('project', 'assigned_qi', 'inspection_type')
+                
+                for inspection in inspections:
+                    days_remaining = (inspection.scheduled_date - today).days if inspection.scheduled_date else 0
+                    
+                    deadlines.append({
+                        'id': f'qi-{inspection.inspection_id}',
+                        'date': inspection.scheduled_date.isoformat() if inspection.scheduled_date else None,
+                        'type': 'inspection',
+                        'title': f'QI Inspection: {inspection.inspection_type.inspection_name}',
+                        'description': f"{inspection.project.project_code} - {inspection.project.project_name}",
+                        'priority': 'High',
+                        'status': 'Scheduled',
+                        'project_code': inspection.project.project_code,
+                        'days_remaining': days_remaining,
+                        'is_overdue': days_remaining < 0,
+                        'assigned_to': inspection.assigned_qi.get_full_name() if inspection.assigned_qi else None
+                    })
+            
+            # Sort by days remaining (most urgent first)
+            deadlines.sort(key=lambda x: (x['is_overdue'], x['days_remaining']))
+            
+            return Response(deadlines)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e), 'detail': 'Failed to fetch upcoming deadlines'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'], url_path='calendar-stats')
+    def calendar_stats(self, request):
+        """Get statistics for calendar dashboard"""
+        try:
+            today = timezone.now().date()
+            week_from_now = today + timedelta(days=7)
+            
+            # Count different types of events
+            stats = {
+                'total_events': 0,
+                'overdue': 0,
+                'this_week': 0,
+                'by_type': {
+                    'project': 0,
+                    'deadline': 0,
+                    'sla': 0,
+                    'inspection': 0
+                },
+                'by_priority': {
+                    'Critical': 0,
+                    'High': 0,
+                    'Medium': 0,
+                    'Low': 0
+                }
+            }
+            
+            # Work Orders
+            work_orders = WorkOrder.objects.filter(
+                target_completion_date__isnull=False,
+                status__in=['NEW', 'FOR AUDIT', 'AUDITED']
+            )
+            
+            for wo in work_orders:
+                stats['total_events'] += 1
+                stats['by_type']['deadline'] += 1
+                
+                if wo.target_completion_date < today:
+                    stats['overdue'] += 1
+                elif wo.target_completion_date <= week_from_now:
+                    stats['this_week'] += 1
+                
+                priority = wo.priority or 'Medium'
+                stats['by_priority'][priority] = stats['by_priority'].get(priority, 0) + 1
+            
+            # Projects
+            projects = Project.objects.filter(
+                completion_date__isnull=False,
+                status__status_name__in=['In Progress', 'Active']
+            )
+            
+            for proj in projects:
+                stats['total_events'] += 1
+                stats['by_type']['project'] += 1
+                
+                if proj.completion_date < today:
+                    stats['overdue'] += 1
+                elif proj.completion_date <= week_from_now:
+                    stats['this_week'] += 1
+                
+                priority = proj.priority or 'Medium'
+                stats['by_priority'][priority] = stats['by_priority'].get(priority, 0) + 1
+            
+            # SLA Deadlines
+            sla_count = SLATracking.objects.filter(
+                status='Open',
+                due_date__isnull=False
+            ).count()
+            stats['by_type']['sla'] = sla_count
+            stats['total_events'] += sla_count
+            
+            # QI Inspections
+            inspection_count = QIInspection.objects.filter(
+                is_completed=False,
+                scheduled_date__isnull=False
+            ).count()
+            stats['by_type']['inspection'] = inspection_count
+            stats['total_events'] += inspection_count
+            
+            return Response(stats)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_calendar_events(request):
+    """Standalone endpoint for calendar events"""
+    viewset = CalendarDashboardViewSet()
+    viewset.request = request
+    return viewset.upcoming_deadlines(request)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_calendar_stats(request):
+    """Standalone endpoint for calendar statistics"""
+    viewset = CalendarDashboardViewSet()
+    viewset.request = request
+    return viewset.calendar_stats(request)
