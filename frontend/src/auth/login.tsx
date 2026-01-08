@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
 // API Configuration
-const API_BASE_URL = 'https://aimswo.online/api/api/v1';
+const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 
 const USER_TYPES = [
   { value: '', label: 'Select User Type' },
@@ -109,6 +109,13 @@ export default function LoginPage() {
         };
         
         const normalizedRole = roleMapping[userType] || userType.toLowerCase().replace(/\s+/g, '-');
+
+        // Store user role in localStorage
+        localStorage.setItem('userRole', normalizedRole);
+        // Store authentication data in sessionStorage (to match dashboard)
+        sessionStorage.setItem('auth_token', data.token);
+        sessionStorage.setItem('user_data', JSON.stringify(data.user));
+  
 
         setModal({
           type: 'success',

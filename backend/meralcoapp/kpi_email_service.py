@@ -1,4 +1,4 @@
-
+# kpi_email_service.py
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from django.utils import timezone

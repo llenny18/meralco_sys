@@ -73,7 +73,7 @@ ChartJS.register(
   ArcElement
 );
 
-const API_BASE_URL = 'https://aimswo.online/api/api/v1';
+const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 
 interface CrewType {
   id: string;
@@ -122,7 +122,7 @@ function DailyCrewMonitoring() {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
     const authToken = localStorage.getItem('authToken');
     
-    if (!isAuthenticated || !authToken || isAuthenticated !== 'true') {
+    if (!userRole) {
       router.push('/login');
     }
   }, [router]);

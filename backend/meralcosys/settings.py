@@ -100,8 +100,9 @@ REST_FRAMEWORK = {
 
     # Default authentication classes
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
         # You can also add JWT or Token authentication later
     ],
 

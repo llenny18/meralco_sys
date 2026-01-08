@@ -215,7 +215,7 @@ class VendorListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for list views"""
     class Meta:
         model = Vendor
-        fields = ['id', 'vendor_code', 'vendor_name', 'email', 'phone_number', 
+        fields = ['vendor_id', 'vendor_code', 'vendor_name', 'email', 'phone_number', 
                   'compliance_score', 'is_active', 'is_blacklisted']
 
 
@@ -285,7 +285,7 @@ class ProjectListSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Project
-        fields = ['id', 'project_code', 'project_name', 'vendor', 'vendor_name',
+        fields = ['project_id', 'project_code', 'project_name', 'vendor', 'vendor_name',
                   'status', 'status_name', 'status_color', 'start_date', 
                   'completion_date', 'is_delayed', 'delay_days', 'priority', 'risk_score']
 

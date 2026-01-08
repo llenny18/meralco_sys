@@ -4,6 +4,9 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [activeFeature, setActiveFeature] = useState(0);
 
+  // API base URL - adjust this to your backend URL
+  const API_BASE = 'http://localhost:8000'; // Change to your actual API URL
+
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
@@ -17,6 +20,48 @@ export default function LandingPage() {
       setActiveFeature((prev) => (prev + 1) % userRoles.length);
     }, 4000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Check and send emails automatically on component load
+    const checkAndSendEmails = async () => {
+      try {
+        // Check KPI daily email status
+        const kpiResponse = await fetch(`${API_BASE}/check-daily-email-status/`);
+        const kpiData = await kpiResponse.json();
+        
+        // Check daily action email logs
+        const actionResponse = await fetch(`${API_BASE}/check-daily-email-logs/`);
+        const actionData = await actionResponse.json();
+        
+        // If KPI email not sent today, send it
+        if (!kpiData.sent_today) {
+          await fetch(`${API_BASE}/auto-send-daily-email/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          console.log('KPI email sent automatically');
+        }
+        
+        // If action emails not sent today (check if any logs exist for today)
+        if (actionData.total === 0 || actionData.sent === 0) {
+          await fetch(`${API_BASE}/send-daily-emails-to-all/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          console.log('Daily action emails sent automatically');
+        }
+        
+      } catch (err) {
+        console.error('Error checking/sending emails:', err);
+      }
+    };
+
+    checkAndSendEmails();
   }, []);
 
   const userRoles = [

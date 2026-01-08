@@ -19,6 +19,9 @@ router = DefaultRouter()
 # Authentication
 router.register(r'auth', AuthViewSet, basename='auth')
 
+# Emailings
+router.register(r'daily-action-emails', DailyActionEmailViewSet, basename='daily-action-email')
+
 # User Management
 router.register(r'user-roles', UserRoleViewSet, basename='user-role')
 router.register(r'permissions', PermissionViewSet, basename='permission')
@@ -122,6 +125,35 @@ router.register(r'kpi-targets', KPITargetViewSet, basename='kpi-target')
 router.register(r'kpi-dashboard', KPIDashboardViewSet, basename='kpi-dashboard')
 
 
+
+# Vendor Portal
+router.register(r'vendor-portal', VendorPortalViewSet, basename='vendor-portal')
+
+# Clerk Portal
+router.register(r'clerk', ClerkViewSet, basename='clerk')
+
+# Engineering Aide Portal
+router.register(r'engineering-aide', EngineeringAideViewSet, basename='engineering-aide')
+
+# Engineer Portal
+router.register(r'engineer', EngineerViewSet, basename='engineer')
+
+# QI Mobile Portal
+router.register(r'qi-mobile', QIMobileViewSet, basename='qi-mobile')
+
+# WO Supervisor Portal
+router.register(r'wo-supervisor', WOSupervisorViewSet, basename='wo-supervisor')
+
+# Team Leader Portal
+router.register(r'team-leader', TeamLeaderViewSet, basename='team-leader')
+
+# Sector Manager Portal
+router.register(r'sector-manager', SectorManagerViewSet, basename='sector-manager')
+
+# System Administrator Portal
+router.register(r'system-admin', SystemAdministratorViewSet, basename='system-admin')
+
+
 # URL patterns
 urlpatterns = [
     # Include router URLs
@@ -131,6 +163,8 @@ urlpatterns = [
     # Standalone API views
     path('api/v1/user-roles-list/', get_user_roles, name='user-roles-list'),
     
+    # Role-specific dashboards
+    path('api/v1/dashboard/user/', user_dashboard, name='user-dashboard'),
     # Health check
     path('health/', health_check, name='health-check'),
     
@@ -157,4 +191,12 @@ urlpatterns = [
     path('chat/', chat, name='chat'),
     path('chat/health/', chat_health, name='chat-health'),
     path('chat/debug/', chat_debug, name='chat-debug'),
+     
+    # Daily Action Email endpoints
+    path('send-my-daily-email/', send_my_daily_email, name='send-my-daily-email'),
+    path('send-daily-emails-to-all/', send_daily_emails_to_all, name='send-daily-emails-all'),
+    path('send-daily-email/<int:user_id>/', send_daily_email_to_user, name='send-daily-email-user'),
+    path('check-my-actions/', check_my_actions, name='check-my-actions'),
+    path('check-daily-email-logs/', check_daily_email_logs, name='check-daily-email-logs'),
+    
 ]

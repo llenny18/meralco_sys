@@ -111,7 +111,7 @@ class UserSession(models.Model):
 # ============================================
 
 class Vendor(models.Model):
-    vendor_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vendor_id = models.UUIDField(primary_key=True,  editable=False)
     vendor_code = models.CharField(max_length=50, unique=True)
     vendor_name = models.CharField(max_length=255)
     company_name = models.CharField(max_length=255, blank=True, null=True)
@@ -186,6 +186,7 @@ class VendorPerformance(models.Model):
 # ============================================
 
 class Sector(models.Model):
+    sector_id = models.IntegerField(primary_key=True, default=uuid.uuid4, editable=False)
     sector_code = models.CharField(max_length=50, unique=True)
     sector_name = models.CharField(max_length=255)
     sector_manager = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='managed_sectors')
@@ -204,7 +205,7 @@ class Sector(models.Model):
 
 
 class ProjectStatus(models.Model):
-    status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    status_id = models.IntegerField(primary_key=True, editable=False)
     status_name = models.CharField(max_length=50, unique=True)
     status_description = models.TextField(blank=True, null=True)
     status_order = models.IntegerField(null=True, blank=True)
@@ -236,7 +237,7 @@ class Project(models.Model):
         ('High', 'High'),
     ]
 
-    project_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project_id = models.IntegerField(primary_key=True,  editable=False)
     project_code = models.CharField(max_length=100, unique=True)
     project_name = models.CharField(max_length=255)
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects')
@@ -270,6 +271,7 @@ class Project(models.Model):
 
 
 class ProjectMilestone(models.Model):
+    milestone_id = models.IntegerField(primary_key=True,  editable=False)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='milestones')
     milestone_name = models.CharField(max_length=255)
     milestone_description = models.TextField(blank=True, null=True)
@@ -290,6 +292,7 @@ class ProjectMilestone(models.Model):
 
 
 class ProjectTeam(models.Model):
+    project_team_id = models.IntegerField(primary_key=True,  editable=False)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='team_members')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='project_memberships')
     role_in_project = models.CharField(max_length=100, blank=True, null=True)
@@ -384,6 +387,7 @@ class ProjectDocument(models.Model):
         ('Rejected', 'Rejected'),
     ]
 
+    document_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='documents')
     doc_type = models.ForeignKey(DocumentType, on_delete=models.CASCADE, related_name='documents')
     document_name = models.CharField(max_length=255)
@@ -437,6 +441,7 @@ class DocumentCompliance(models.Model):
 # ============================================
 
 class SLARule(models.Model):
+    sla_rule_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     rule_name = models.CharField(max_length=100, unique=True)
     rule_description = models.TextField(blank=True, null=True)
     stage = models.ForeignKey(WorkflowStage, on_delete=models.CASCADE, related_name='sla_rules')
@@ -474,7 +479,7 @@ class SLATracking(models.Model):
     is_breached = models.BooleanField(default=False)
     breach_days = models.IntegerField(default=0)
     waiver_reason = models.TextField(blank=True, null=True)
-    waived_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='sla_waivers')
+    waived_by = models.IntegerField(default=0)
     waiver_date = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -515,6 +520,7 @@ class QIInspection(models.Model):
         ('Conditional', 'Conditional'),
     ]
 
+    inspection_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='inspections')
     inspection_type = models.ForeignKey(InspectionType, on_delete=models.CASCADE, related_name='inspections')
     assigned_qi = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_inspections')
@@ -837,7 +843,7 @@ class Escalation(models.Model):
 # ============================================
 
 class DelayFactor(models.Model):
-    factor_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    factor_id = models.IntegerField(primary_key=True, default=uuid.uuid4, editable=False)
     factor_name = models.CharField(max_length=100, unique=True)
     factor_category = models.CharField(max_length=50, blank=True, null=True)
     factor_description = models.TextField(blank=True, null=True)

@@ -10,7 +10,7 @@ import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
 import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
 import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
 
-const API_BASE_URL = 'https://aimswo.online/api/api/v1';
+const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 const ENDPOINT = 'vendor-performance';
 const COLUMNS = ['vendor', 'evaluation_date', 'overall_rating', 'compliance_score'];
 
@@ -23,7 +23,7 @@ function SectorManagerVendorPerformance() {
     const userRole = localStorage.getItem('userRole');
 
     // If not authenticated or missing token, redirect to login
-    if (!isAuthenticated || !authToken || isAuthenticated !== 'true') {
+    if (!userRole) {
       router.push('/login');
       return;
     }

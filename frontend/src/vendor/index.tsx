@@ -1,5 +1,6 @@
 // pages/vendor/dashboard.tsx
-import { FC, useState } from 'react';
+import { FC, useState, useEffect, ChangeEvent } from 'react';
+
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import SidebarLayout from '@/layouts/SidebarLayout';
@@ -76,7 +77,7 @@ function VendorDashboard() {
     const userRole = localStorage.getItem('userRole');
 
     // If not authenticated or missing token, redirect to login
-    if (!isAuthenticated || !authToken || isAuthenticated !== 'true') {
+    if (!userRole) {
       router.push('/login');
       return;
     }

@@ -53,7 +53,7 @@ import CloudDownloadTwoToneIcon from '@mui/icons-material/CloudDownloadTwoTone';
 import FilterListTwoToneIcon from '@mui/icons-material/FilterListTwoTone';
 import DescriptionTwoToneIcon from '@mui/icons-material/DescriptionTwoTone';
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
+const API_BASE_URL = 'http://http://127.0.0.1:8000/api/v1';
 const ENDPOINT = 'work-orders';
 
 interface WorkOrder {
@@ -119,7 +119,8 @@ function WorkOrders() {
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
     const authToken = localStorage.getItem('authToken');
-    if (!isAuthenticated || !authToken || isAuthenticated !== 'true') {
+    const userRole = localStorage.getItem('userRole');
+    if (!userRole) {
       router.push('/login');
       return;
     }
