@@ -26,7 +26,12 @@ from .serializers import (
     RegisterUserSerializer
 )
 
-
+from rest_framework.parsers import MultiPartParser, FormParser
+from pathlib import Path
+from django.http import FileResponse
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.conf import settings
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -93,21 +98,20 @@ class DashboardViewSet(viewsets.ViewSet):
             
             # 1. Work Order Deadlines
             work_orders = WorkOrder.objects.filter(
-                target_completion_date__range=[today, end_date],
-                status__in=['NEW', 'FOR AUDIT', 'AUDITED']
+                date_received_by_vc__range=[today, end_date]
             ).select_related('vendor', 'supervisor')
             
             for wo in work_orders:
-                days_remaining = (wo.target_completion_date - today).days if wo.target_completion_date else 0
+                days_remaining = (wo.date_received_by_vc - today).days if wo.date_received_by_vc else 0
                 deadlines.append({
                     'project_code': wo.wo_no,
                     'project_name': wo.description or 'No Description',
                     'deadline_type': 'Work Order Completion',
-                    'due_date': wo.target_completion_date,
+                    'due_date': wo.date_received_by_vc,
                     'days_remaining': days_remaining,
-                    'priority': wo.priority,
+                    
                     'status': wo.status,
-                    'assigned_to': wo.supervisor.get_full_name() if wo.supervisor else None
+                    'assigned_to': wo.supervisor_full_name if wo.supervisor_full_name else None
                 })
             
             # 2. Project Completion Dates
@@ -1192,9 +1196,7 @@ class SLARuleViewSet(viewsets.ModelViewSet):
 
 
 class SLATrackingViewSet(viewsets.ModelViewSet):
-    queryset = SLATracking.objects.select_related(
-        'project', 'sla_rule', 'waived_by'
-    ).all()
+    queryset = SLATracking.objects.all()
     serializer_class = SLATrackingSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -1683,108 +1685,410 @@ from django_filters.rest_framework import DjangoFilterBackend
 # ============================================
 # WORK ORDER VIEWSETS
 # ============================================
+from rest_framework import viewsets, status, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Count, Avg, Q, Sum, F
+from django.db.models.functions import TruncMonth
+from datetime import datetime, timedelta
+import pandas as pd
+from io import BytesIO
+from django.http import HttpResponse
 
 class WorkOrderViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Work Order management
+    
+    Provides CRUD operations and various custom endpoints for:
+    - Dashboard statistics
+    - Filtering and searching
+    - Excel export/import
+    - Timeline tracking
+    - Performance metrics
+    """
     queryset = WorkOrder.objects.all()
     serializer_class = WorkOrderSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'priority', 'vendor', 'assigned_crew', 'supervisor', 'is_vip', 'is_delayed']
-    search_fields = ['wo_no', 'description', 'location', 'municipality']
-    ordering_fields = ['date_received_jacket', 'date_energized', 'total_resolution_days', 'created_at']
-    ordering = ['-date_received_jacket']
+    
+    # Filtering options
+    filterset_fields = {
+        'status': ['exact', 'in'],
+        'vip': ['exact'],
+        'municipality': ['exact', 'in'],
+        'assigned': ['exact', 'in'],
+        'ccti_exclusion': ['exact'],
+        'apt_exclusion': ['exact'],
+        'actual_field_status': ['exact', 'in'],
+        'date_received_jacket_ps': ['gte', 'lte', 'exact'],
+        'date_comp': ['gte', 'lte', 'exact'],
+        'days_comp': ['gte', 'lte'],
+    }
+    
+    # Search functionality
+    search_fields = [
+        'wo_no', 
+        'description', 
+        'location', 
+        'municipality',
+        'area_of_responsibility',
+        'assigned',
+        'supervisor_full_name'
+    ]
+    
+    # Ordering options
+    ordering_fields = [
+        'date_received_jacket_ps', 
+        'date_comp', 
+        'days_comp',
+        'created_at',
+        'wo_no',
+        'status'
+    ]
+    ordering = ['-date_received_jacket_ps']
     
     def get_serializer_class(self):
+        """Return appropriate serializer based on action"""
         if self.action == 'list':
             return WorkOrderListSerializer
+        elif self.action in ['create', 'update', 'partial_update']:
+            return WorkOrderCreateUpdateSerializer
+        elif self.action == 'timeline':
+            return WorkOrderTimelineSerializer
         return WorkOrderSerializer
+    
+    def get_queryset(self):
+        """
+        Optionally restricts the returned work orders,
+        by filtering against query parameters in the URL.
+        """
+        queryset = WorkOrder.objects.all()
+        
+        # Filter by date range if provided
+        start_date = self.request.query_params.get('start_date', None)
+        end_date = self.request.query_params.get('end_date', None)
+        
+        if start_date:
+            queryset = queryset.filter(date_received_jacket_ps__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date_received_jacket_ps__lte=end_date)
+        
+        # Filter overdue work orders
+        is_overdue = self.request.query_params.get('is_overdue', None)
+        if is_overdue == 'true':
+            queryset = queryset.filter(days_comp__gt=60)  # Adjust threshold as needed
+        
+        return queryset
+    
+    # ============================================================
+    # DASHBOARD & STATISTICS ENDPOINTS
+    # ============================================================
     
     @action(detail=False, methods=['get'])
     def dashboard_stats(self, request):
-        """Get dashboard statistics for work orders"""
-        total_count = WorkOrder.objects.count()
+        """
+        GET /api/work-orders/dashboard_stats/
         
-        status_breakdown = WorkOrder.objects.values('status').annotate(
-            count=Count('wo_id')
-        )
+        Returns comprehensive dashboard statistics including:
+        - Total count and status breakdown
+        - VIP projects
+        - Overdue work orders
+        - Average completion time
+        - Recent work orders
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        total_count = queryset.count()
         
-        delayed_count = WorkOrder.objects.filter(is_delayed=True).count()
+        # Status breakdown
+        status_breakdown = queryset.values('status').annotate(
+            count=Count('id')
+        ).order_by('-count')
         
-        # Average resolution time
-        avg_resolution = WorkOrder.objects.filter(
-            total_resolution_days__isnull=False
+        # VIP count
+        vip_count = queryset.filter(vip=True).count()
+        
+        # Overdue count (work orders taking more than 60 days)
+        overdue_count = queryset.filter(days_comp__gt=60).count()
+        
+        # Average completion time
+        avg_completion = queryset.filter(
+            days_comp__isnull=False
         ).aggregate(
-            avg_days=Avg('total_resolution_days')
+            avg_days=Avg('days_comp')
         )
+        
+        # Completion rate (work orders with date_comp filled)
+        completed_count = queryset.filter(date_comp__isnull=False).count()
+        completion_rate = (completed_count / total_count * 100) if total_count > 0 else 0
+        
+        # By municipality
+        by_municipality = queryset.values('municipality').annotate(
+            count=Count('id')
+        ).order_by('-count')[:10]
+        
+        # By assigned crew/person
+        by_assigned = queryset.values('assigned').annotate(
+            count=Count('id')
+        ).order_by('-count')[:10]
         
         # Recent work orders
-        recent_wo = WorkOrder.objects.all()[:10]
-        
-        # VIP projects
-        vip_count = WorkOrder.objects.filter(is_vip=True).count()
+        recent_wo = queryset.order_by('-created_at')[:10]
         
         return Response({
             'total_count': total_count,
-            'status_breakdown': status_breakdown,
-            'delayed_count': delayed_count,
-            'delayed_percentage': (delayed_count / total_count * 100) if total_count > 0 else 0,
-            'average_resolution_days': avg_resolution['avg_days'],
+            'status_breakdown': list(status_breakdown),
             'vip_count': vip_count,
+            'overdue_count': overdue_count,
+            'overdue_percentage': (overdue_count / total_count * 100) if total_count > 0 else 0,
+            'avg_completion_days': round(avg_completion['avg_days'], 2) if avg_completion['avg_days'] else 0,
+            'completion_rate': round(completion_rate, 2),
+            'by_municipality': list(by_municipality),
+            'by_assigned': list(by_assigned),
             'recent_work_orders': WorkOrderListSerializer(recent_wo, many=True).data
         })
     
     @action(detail=False, methods=['get'])
-    def by_vendor(self, request):
-        """Get work orders grouped by vendor"""
-        vendor_stats = WorkOrder.objects.values(
-            'vendor__vendor_code', 
-            'vendor__vendor_name'
+    def performance_metrics(self, request):
+        """
+        GET /api/work-orders/performance_metrics/
+        
+        Returns performance metrics and KPIs
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Completion metrics
+        completed = queryset.filter(date_comp__isnull=False)
+        total = queryset.count()
+        
+        metrics = {
+            'total_work_orders': total,
+            'completed': completed.count(),
+            'in_progress': queryset.filter(date_comp__isnull=True).count(),
+            'completion_rate': (completed.count() / total * 100) if total > 0 else 0,
+            
+            # Time-based metrics
+            'avg_wmtrl_to_fcomp': completed.aggregate(
+                avg=Avg('days_wmtrl_to_fcomp')
+            )['avg'] or 0,
+            'avg_sched_to_fcomp': completed.aggregate(
+                avg=Avg('days_sched_to_fcomp')
+            )['avg'] or 0,
+            'avg_total_days': completed.aggregate(
+                avg=Avg('days_comp')
+            )['avg'] or 0,
+            
+            # Index metrics
+            'avg_index_wmtrl_to_fcomp': completed.aggregate(
+                avg=Avg('computed_index_wmtrl_to_fcomp')
+            )['avg'] or 0,
+            'avg_index_comp': completed.aggregate(
+                avg=Avg('computed_index_comp')
+            )['avg'] or 0,
+            
+            # Exclusions
+            'ccti_exclusions': queryset.filter(ccti_exclusion=True).count(),
+            'apt_exclusions': queryset.filter(apt_exclusion=True).count(),
+            
+            # VIP
+            'vip_projects': queryset.filter(vip=True).count(),
+        }
+        
+        return Response(metrics)
+    
+    @action(detail=False, methods=['get'])
+    def monthly_trends(self, request):
+        """
+        GET /api/work-orders/monthly_trends/
+        
+        Returns monthly trends for work order creation and completion
+        """
+        # Get date range from query params (default: last 12 months)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=365)
+        
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Work orders received by month
+        received_by_month = queryset.filter(
+            date_received_jacket_ps__range=[start_date, end_date]
         ).annotate(
-            total_wo=Count('wo_id'),
-            completed=Count('wo_id', filter=Q(status='AUDITED')),
-            delayed=Count('wo_id', filter=Q(is_delayed=True)),
-            avg_resolution_days=Avg('total_resolution_days')
-        ).order_by('-total_wo')
+            month=TruncMonth('date_received_jacket_ps')
+        ).values('month').annotate(
+            count=Count('id')
+        ).order_by('month')
         
-        return Response(vendor_stats)
+        # Work orders completed by month
+        completed_by_month = queryset.filter(
+            date_comp__range=[start_date, end_date]
+        ).annotate(
+            month=TruncMonth('date_comp')
+        ).values('month').annotate(
+            count=Count('id')
+        ).order_by('month')
+        
+        return Response({
+            'received_by_month': list(received_by_month),
+            'completed_by_month': list(completed_by_month)
+        })
+    
+    # ============================================================
+    # FILTERING & GROUPING ENDPOINTS
+    # ============================================================
     
     @action(detail=False, methods=['get'])
-    def by_crew(self, request):
-        """Get work orders grouped by crew"""
-        crew_stats = WorkOrder.objects.values('assigned_crew').annotate(
-            total_wo=Count('wo_id'),
-            completed=Count('wo_id', filter=Q(status='AUDITED')),
-            pending=Count('wo_id', filter=Q(status__in=['NEW', 'FOR AUDIT'])),
-            avg_resolution_days=Avg('total_resolution_days')
+    def by_municipality(self, request):
+        """
+        GET /api/work-orders/by_municipality/
+        
+        Get work orders grouped by municipality with statistics
+        """
+        municipality_stats = self.filter_queryset(self.get_queryset()).values(
+            'municipality'
+        ).annotate(
+            total_wo=Count('id'),
+            completed=Count('id', filter=Q(date_comp__isnull=False)),
+            vip_count=Count('id', filter=Q(vip=True)),
+            avg_completion_days=Avg('days_comp'),
+            overdue=Count('id', filter=Q(days_comp__gt=60))
         ).order_by('-total_wo')
         
-        return Response(crew_stats)
+        return Response(list(municipality_stats))
     
     @action(detail=False, methods=['get'])
-    def delayed_projects(self, request):
-        """Get all delayed projects"""
-        delayed = WorkOrder.objects.filter(is_delayed=True).order_by('-delay_days')
-        serializer = self.get_serializer(delayed, many=True)
+    def by_assigned(self, request):
+        """
+        GET /api/work-orders/by_assigned/
+        
+        Get work orders grouped by assigned crew/person
+        """
+        assigned_stats = self.filter_queryset(self.get_queryset()).values(
+            'assigned'
+        ).annotate(
+            total_wo=Count('id'),
+            completed=Count('id', filter=Q(date_comp__isnull=False)),
+            in_progress=Count('id', filter=Q(date_comp__isnull=True)),
+            avg_completion_days=Avg('days_comp'),
+            vip_count=Count('id', filter=Q(vip=True))
+        ).order_by('-total_wo')
+        
+        return Response(list(assigned_stats))
+    
+    @action(detail=False, methods=['get'])
+    def by_status(self, request):
+        """
+        GET /api/work-orders/by_status/
+        
+        Get detailed statistics for each status
+        """
+        status_stats = self.filter_queryset(self.get_queryset()).values(
+            'status'
+        ).annotate(
+            count=Count('id'),
+            vip_count=Count('id', filter=Q(vip=True)),
+            avg_days=Avg('days_comp')
+        ).order_by('-count')
+        
+        return Response(list(status_stats))
+    
+    @action(detail=False, methods=['get'])
+    def overdue_projects(self, request):
+        """
+        GET /api/work-orders/overdue_projects/
+        
+        Get all overdue projects (taking more than 60 days)
+        """
+        overdue = self.filter_queryset(self.get_queryset()).filter(
+            days_comp__gt=60
+        ).order_by('-days_comp')
+        
+        serializer = self.get_serializer(overdue, many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
-    def export_excel(self, request):
-        """Export work orders to Excel format (matching your C1 sheet)"""
-        # This will be implemented with pandas/openpyxl
-        # For now, return the data structure
-        work_orders = self.get_queryset()
-        serializer = self.get_serializer(work_orders, many=True)
+    def vip_projects(self, request):
+        """
+        GET /api/work-orders/vip_projects/
         
-        return Response({
-            'message': 'Excel export endpoint',
-            'data': serializer.data,
-            'format': 'C1_sheet_format'
-        })
+        Get all VIP projects
+        """
+        vip = self.filter_queryset(self.get_queryset()).filter(
+            vip=True
+        ).order_by('-date_received_jacket_ps')
+        
+        serializer = self.get_serializer(vip, many=True)
+        return Response(serializer.data)
+    
+    # ============================================================
+    # TIMELINE & TRACKING ENDPOINTS
+    # ============================================================
+    
+    @action(detail=True, methods=['get'])
+    def timeline(self, request, pk=None):
+        """
+        GET /api/work-orders/{id}/timeline/
+        
+        Get detailed timeline for a specific work order
+        """
+        work_order = self.get_object()
+        serializer = WorkOrderTimelineSerializer(work_order)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def update_milestone(self, request, pk=None):
+        """
+        POST /api/work-orders/{id}/update_milestone/
+        
+        Update a specific milestone date
+        
+        Request body:
+        {
+            "milestone": "date_wmtrl",
+            "date": "2026-01-15"
+        }
+        """
+        work_order = self.get_object()
+        milestone = request.data.get('milestone')
+        date_value = request.data.get('date')
+        
+        allowed_milestones = [
+            'date_wmtrl', 'date_sched', 'date_received_by_vc',
+            'actual_date_completed_on_site', 'date_fcomp', 'date_comp',
+            'date_received_by_contractor', 'date_corrected'
+        ]
+        
+        if milestone not in allowed_milestones:
+            return Response(
+                {'error': f'Invalid milestone. Must be one of: {", ".join(allowed_milestones)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            setattr(work_order, milestone, date_value)
+            work_order.save()
+            return Response({
+                'message': f'{milestone} updated successfully',
+                'work_order': WorkOrderSerializer(work_order).data
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    # ============================================================
+    # DOCUMENT MANAGEMENT ENDPOINTS
+    # ============================================================
     
     @action(detail=True, methods=['post'])
     def upload_document(self, request, pk=None):
-        """Upload a document for this work order"""
+        """
+        POST /api/work-orders/{id}/upload_document/
+        
+        Upload a document for this work order
+        """
         work_order = self.get_object()
         
+        # You'll need to create WorkOrderDocument model first
         serializer = WorkOrderDocumentSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(
@@ -1796,31 +2100,296 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def documents(self, request, pk=None):
-        """Get all documents for this work order"""
+        """
+        GET /api/work-orders/{id}/documents/
+        
+        Get all documents for this work order
+        """
         work_order = self.get_object()
-        documents = work_order.wo_documents.all()
+        documents = work_order.documents.all()  # Related name from WorkOrderDocument
         serializer = WorkOrderDocumentSerializer(documents, many=True)
         return Response(serializer.data)
+    
+    # ============================================================
+    # EXCEL IMPORT/EXPORT ENDPOINTS
+    # ============================================================
+    
+    @action(detail=False, methods=['get'])
+    def export_excel(self, request):
+        """
+        GET /api/work-orders/export_excel/
+        
+        Export work orders to Excel format matching your C1 sheet structure
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Create DataFrame from queryset
+        data = []
+        for wo in queryset:
+            data.append({
+                'WO No': wo.wo_no,
+                'Date Received Jacket (PS)': wo.date_received_jacket_ps,
+                'Date Received Awarding WO': wo.date_received_awarding_wo,
+                'VIP': 'Yes' if wo.vip else 'No',
+                'Description': wo.description,
+                'Location': wo.location,
+                'Municipality': wo.municipality,
+                'Area of Responsibility': wo.area_of_responsibility,
+                'Vendor Remarks': wo.vendor_remarks,
+                'C1 Remarks': wo.c1_remarks,
+                'Assigned': wo.assigned,
+                'Status': wo.status,
+                'Date WMTRL': wo.date_wmtrl,
+                'Date Sched': wo.date_sched,
+                'Date Received by VC': wo.date_received_by_vc,
+                'Actual Date Completed on Site': wo.actual_date_completed_on_site,
+                'Date FCOMP': wo.date_fcomp,
+                'Date COMP': wo.date_comp,
+                'Days WMTRL to FCOMP': wo.days_wmtrl_to_fcomp,
+                'Days Sched to FCOMP': wo.days_sched_to_fcomp,
+                'Days COMP': wo.days_comp,
+                'Computed Index WMTRL to FCOMP': wo.computed_index_wmtrl_to_fcomp,
+                'Computed Index COMP': wo.computed_index_comp,
+                'Exclusion Reason': wo.exclusion_reason,
+                'CCTI Exclusion': 'Yes' if wo.ccti_exclusion else 'No',
+                'APT Exclusion': 'Yes' if wo.apt_exclusion else 'No',
+                'Date Received by Contractor': wo.date_received_by_contractor,
+                'Date Corrected': wo.date_corrected,
+                'Actual Field Status': wo.actual_field_status,
+                'Supervisor Full Name': wo.supervisor_full_name,
+            })
+        
+        df = pd.DataFrame(data)
+        
+        # Create Excel file in memory
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Work Orders', index=False)
+            
+            # Auto-adjust column widths
+            worksheet = writer.sheets['Work Orders']
+            for idx, col in enumerate(df.columns):
+                max_length = max(
+                    df[col].astype(str).apply(len).max(),
+                    len(col)
+                )
+                worksheet.column_dimensions[chr(65 + idx)].width = min(max_length + 2, 50)
+        
+        output.seek(0)
+        
+        # Create response
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename=work_orders_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        
+        return response
+    
+    @action(detail=False, methods=['post'])
+    def import_excel(self, request):
+        """
+        POST /api/work-orders/import_excel/
+        
+        Import work orders from Excel file
+        
+        Expected format: Same as C1 sheet structure
+        """
+        if 'file' not in request.FILES:
+            return Response(
+                {'error': 'No file provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        file = request.FILES['file']
+        
+        try:
+            # Read Excel file
+            df = pd.read_excel(file)
+            
+            imported = 0
+            errors = []
+            
+            for index, row in df.iterrows():
+                try:
+                    # Map Excel columns to model fields
+                    work_order_data = {
+                        'wo_no': row.get('WO No'),
+                        'date_received_jacket_ps': pd.to_datetime(row.get('Date Received Jacket (PS)'), errors='coerce'),
+                        'date_received_awarding_wo': pd.to_datetime(row.get('Date Received Awarding WO'), errors='coerce'),
+                        'vip': row.get('VIP', '').lower() == 'yes',
+                        'description': row.get('Description', ''),
+                        'location': row.get('Location', ''),
+                        'municipality': row.get('Municipality', ''),
+                        'area_of_responsibility': row.get('Area of Responsibility', ''),
+                        'vendor_remarks': row.get('Vendor Remarks', ''),
+                        'c1_remarks': row.get('C1 Remarks', ''),
+                        'assigned': row.get('Assigned', ''),
+                        'status': row.get('Status', ''),
+                        'date_wmtrl': pd.to_datetime(row.get('Date WMTRL'), errors='coerce'),
+                        'date_sched': pd.to_datetime(row.get('Date Sched'), errors='coerce'),
+                        'date_received_by_vc': pd.to_datetime(row.get('Date Received by VC'), errors='coerce'),
+                        'actual_date_completed_on_site': pd.to_datetime(row.get('Actual Date Completed on Site'), errors='coerce'),
+                        'date_fcomp': pd.to_datetime(row.get('Date FCOMP'), errors='coerce'),
+                        'date_comp': pd.to_datetime(row.get('Date COMP'), errors='coerce'),
+                        'exclusion_reason': row.get('Exclusion Reason', ''),
+                        'ccti_exclusion': row.get('CCTI Exclusion', '').lower() == 'yes',
+                        'apt_exclusion': row.get('APT Exclusion', '').lower() == 'yes',
+                        'date_received_by_contractor': pd.to_datetime(row.get('Date Received by Contractor'), errors='coerce'),
+                        'date_corrected': pd.to_datetime(row.get('Date Corrected'), errors='coerce'),
+                        'actual_field_status': row.get('Actual Field Status', ''),
+                        'supervisor_full_name': row.get('Supervisor Full Name', ''),
+                        }
+                # Remove NaT values
+                    work_order_data = {k: v for k, v in work_order_data.items() if not pd.isna(v)}
+                    
+                    # Create or update work order
+                    WorkOrder.objects.update_or_create(
+                        wo_no=work_order_data['wo_no'],
+                        defaults=work_order_data
+                    )
+                    imported += 1
+                    
+                except Exception as e:
+                    errors.append({
+                        'row': index + 2,  # +2 because Excel rows start at 1 and header is row 1
+                        'error': str(e)
+                    })
+            
+            return Response({
+                'message': f'Successfully imported {imported} work orders',
+                'imported': imported,
+                'errors': errors
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to process file: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    # ============================================================
+    # BULK OPERATIONS
+    # ============================================================
+
+    @action(detail=False, methods=['post'])
+    def bulk_update_status(self, request):
+        """
+        POST /api/work-orders/bulk_update_status/
+        
+        Update status for multiple work orders
+        
+        Request body:
+        {
+            "work_order_ids": [1, 2, 3],
+            "status": "COMPLETED"
+        }
+        """
+        work_order_ids = request.data.get('work_order_ids', [])
+        new_status = request.data.get('status')
+        
+        if not work_order_ids or not new_status:
+            return Response(
+                {'error': 'work_order_ids and status are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        updated = WorkOrder.objects.filter(
+            id__in=work_order_ids
+        ).update(status=new_status)
+        
+        return Response({
+            'message': f'Updated {updated} work orders',
+            'updated_count': updated
+        })
+
+    @action(detail=False, methods=['delete'])
+    def bulk_delete(self, request):
+        """
+        DELETE /api/work-orders/bulk_delete/
+        
+        Delete multiple work orders
+        
+        Request body:
+        {
+            "work_order_ids": [1, 2, 3]
+        }
+        """
+        work_order_ids = request.data.get('work_order_ids', [])
+        
+        if not work_order_ids:
+            return Response(
+                {'error': 'work_order_ids is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        deleted_count, _ = WorkOrder.objects.filter(
+            id__in=work_order_ids
+        ).delete()
+        
+        return Response({
+            'message': f'Deleted {deleted_count} work orders',
+            'deleted_count': deleted_count
+        })
+        
+       
+    @action(detail=False, methods=['get'])
+    def download_template(self, request):
+        """
+        Download Excel template for importing work orders
+        """
+        try:
+            template_path = Path(settings.BASE_DIR) / 'meralcoapp' / 'templates' / 'excel' / 'work_orders_template.xlsx'
+            
+            if not template_path.exists():
+                return Response({'error': 'Template file not found'}, status=404)
+            
+            # Open file safely
+            file_handle = open(template_path, 'rb')
+            response = FileResponse(
+                file_handle,
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = 'attachment; filename="work_orders_template.xlsx"'
+            
+            return response
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=500
+            )
+
 
 
 class WorkOrderDocumentViewSet(viewsets.ModelViewSet):
-    queryset = WorkOrderDocument.objects.all()
+    queryset = WorkOrderDocument.objects.select_related(
+        'work_order', 'uploaded_by'
+    )
     serializer_class = WorkOrderDocumentSerializer
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['work_order', 'document_type', 'is_approved']
-    ordering = ['-upload_date']
-    
-    @action(detail=True, methods=['post'])
-    def approve(self, request, pk=None):
-        """Approve a document"""
-        document = self.get_object()
-        document.is_approved = True
-        document.approved_by = request.user
-        document.approval_date = timezone.now()
-        document.save()
-        
-        serializer = self.get_serializer(document)
-        return Response(serializer.data)
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def perform_create(self, serializer):
+        serializer.save(uploaded_by=self.request.user)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Optional filters
+        work_order_id = self.request.query_params.get('work_order')
+        document_type = self.request.query_params.get('document_type')
+
+        if work_order_id:
+            queryset = queryset.filter(work_order_id=work_order_id)
+
+        if document_type:
+            queryset = queryset.filter(document_type=document_type)
+
+        return queryset
 
 
 # ============================================
@@ -2208,7 +2777,7 @@ class AgeingAnalysisViewSet(viewsets.ModelViewSet):
                     age_bracket=age_bracket,
                     age_in_days=age_days,
                     age_in_months=age_months,
-                    supervisor=wo.supervisor,
+                    supervisor=wo.supervisor_full_name,
                     crew=wo.assigned_crew,
                     status_at_analysis=wo.status
                 )
@@ -3382,7 +3951,7 @@ class ClerkViewSet(viewsets.ViewSet):
     """
     Clerk Portal - Document management and basic communications
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     @action(detail=False, methods=['get'])
     def pending_documents(self, request):
@@ -3582,6 +4151,184 @@ class ClerkViewSet(viewsets.ViewSet):
             'overdue_count': missing.filter(is_overdue=True).count(),
             'by_vendor': by_vendor
         })
+        
+    @action(detail=False, methods=['get'], url_path='coc-checklist')
+    def coc_checklist(self, request):
+        """Get work orders needing COC review/processing"""
+        
+        # Filter work orders that are energized but need COC processing
+        queryset = WorkOrder.objects.select_related(
+            'vendor', 'supervisor'
+        ).filter(
+            status__in=['NEW', 'FOR AUDIT']
+        ).filter(
+            models.Q(date_energized__isnull=False) &
+            (
+                models.Q(date_coc_received__isnull=True) |
+                models.Q(date_for_audit__isnull=True)
+            )
+        ).order_by('-date_energized')
+        
+        # Apply filters
+        status = request.query_params.get('status')
+        vendor_id = request.query_params.get('vendor')
+        crew = request.query_params.get('crew')
+        needs_attention = request.query_params.get('needs_attention')
+        
+        if status:
+            queryset = queryset.filter(status=status)
+        if vendor_id:
+            queryset = queryset.filter(vendor_id=vendor_id)
+        if crew:
+            queryset = queryset.filter(assigned_crew=crew)
+        if needs_attention == 'true':
+            # Filter items needing immediate attention
+            from django.utils import timezone
+            seven_days_ago = timezone.now().date() - timezone.timedelta(days=7)
+            three_days_ago = timezone.now().date() - timezone.timedelta(days=3)
+            
+            queryset = queryset.filter(
+                models.Q(date_energized__lte=seven_days_ago, date_coc_received__isnull=True) |
+                models.Q(date_coc_received__lte=three_days_ago, date_for_audit__isnull=True)
+            )
+        
+        serializer = COCChecklistSerializer(queryset, many=True)
+        
+        # Calculate statistics
+        stats = {
+            'total': queryset.count(),
+            'awaiting_coc': queryset.filter(date_coc_received__isnull=True).count(),
+            'awaiting_audit': queryset.filter(
+                date_coc_received__isnull=False,
+                date_for_audit__isnull=True
+            ).count(),
+            'needs_attention': sum(1 for item in serializer.data if item['needs_attention']),
+        }
+        
+        return Response({
+            'results': serializer.data,
+            'stats': stats
+        })
+    
+    @action(detail=True, methods=['post'], url_path='mark-coc-received')
+    def mark_coc_received(self, request, pk=None):
+        """Mark that COC has been received for a work order"""
+        try:
+            work_order = WorkOrder.objects.get(id=pk)
+            
+            date_received = request.data.get('date_coc_received')
+            remarks = request.data.get('clerk_remarks', '')
+            
+            if date_received:
+                from datetime import datetime
+                work_order.date_coc_received = datetime.strptime(date_received, '%Y-%m-%d').date()
+            else:
+                from django.utils import timezone
+                work_order.date_coc_received = timezone.now().date()
+            
+            if remarks:
+                work_order.clerk_remarks = remarks
+            
+            work_order.save()
+            
+            serializer = COCChecklistSerializer(work_order)
+            return Response({
+                'message': 'COC receipt date marked successfully',
+                'data': serializer.data
+            })
+        except WorkOrder.DoesNotExist:
+            return Response(
+                {'error': 'Work order not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=True, methods=['post'], url_path='send-for-audit')
+    def send_for_audit(self, request, pk=None):
+        """Mark work order as sent for audit"""
+        try:
+            work_order = WorkOrder.objects.get(id=pk)
+            
+            if not work_order.date_coc_received:
+                return Response(
+                    {'error': 'Cannot send for audit without COC received date'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            date_for_audit = request.data.get('date_for_audit')
+            remarks = request.data.get('clerk_remarks', '')
+            
+            if date_for_audit:
+                from datetime import datetime
+                work_order.date_for_audit = datetime.strptime(date_for_audit, '%Y-%m-%d').date()
+            else:
+                from django.utils import timezone
+                work_order.date_for_audit = timezone.now().date()
+            
+            work_order.status = 'FOR AUDIT'
+            
+            if remarks:
+                if work_order.clerk_remarks:
+                    work_order.clerk_remarks += f"\n{remarks}"
+                else:
+                    work_order.clerk_remarks = remarks
+            
+            work_order.save()
+            
+            serializer = COCChecklistSerializer(work_order)
+            return Response({
+                'message': 'Work order sent for audit successfully',
+                'data': serializer.data
+            })
+        except WorkOrder.DoesNotExist:
+            return Response(
+                {'error': 'Work order not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=False, methods=['post'], url_path='bulk-mark-coc')
+    def bulk_mark_coc(self, request):
+        """Bulk mark COC received for multiple work orders"""
+        ids = request.data.get('ids', [])
+        date_received = request.data.get('date_coc_received')
+        
+        if not ids:
+            return Response(
+                {'error': 'No work order IDs provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            from datetime import datetime
+            from django.utils import timezone
+            
+            if date_received:
+                coc_date = datetime.strptime(date_received, '%Y-%m-%d').date()
+            else:
+                coc_date = timezone.now().date()
+            
+            updated = WorkOrder.objects.filter(
+                id__in=ids
+            ).update(date_coc_received=coc_date)
+            
+            return Response({
+                'message': f'Successfully marked COC received for {updated} work orders',
+                'updated_count': updated
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
 
 
@@ -5477,27 +6224,24 @@ class CalendarDashboardViewSet(viewsets.ViewSet):
             # 1. Work Order Deadlines
             if filter_type in ['all', 'deadline']:
                 work_orders = WorkOrder.objects.filter(
-                    target_completion_date__range=[today, end_date],
-                    status__in=['NEW', 'FOR AUDIT', 'AUDITED']
-                ).select_related('vendor', 'supervisor')
+                    date_received_by_vc__range=[today, end_date]
+                )
                 
-                if priority:
-                    work_orders = work_orders.filter(priority=priority)
-                
+               
                 for wo in work_orders:
-                    days_remaining = (wo.target_completion_date - today).days if wo.target_completion_date else 0
+                    days_remaining = (wo.date_received_by_vc - today).days if wo.date_received_by_vc else 0
                     deadlines.append({
-                        'id': f'wo-{wo.wo_id}',
-                        'date': wo.target_completion_date.isoformat() if wo.target_completion_date else None,
+                        'id': f'wo-{wo.id}',
+                        'date': wo.date_received_by_vc.isoformat() if wo.date_received_by_vc else None,
                         'type': 'deadline',
                         'title': 'Work Order Completion',
                         'description': f"{wo.wo_no} - {wo.description or 'No Description'}",
-                        'priority': wo.priority,
+                        
                         'status': wo.status,
                         'project_code': wo.wo_no,
                         'days_remaining': days_remaining,
                         'is_overdue': days_remaining < 0,
-                        'assigned_to': wo.supervisor.get_full_name() if wo.supervisor else None
+                        'assigned_to': wo.supervisor_full_name if wo.supervisor_full_name else None
                     })
             
             # 2. Project Completion Dates
@@ -5639,21 +6383,19 @@ class CalendarDashboardViewSet(viewsets.ViewSet):
             
             # Work Orders
             work_orders = WorkOrder.objects.filter(
-                target_completion_date__isnull=False,
-                status__in=['NEW', 'FOR AUDIT', 'AUDITED']
+                date_received_by_vc__isnull=False
             )
             
             for wo in work_orders:
                 stats['total_events'] += 1
                 stats['by_type']['deadline'] += 1
                 
-                if wo.target_completion_date < today:
+                if wo.date_received_by_vc < today:
                     stats['overdue'] += 1
-                elif wo.target_completion_date <= week_from_now:
+                elif wo.date_received_by_vc <= week_from_now:
                     stats['this_week'] += 1
                 
-                priority = wo.priority or 'Medium'
-                stats['by_priority'][priority] = stats['by_priority'].get(priority, 0) + 1
+                
             
             # Projects
             projects = Project.objects.filter(
@@ -5714,3 +6456,130 @@ def get_calendar_stats(request):
     viewset = CalendarDashboardViewSet()
     viewset.request = request
     return viewset.calendar_stats(request)
+
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.utils import timezone
+from datetime import datetime, timedelta
+
+class VendorDailyActivityViewSet(viewsets.ModelViewSet):
+    queryset = VendorDailyActivity.objects.all()
+    serializer_class = VendorDailyActivitySerializer
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filter by vendor if user is a vendor
+        user = self.request.user
+        if hasattr(user, 'role') and user.role and user.role.role_name == 'vendor':
+            # Assuming vendor users are linked to a vendor
+            vendor_id = self.request.query_params.get('vendor_id')
+            if vendor_id:
+                queryset = queryset.filter(vendor_id=vendor_id)
+        
+        # Filter by date
+        date_param = self.request.query_params.get('date')
+        if date_param:
+            queryset = queryset.filter(activity_date=date_param)
+        
+        # Filter by status
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        
+        return queryset
+    
+    @action(detail=False, methods=['get'])
+    def today_activities(self, request):
+        """Get today's activities for the vendor"""
+        today = timezone.now().date()
+        vendor_id = request.query_params.get('vendor_id')
+        
+        activities = self.queryset.filter(
+            activity_date=today,
+            vendor_id=vendor_id
+        )
+        
+        serializer = self.get_serializer(activities, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def weekly_summary(self, request):
+        """Get weekly summary of activities"""
+        vendor_id = request.query_params.get('vendor_id')
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=7)
+        
+        activities = self.queryset.filter(
+            vendor_id=vendor_id,
+            activity_date__gte=start_date,
+            activity_date__lte=end_date
+        )
+        
+        summary = {
+            'total_activities': activities.count(),
+            'signed_on': activities.filter(status='SIGNED_ON').count(),
+            'in_progress': activities.filter(status='IN_PROGRESS').count(),
+            'completed': activities.filter(status='COMPLETED').count(),
+            'caution_count': activities.filter(has_caution=True).count(),
+            'activities': VendorDailyActivitySerializer(activities, many=True).data
+        }
+        
+        return Response(summary)
+    
+    @action(detail=True, methods=['post'])
+    def upload_photo(self, request, pk=None):
+        """Upload a photo for an activity"""
+        activity = self.get_object()
+        
+        photo_type = request.data.get('photo_type', 'SIGN_ON')
+        caption = request.data.get('caption', '')
+        photo_file = request.FILES.get('photo')
+        user_id = request.data.get('uploaded_by')
+        
+        if not photo_file:
+            return Response(
+                {'error': 'No photo file provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        photo = VendorActivityPhoto.objects.create(
+            activity=activity,
+            photo_type=photo_type,
+            photo_file=photo_file,
+            caption=caption,
+            uploaded_by=user_id
+        )
+        
+        serializer = VendorActivityPhotoSerializer(photo)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['patch'])
+    def mark_completed(self, request, pk=None):
+        """Mark activity as completed"""
+        activity = self.get_object()
+        
+        activity.status = 'COMPLETED'
+        activity.completed_at = timezone.now()
+        activity.completion_notes = request.data.get('completion_notes', '')
+        activity.save()
+        
+        serializer = self.get_serializer(activity)
+        return Response(serializer.data)
+
+
+class VendorActivityPhotoViewSet(viewsets.ModelViewSet):
+    queryset = VendorActivityPhoto.objects.all()
+    serializer_class = VendorActivityPhotoSerializer
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        activity_id = self.request.query_params.get('activity_id')
+        if activity_id:
+            queryset = queryset.filter(activity_id=activity_id)
+        
+        return queryset
+
+

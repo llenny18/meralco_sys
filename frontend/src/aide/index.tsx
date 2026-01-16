@@ -1,502 +1,937 @@
-// pages/aide/dashboard.tsx
-import { FC, useState, useEffect } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import SidebarLayout from '@/layouts/SidebarLayout';
-import PageTitleWrapper from '@/components/PageTitleWrapper';
-import { Container, Grid, Card, CardHeader, CardContent, Divider, Box, Typography, Avatar, Chip, Table, TableBody, TableCell, TableHead, TableRow, TableContainer, Button, LinearProgress, Paper } from '@mui/material';
-import Footer from '@/components/Footer';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ComposedChart, Area } from 'recharts';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import AssessmentIcon from '@mui/icons-material/Assessment';
-import AccountTreeIcon from '@mui/icons-material/AccountTree';
-import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import SpeedIcon from '@mui/icons-material/Speed';
+import React, { useState, useEffect } from 'react';
+import {
+    Loader2,
+    AlertCircle,
+    FileText,
+    Clock,
+    ChevronLeft,
+    ChevronRight,
+    XCircle,
+    AlertTriangle,
+    TrendingUp,
+    BarChart3,
+    CheckCircle,
+    Calendar as CalendarIcon,
+    List,
+    Users,
+    Wrench,
+    Shield,
+    DollarSign,
+    Package,
+    Bell,
+    Activity,
+    Target,
+    Flag,
+    Truck,
+    ClipboardCheck,
+    BarChart2,
+    FileCheck,
+    UserCheck,
+    CircleDot,
+    RefreshCw
+} from 'lucide-react';
 
-const COLORS = ['#5569ff', '#57ca22', '#ffc107', '#ff5630', '#9c27b0', '#00bcd4'];
-
-// Mock Data
-const kpiMetrics = {
-  activeProjects: 42,
-  completionRate: 87,
-  avgResponseTime: 2.4,
-  pendingApprovals: 15
-};
-
-const projectStageDistribution = [
-  { name: 'Planning', value: 8 },
-  { name: 'In Progress', value: 18 },
-  { name: 'QA Review', value: 10 },
-  { name: 'Pending Approval', value: 6 },
-];
-
-const weeklyProjectFlow = [
-  { week: 'Week 1', started: 8, completed: 6, delayed: 1 },
-  { week: 'Week 2', started: 10, completed: 8, delayed: 2 },
-  { week: 'Week 3', started: 12, completed: 10, delayed: 1 },
-  { week: 'Week 4', started: 9, completed: 11, delayed: 0 },
-];
-
-const documentComplianceByProject = [
-  { project: 'Alpha', compliance: 95, missing: 2, total: 40 },
-  { project: 'Beta', compliance: 88, missing: 5, total: 42 },
-  { project: 'Gamma', compliance: 92, missing: 3, total: 38 },
-  { project: 'Delta', compliance: 78, missing: 8, total: 36 },
-  { project: 'Epsilon', compliance: 100, missing: 0, total: 45 },
-  { project: 'Zeta', compliance: 85, missing: 6, total: 40 },
-];
-
-const workflowPerformance = [
-  { stage: 'Document Upload', efficiency: 92 },
-  { stage: 'Initial Review', efficiency: 88 },
-  { stage: 'QI Inspection', efficiency: 75 },
-  { stage: 'Engineering Review', efficiency: 82 },
-  { stage: 'Final Approval', efficiency: 90 },
-];
-
-const monthlyTrends = [
-  { month: 'Jan', projects: 35, compliance: 85, sla: 88 },
-  { month: 'Feb', projects: 38, compliance: 87, sla: 90 },
-  { month: 'Mar', projects: 42, compliance: 89, sla: 92 },
-  { month: 'Apr', projects: 40, compliance: 88, sla: 91 },
-  { month: 'May', projects: 45, compliance: 91, sla: 93 },
-  { month: 'Jun', projects: 48, compliance: 92, sla: 94 },
-];
-
-const upcomingTasks = [
-  { id: 1, task: 'Review Project Alpha COC', assignee: 'John Doe', dueDate: '2025-12-03', priority: 'High' },
-  { id: 2, task: 'Coordinate QI inspection - Beta', assignee: 'Jane Smith', dueDate: '2025-12-05', priority: 'Medium' },
-  { id: 3, task: 'Send compliance reminders', assignee: 'Auto', dueDate: '2025-12-02', priority: 'High' },
-  { id: 4, task: 'Update workflow documentation', assignee: 'Bob Wilson', dueDate: '2025-12-08', priority: 'Low' },
-];
-
-const agingProjects = [
-  { project: 'Project Omega', stage: 'QI Review', daysOpen: 45, risk: 'High' },
-  { project: 'Project Theta', stage: 'Document Pending', daysOpen: 32, risk: 'Medium' },
-  { project: 'Project Iota', stage: 'Engineering Review', daysOpen: 28, risk: 'Medium' },
-];
-
-const teamWorkload = [
-  { member: 'Team A', active: 12, pending: 4, completed: 8 },
-  { member: 'Team B', active: 10, pending: 3, completed: 10 },
-  { member: 'Team C', active: 15, pending: 6, completed: 7 },
-  { member: 'Team D', active: 8, pending: 2, completed: 12 },
-];
-
-const notificationStats = {
-  sentToday: 48,
-  scheduled: 22,
-  overdue: 8,
-  responseRate: 76
-};
-
-function AideDashboard() {
-  const router = useRouter();
-
-  useEffect(() => {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    const authToken = localStorage.getItem('authToken');
-    const userRole = localStorage.getItem('userRole');
-
-    // If not authenticated or missing token, redirect to login
-    if (!userRole) {
-      router.push('/login');
-      return;
-    }
-
-    // Optional: Check if user has admin role
-    if (userRole !== 'engineer-aide') {
-      // Redirect non-admin users to their appropriate dashboard
-      router.push('/unauthorized'); // or router.push('/dashboard');
-    }
-  }, [router]);
-
-  return (
-    <>
-      <Head><title>Engineering Aide Dashboard</title></Head>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center">
-          <Grid item>
-            <Typography variant="h3" component="h3" gutterBottom>
-              🔧 Engineering Aide Dashboard
-            </Typography>
-            <Typography variant="subtitle2">
-              Support & coordination center with real-time monitoring
-            </Typography>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
-        <Grid container spacing={3}>
-          {/* KPI Cards */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h4" gutterBottom>{kpiMetrics.activeProjects}</Typography>
-                    <Typography variant="body2" color="text.secondary">Active Projects</Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#5569ff', width: 56, height: 56 }}>
-                    <DashboardIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h4" gutterBottom>{kpiMetrics.completionRate}%</Typography>
-                    <Typography variant="body2" color="text.secondary">Completion Rate</Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#57ca22', width: 56, height: 56 }}>
-                    <TrendingUpIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h4" gutterBottom>{kpiMetrics.avgResponseTime}h</Typography>
-                    <Typography variant="body2" color="text.secondary">Avg Response Time</Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#ffc107', width: 56, height: 56 }}>
-                    <SpeedIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h4" gutterBottom>{kpiMetrics.pendingApprovals}</Typography>
-                    <Typography variant="body2" color="text.secondary">Pending Approvals</Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#ff5630', width: 56, height: 56 }}>
-                    <AssessmentIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Project Stage Distribution */}
-          <Grid item xs={12} md={5}>
-            <Card>
-              <CardHeader title="📊 Project Stage Distribution" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <PieChart>
-                    <Pie
-                      data={projectStageDistribution}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value }) => `${name}: ${value}`}
-                      outerRadius={90}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {projectStageDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Workflow Performance Radar */}
-          <Grid item xs={12} md={7}>
-            <Card>
-              <CardHeader title="🎯 Workflow Stage Efficiency" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={workflowPerformance}>
-                    <PolarGrid />
-                    <PolarAngleAxis dataKey="stage" />
-                    <PolarRadiusAxis angle={90} domain={[0, 100]} />
-                    <Radar name="Efficiency %" dataKey="efficiency" stroke="#5569ff" fill="#5569ff" fillOpacity={0.6} />
-                    <Tooltip />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Weekly Project Flow */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader title="📈 Weekly Project Flow Analysis" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <ComposedChart data={weeklyProjectFlow}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="week" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="started" fill="#5569ff" name="Started" />
-                    <Bar dataKey="completed" fill="#57ca22" name="Completed" />
-                    <Line type="monotone" dataKey="delayed" stroke="#ff5630" strokeWidth={2} name="Delayed" />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Document Compliance by Project */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader title="📋 Document Compliance by Project" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={documentComplianceByProject}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="project" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="compliance" fill="#5569ff" name="Compliance %" />
-                    <Bar dataKey="missing" fill="#ff5630" name="Missing Docs" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Monthly Trends - Multi-metric */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader title="📅 Monthly Performance Trends" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <ComposedChart data={monthlyTrends}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Area type="monotone" dataKey="projects" fill="#5569ff" stroke="#5569ff" name="Projects" />
-                    <Line type="monotone" dataKey="compliance" stroke="#57ca22" strokeWidth={2} name="Compliance %" />
-                    <Line type="monotone" dataKey="sla" stroke="#ffc107" strokeWidth={2} name="SLA %" />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Team Workload Distribution */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title="👥 Team Workload Distribution" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={teamWorkload} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="member" type="category" />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="active" fill="#5569ff" name="Active" />
-                    <Bar dataKey="pending" fill="#ffc107" name="Pending" />
-                    <Bar dataKey="completed" fill="#57ca22" name="Completed" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Notification Statistics */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title="🔔 Notification Statistics" />
-              <Divider />
-              <CardContent>
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Paper elevation={0} sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-                      <Typography variant="h3" color="primary">{notificationStats.sentToday}</Typography>
-                      <Typography variant="body2" color="text.secondary">Sent Today</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Paper elevation={0} sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-                      <Typography variant="h3" color="secondary">{notificationStats.scheduled}</Typography>
-                      <Typography variant="body2" color="text.secondary">Scheduled</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Paper elevation={0} sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-                      <Typography variant="h3" color="error">{notificationStats.overdue}</Typography>
-                      <Typography variant="body2" color="text.secondary">Overdue</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Paper elevation={0} sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-                      <Typography variant="h3" color="success">{notificationStats.responseRate}%</Typography>
-                      <Typography variant="body2" color="text.secondary">Response Rate</Typography>
-                    </Paper>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Upcoming Tasks Calendar */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader 
-                title="📅 Upcoming Tasks & Deadlines" 
-                action={<Button size="small" startIcon={<CalendarMonthIcon />}>View Calendar</Button>}
-              />
-              <Divider />
-              <CardContent>
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Task</TableCell>
-                        <TableCell>Assignee</TableCell>
-                        <TableCell>Due Date</TableCell>
-                        <TableCell>Priority</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {upcomingTasks.map((task) => (
-                        <TableRow key={task.id} hover>
-                          <TableCell>{task.task}</TableCell>
-                          <TableCell>{task.assignee}</TableCell>
-                          <TableCell>{task.dueDate}</TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={task.priority} 
-                              size="small"
-                              color={task.priority === 'High' ? 'error' : task.priority === 'Medium' ? 'warning' : 'default'}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Aging Projects Alert */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title="⚠️ Aging Projects - Attention Required" />
-              <Divider />
-              <CardContent>
-                {agingProjects.map((project, idx) => (
-                  <Box key={idx} mb={2}>
-                    <Box display="flex" justifyContent="space-between" mb={1}>
-                      <Typography variant="body1" fontWeight="bold">{project.project}</Typography>
-                      <Chip 
-                        label={`${project.daysOpen} days`} 
-                        size="small"
-                        color={project.risk === 'High' ? 'error' : 'warning'}
-                      />
-                    </Box>
-                    <Typography variant="body2" color="text.secondary" mb={1}>
-                      Current Stage: {project.stage}
-                    </Typography>
-                    <LinearProgress 
-                      variant="determinate" 
-                      value={Math.min((project.daysOpen / 60) * 100, 100)}
-                      color={project.risk === 'High' ? 'error' : 'warning'}
-                      sx={{ height: 8, borderRadius: 4 }}
-                    />
-                  </Box>
-                ))}
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Quick Actions */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader title="⚡ Quick Actions" />
-              <Divider />
-              <CardContent>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button 
-                      variant="contained" 
-                      fullWidth 
-                      startIcon={<AccountTreeIcon />}
-                      size="large"
-                    >
-                      View Workflow
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button 
-                      variant="contained" 
-                      fullWidth 
-                      startIcon={<NotificationsActiveIcon />}
-                      size="large"
-                      color="secondary"
-                    >
-                      Send Reminders
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button 
-                      variant="contained" 
-                      fullWidth 
-                      startIcon={<AssessmentIcon />}
-                      size="large"
-                      color="success"
-                    >
-                      Generate Report
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button 
-                      variant="outlined" 
-                      fullWidth 
-                      startIcon={<CalendarMonthIcon />}
-                      size="large"
-                    >
-                      Auto-Schedule
-                    </Button>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Container>
-      <Footer />
-    </>
-  );
+interface CalendarEvent {
+    id: string;
+    date: string;
+    type: 'project' | 'deadline' | 'inspection' | 'sla' | 'work_order' | 'milestone' | 
+          'vendor_evaluation' | 'payment' | 'document' | 'crew_monitoring' | 'qi_target' |
+          'pca_goal' | 'backjob' | 'escalation' | 'audit' | 'training' | 'penalty' | 
+          'invoice' | 'workflow' | 'notification';
+    title: string;
+    description: string;
+    priority: 'Critical' | 'High' | 'Medium' | 'Low';
+    status: string;
+    project_code?: string;
+    wo_number?: string;
+    vendor_name?: string;
+    assigned_to?: string;
+    days_remaining?: number;
+    is_overdue?: boolean;
+    related_entity?: string;
+    action_required?: string;
+    completion_percentage?: number;
 }
 
-AideDashboard.getLayout = (page) => <SidebarLayout userRole="aide">{page}</SidebarLayout>;
-export default AideDashboard;
+interface CalendarStats {
+    total_events: number;
+    overdue: number;
+    this_week: number;
+    by_type: Record<string, number>;
+    by_priority: Record<string, number>;
+    by_status: Record<string, number>;
+}
+
+const ProjectCalendarDashboard: React.FC = () => {
+    const [events, setEvents] = useState<CalendarEvent[]>([]);
+    const [stats, setStats] = useState<CalendarStats | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [filterType, setFilterType] = useState<string>('all');
+    const [filterPriority, setFilterPriority] = useState<string>('all');
+    const [filterStatus, setFilterStatus] = useState<string>('all');
+    const [view, setView] = useState<'calendar' | 'list'>('calendar');
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const API_BASE_URL = 'http://localhost:8000/api/v1';
+
+    useEffect(() => {
+        loadAllData();
+    }, []);
+
+    useEffect(() => {
+        if (events.length > 0) {
+            calculateStats();
+        }
+    }, [events, filterType, filterPriority, filterStatus]);
+
+    const loadAllData = async () => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const allEvents: CalendarEvent[] = [];
+
+            // Fetch Projects
+            const projects = await fetchData(`${API_BASE_URL}/projects/`);
+            projects.forEach((project: any) => {
+                if (project.start_date) {
+                    allEvents.push({
+                        id: `project-${project.project_id}`,
+                        date: project.start_date,
+                        type: 'project',
+                        title: `Project Start: ${project.project_name}`,
+                        description: project.project_description || 'Project start date',
+                        priority: project.priority || 'Medium',
+                        status: project.status?.status_name || 'Active',
+                        project_code: project.project_code,
+                        vendor_name: project.vendor?.vendor_name,
+                        assigned_to: project.assigned_engineer?.username
+                    });
+                }
+                if (project.completion_date) {
+                    const daysRemaining = Math.floor((new Date(project.completion_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `project-deadline-${project.project_id}`,
+                        date: project.completion_date,
+                        type: 'deadline',
+                        title: `Project Deadline: ${project.project_name}`,
+                        description: 'Project completion deadline',
+                        priority: daysRemaining < 7 ? 'Critical' : project.priority || 'High',
+                        status: project.status?.status_name || 'Pending',
+                        project_code: project.project_code,
+                        days_remaining: daysRemaining,
+                        is_overdue: daysRemaining < 0
+                    });
+                }
+            });
+
+            // Fetch Work Orders
+            const workOrders = await fetchData(`${API_BASE_URL}/work-orders/`);
+            workOrders.forEach((wo: any) => {
+                if (wo.date_received_jacket) {
+                    allEvents.push({
+                        id: `wo-received-${wo.wo_id}`,
+                        date: wo.date_received_jacket,
+                        type: 'work_order',
+                        title: `WO Received: ${wo.wo_no}`,
+                        description: wo.description || 'Work order received',
+                        priority: wo.priority || 'Medium',
+                        status: wo.status || 'NEW',
+                        wo_number: wo.wo_no,
+                        vendor_name: wo.vendor?.vendor_name,
+                        assigned_to: wo.supervisor?.username
+                    });
+                }
+                if (wo.date_energized) {
+                    allEvents.push({
+                        id: `wo-energized-${wo.wo_id}`,
+                        date: wo.date_energized,
+                        type: 'work_order',
+                        title: `WO Energized: ${wo.wo_no}`,
+                        description: 'Work order energization completed',
+                        priority: 'Medium',
+                        status: wo.status || 'Completed',
+                        wo_number: wo.wo_no
+                    });
+                }
+                if (wo.date_for_audit) {
+                    allEvents.push({
+                        id: `wo-audit-${wo.wo_id}`,
+                        date: wo.date_for_audit,
+                        type: 'audit',
+                        title: `WO For Audit: ${wo.wo_no}`,
+                        description: 'Work order ready for audit',
+                        priority: 'High',
+                        status: 'FOR AUDIT',
+                        wo_number: wo.wo_no,
+                        action_required: 'Audit required'
+                    });
+                }
+            });
+
+            // Fetch Milestones
+            const milestones = await fetchData(`${API_BASE_URL}/project-milestones/`);
+            milestones.forEach((milestone: any) => {
+                if (milestone.target_date) {
+                    const daysRemaining = Math.floor((new Date(milestone.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `milestone-${milestone.milestone_id}`,
+                        date: milestone.target_date,
+                        type: 'milestone',
+                        title: milestone.milestone_name,
+                        description: milestone.milestone_description || 'Project milestone',
+                        priority: daysRemaining < 7 ? 'High' : 'Medium',
+                        status: milestone.is_completed ? 'Completed' : 'Pending',
+                        project_code: milestone.project?.project_code,
+                        days_remaining: daysRemaining,
+                        is_overdue: !milestone.is_completed && daysRemaining < 0
+                    });
+                }
+            });
+
+            // Fetch QI Inspections
+            const inspections = await fetchData(`${API_BASE_URL}/qi-inspections/`);
+            inspections.forEach((inspection: any) => {
+                if (inspection.scheduled_date) {
+                    const daysRemaining = Math.floor((new Date(inspection.scheduled_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `inspection-${inspection.inspection_id}`,
+                        date: inspection.scheduled_date,
+                        type: 'inspection',
+                        title: `QI Inspection: ${inspection.inspection_type?.inspection_name || 'Inspection'}`,
+                        description: inspection.findings || 'Quality inspection scheduled',
+                        priority: daysRemaining < 3 ? 'High' : 'Medium',
+                        status: inspection.is_completed ? 'Completed' : 'Scheduled',
+                        project_code: inspection.project?.project_code,
+                        assigned_to: inspection.assigned_qi?.username,
+                        days_remaining: daysRemaining,
+                        is_overdue: !inspection.is_completed && daysRemaining < 0
+                    });
+                }
+            });
+
+            // Fetch SLA Tracking
+            const slaTracking = await fetchData(`${API_BASE_URL}/sla-tracking/`);
+            slaTracking.forEach((sla: any) => {
+                if (sla.due_date) {
+                    const daysRemaining = Math.floor((new Date(sla.due_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `sla-${sla.sla_tracking_id}`,
+                        date: sla.due_date,
+                        type: 'sla',
+                        title: `SLA: ${sla.sla_rule?.rule_name || 'SLA Deadline'}`,
+                        description: sla.sla_rule?.rule_description || 'SLA compliance deadline',
+                        priority: daysRemaining < 2 ? 'Critical' : 'High',
+                        status: sla.status || 'Open',
+                        project_code: sla.project?.project_code,
+                        days_remaining: daysRemaining,
+                        is_overdue: sla.is_breached || daysRemaining < 0,
+                        action_required: daysRemaining < 2 ? 'Immediate action required' : undefined
+                    });
+                }
+            });
+
+            // Fetch Vendor Performance
+            const vendorPerformance = await fetchData(`${API_BASE_URL}/vendor-performance/`);
+            vendorPerformance.forEach((perf: any) => {
+                if (perf.evaluation_date) {
+                    allEvents.push({
+                        id: `vendor-eval-${perf.id}`,
+                        date: perf.evaluation_date,
+                        type: 'vendor_evaluation',
+                        title: `Vendor Evaluation: ${perf.vendor?.vendor_name || 'Vendor'}`,
+                        description: `Overall Rating: ${perf.overall_rating || 'N/A'}`,
+                        priority: 'Medium',
+                        status: 'Completed',
+                        vendor_name: perf.vendor?.vendor_name
+                    });
+                }
+            });
+
+            // Fetch Invoices
+            const invoices = await fetchData(`${API_BASE_URL}/invoices/`);
+            invoices.forEach((invoice: any) => {
+                if (invoice.due_date) {
+                    const daysRemaining = Math.floor((new Date(invoice.due_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `invoice-${invoice.id}`,
+                        date: invoice.due_date,
+                        type: 'invoice',
+                        title: `Invoice Due: ${invoice.invoice_number}`,
+                        description: `Amount: $${invoice.net_amount}`,
+                        priority: daysRemaining < 5 ? 'High' : 'Medium',
+                        status: invoice.payment_status || 'Unpaid',
+                        vendor_name: invoice.vendor?.vendor_name,
+                        days_remaining: daysRemaining,
+                        is_overdue: invoice.payment_status === 'Overdue' || daysRemaining < 0
+                    });
+                }
+            });
+
+            // Fetch Payments
+            const payments = await fetchData(`${API_BASE_URL}/payments/`);
+            payments.forEach((payment: any) => {
+                if (payment.payment_date) {
+                    allEvents.push({
+                        id: `payment-${payment.id}`,
+                        date: payment.payment_date,
+                        type: 'payment',
+                        title: `Payment: ${payment.invoice?.invoice_number || 'Payment'}`,
+                        description: `Amount: $${payment.payment_amount}`,
+                        priority: 'Low',
+                        status: 'Completed',
+                        vendor_name: payment.invoice?.vendor?.vendor_name
+                    });
+                }
+            });
+
+            // Fetch Document Compliance
+            const docCompliance = await fetchData(`${API_BASE_URL}/document-compliance/`);
+            docCompliance.forEach((doc: any) => {
+                if (doc.due_date) {
+                    const daysRemaining = Math.floor((new Date(doc.due_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `doc-${doc.compliance_id}`,
+                        date: doc.due_date,
+                        type: 'document',
+                        title: `Document Due: ${doc.doc_type?.doc_type_name || 'Document'}`,
+                        description: 'Document submission deadline',
+                        priority: daysRemaining < 3 ? 'High' : 'Medium',
+                        status: doc.is_submitted ? 'Submitted' : 'Pending',
+                        project_code: doc.project?.project_code,
+                        days_remaining: daysRemaining,
+                        is_overdue: doc.is_overdue || daysRemaining < 0,
+                        action_required: !doc.is_submitted ? 'Submission required' : undefined
+                    });
+                }
+            });
+
+            // Fetch Penalties
+            const penalties = await fetchData(`${API_BASE_URL}/penalties/`);
+            penalties.forEach((penalty: any) => {
+                if (penalty.violation_date) {
+                    allEvents.push({
+                        id: `penalty-${penalty.id}`,
+                        date: penalty.violation_date,
+                        type: 'penalty',
+                        title: `Penalty: ${penalty.penalty_rule?.rule_name || 'Penalty'}`,
+                        description: `Amount: $${penalty.penalty_amount}`,
+                        priority: 'High',
+                        status: penalty.penalty_status || 'Draft',
+                        project_code: penalty.project?.project_code,
+                        vendor_name: penalty.vendor?.vendor_name
+                    });
+                }
+            });
+
+            // Fetch Escalations
+            const escalations = await fetchData(`${API_BASE_URL}/escalations/`);
+            escalations.forEach((esc: any) => {
+                if (esc.escalation_date) {
+                    allEvents.push({
+                        id: `escalation-${esc.id}`,
+                        date: esc.escalation_date.split('T')[0],
+                        type: 'escalation',
+                        title: `Escalation: ${esc.escalation_rule?.rule_name || 'Issue'}`,
+                        description: esc.escalation_reason || 'Project escalation',
+                        priority: 'Critical',
+                        status: esc.status || 'Open',
+                        project_code: esc.project?.project_code,
+                        action_required: esc.status === 'Open' ? 'Resolution required' : undefined
+                    });
+                }
+            });
+
+            // Fetch Backjobs
+            const backjobs = await fetchData(`${API_BASE_URL}/backjob-monitoring/`);
+            backjobs.forEach((backjob: any) => {
+                if (backjob.target_resolution_date) {
+                    const daysRemaining = Math.floor((new Date(backjob.target_resolution_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `backjob-${backjob.id}`,
+                        date: backjob.target_resolution_date,
+                        type: 'backjob',
+                        title: `Backjob: ${backjob.issue_category || 'Issue'}`,
+                        description: backjob.issue_description || 'Backjob resolution required',
+                        priority: backjob.is_overdue ? 'Critical' : 'High',
+                        status: backjob.status || 'PENDING',
+                        wo_number: backjob.work_order?.wo_no,
+                        days_remaining: daysRemaining,
+                        is_overdue: backjob.is_overdue || daysRemaining < 0,
+                        action_required: 'Resolution required'
+                    });
+                }
+            });
+
+            // Fetch QI Daily Targets
+            const qiTargets = await fetchData(`${API_BASE_URL}/qi-daily-targets/`);
+            qiTargets.forEach((target: any) => {
+                if (target.target_date) {
+                    allEvents.push({
+                        id: `qi-target-${target.id}`,
+                        date: target.target_date,
+                        type: 'qi_target',
+                        title: `QI Target: ${target.qi_user?.username || 'QI'}`,
+                        description: `Target: ${target.target_audits} audits`,
+                        priority: target.target_met ? 'Low' : 'Medium',
+                        status: target.target_met ? 'Met' : 'Pending',
+                        assigned_to: target.qi_user?.username
+                    });
+                }
+            });
+
+            // Fetch Notifications
+            const notifications = await fetchData(`${API_BASE_URL}/notifications/`);
+            notifications.forEach((notif: any) => {
+                if (notif.sent_at) {
+                    allEvents.push({
+                        id: `notification-${notif.id}`,
+                        date: notif.sent_at.split('T')[0],
+                        type: 'notification',
+                        title: notif.subject || 'Notification',
+                        description: notif.message || 'System notification',
+                        priority: 'Low',
+                        status: notif.status || 'Sent'
+                    });
+                }
+            });
+
+            setEvents(allEvents);
+        } catch (err) {
+            console.error('Error loading calendar data:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load calendar data');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchData = async (url: string) => {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                console.warn(`Failed to fetch from ${url}: ${response.status}`);
+                return [];
+            }
+            const data = await response.json();
+            return Array.isArray(data) ? data : data.results || [];
+        } catch (error) {
+            console.warn(`Error fetching from ${url}:`, error);
+            return [];
+        }
+    };
+
+    const calculateStats = () => {
+        const filtered = getFilteredEvents();
+        
+        const statsByType: Record<string, number> = {};
+        const statsByPriority: Record<string, number> = {
+            Critical: 0,
+            High: 0,
+            Medium: 0,
+            Low: 0
+        };
+        const statsByStatus: Record<string, number> = {
+            pending: 0,
+            in_progress: 0,
+            completed: 0,
+            overdue: 0
+        };
+
+        let overdueCount = 0;
+        let thisWeekCount = 0;
+        const weekFromNow = new Date();
+        weekFromNow.setDate(weekFromNow.getDate() + 7);
+
+        filtered.forEach(event => {
+            statsByType[event.type] = (statsByType[event.type] || 0) + 1;
+            statsByPriority[event.priority] = (statsByPriority[event.priority] || 0) + 1;
+
+            if (event.is_overdue) {
+                overdueCount++;
+                statsByStatus.overdue++;
+            } else if (event.status.toLowerCase().includes('complet')) {
+                statsByStatus.completed++;
+            } else if (event.status.toLowerCase().includes('progress')) {
+                statsByStatus.in_progress++;
+            } else {
+                statsByStatus.pending++;
+            }
+
+            const eventDate = new Date(event.date);
+            if (eventDate >= new Date() && eventDate <= weekFromNow) {
+                thisWeekCount++;
+            }
+        });
+
+        setStats({
+            total_events: filtered.length,
+            overdue: overdueCount,
+            this_week: thisWeekCount,
+            by_type: statsByType,
+            by_priority: statsByPriority,
+            by_status: statsByStatus
+        });
+    };
+
+    const getFilteredEvents = () => {
+        return events.filter(event => {
+            const matchesType = filterType === 'all' || event.type === filterType;
+            const matchesPriority = filterPriority === 'all' || event.priority === filterPriority;
+            const matchesStatus = filterStatus === 'all' || 
+                (filterStatus === 'overdue' && event.is_overdue) ||
+                event.status.toLowerCase().includes(filterStatus.toLowerCase());
+            const matchesSearch = searchQuery === '' || 
+                event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (event.project_code && event.project_code.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (event.wo_number && event.wo_number.toLowerCase().includes(searchQuery.toLowerCase()));
+            
+            return matchesType && matchesPriority && matchesStatus && matchesSearch;
+        });
+    };
+
+    const getDaysInMonth = (date: Date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startingDayOfWeek = firstDay.getDay();
+        return { daysInMonth, startingDayOfWeek, year, month };
+    };
+
+    const getEventsForDate = (date: Date) => {
+        const dateStr = date.toISOString().split('T')[0];
+        return getFilteredEvents().filter(event => event.date === dateStr);
+    };
+
+    const navigateMonth = (direction: 'prev' | 'next') => {
+        setCurrentDate(prev => {
+            const newDate = new Date(prev);
+            if (direction === 'prev') {
+                newDate.setMonth(prev.getMonth() - 1);
+            } else {
+                newDate.setMonth(prev.getMonth() + 1);
+            }
+            return newDate;
+        });
+    };
+
+    const goToToday = () => {
+        setCurrentDate(new Date());
+        setSelectedDate(null);
+    };
+
+    const getEventIcon = (type: string) => {
+        const iconMap: Record<string, any> = {
+            project: Flag,
+            deadline: Clock,
+            sla: AlertTriangle,
+            inspection: CheckCircle,
+            work_order: Wrench,
+            milestone: Target,
+            vendor_evaluation: Users,
+            payment: DollarSign,
+            document: FileText,
+            crew_monitoring: Users,
+            qi_target: Shield,
+            pca_goal: Target,
+            backjob: AlertCircle,
+            escalation: TrendingUp,
+            audit: FileCheck,
+            penalty: XCircle,
+            invoice: DollarSign,
+            workflow: Activity,
+            notification: Bell,
+            training: UserCheck
+        };
+        return iconMap[type] || CircleDot;
+    };
+
+    const getEventColor = (type: string) => {
+        const colors: Record<string, any> = {
+            project: { bg: '#9333ea', light: '#f3e8ff', text: '#581c87', border: '#c084fc' },
+            deadline: { bg: '#f97316', light: '#ffedd5', text: '#9a3412', border: '#fb923c' },
+            sla: { bg: '#dc2626', light: '#fee2e2', text: '#991b1b', border: '#f87171' },
+            inspection: { bg: '#3b82f6', light: '#dbeafe', text: '#1e40af', border: '#60a5fa' },
+            work_order: { bg: '#0891b2', light: '#cffafe', text: '#155e75', border: '#22d3ee' },
+            milestone: { bg: '#8b5cf6', light: '#ede9fe', text: '#5b21b6', border: '#a78bfa' },
+            vendor_evaluation: { bg: '#ec4899', light: '#fce7f3', text: '#9f1239', border: '#f472b6' },
+            payment: { bg: '#10b981', light: '#d1fae5', text: '#065f46', border: '#34d399' },
+            document: { bg: '#6366f1', light: '#e0e7ff', text: '#3730a3', border: '#818cf8' },
+            crew_monitoring: { bg: '#f59e0b', light: '#fef3c7', text: '#92400e', border: '#fbbf24' },
+            qi_target: { bg: '#14b8a6', light: '#ccfbf1', text: '#134e4a', border: '#2dd4bf' },
+            pca_goal: { bg: '#a855f7', light: '#f3e8ff', text: '#6b21a8', border: '#c084fc' },
+            backjob: { bg: '#ef4444', light: '#fee2e2', text: '#991b1b', border: '#f87171' },
+            escalation: { bg: '#f43f5e', light: '#ffe4e6', text: '#9f1239', border: '#fb7185' },
+            audit: { bg: '#06b6d4', light: '#cffafe', text: '#155e75', border: '#22d3ee' },
+            penalty: { bg: '#b91c1c', light: '#fee2e2', text: '#7f1d1d', border: '#dc2626' },
+            invoice: { bg: '#059669', light: '#d1fae5', text: '#065f46', border: '#10b981' },
+            workflow: { bg: '#7c3aed', light: '#ede9fe', text: '#5b21b6', border: '#8b5cf6' },
+            notification: { bg: '#64748b', light: '#f1f5f9', text: '#334155', border: '#94a3b8' }
+        };
+        return colors[type] || colors.project;
+    };
+
+    const getPriorityColor = (priority: string, isOverdue: boolean) => {
+        if (isOverdue) return { bg: '#fef2f2', text: '#991b1b', border: '#fca5a5' };
+        const colors: Record<string, any> = {
+            Critical: { bg: '#fef2f2', text: '#991b1b', border: '#fca5a5' },
+            High: { bg: '#fff7ed', text: '#9a3412', border: '#fdba74' },
+            Medium: { bg: '#eff6ff', text: '#1e40af', border: '#93c5fd' },
+            Low: { bg: '#f9fafb', text: '#374151', border: '#d1d5db' }
+        };
+        return colors[priority] || colors.Low;
+    };
+
+    const renderCalendarView = () => {
+        const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentDate);
+        const days = [];
+        const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+        for (let i = 0; i < startingDayOfWeek; i++) {
+            days.push(
+                <div 
+                    key={`empty-${i}`} 
+                    style={{
+                        minHeight: '140px',
+                        backgroundColor: '#f9fafb',
+                        border: '1px solid #e5e7eb'
+                    }}
+                />
+            );
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const currentDateObj = new Date(year, month, day);
+            const dayEvents = getEventsForDate(currentDateObj);
+            const isToday = currentDateObj.toDateString() === new Date().toDateString();
+            const isSelected = selectedDate && currentDateObj.toDateString() === selectedDate.toDateString();
+            const hasOverdue = dayEvents.some(e => e.is_overdue);
+
+            days.push(
+                <div
+                    key={day}
+                    onClick={() => setSelectedDate(currentDateObj)}
+                    style={{
+                        minHeight: '140px',
+                        border: isToday ? '3px solid #3b82f6' : '1px solid #e5e7eb',
+                        backgroundColor: isToday ? '#eff6ff' : '#ffffff',
+                        padding: '8px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: isSelected ? '0 0 0 3px rgba(59, 130, 246, 0.5)' : 'none',
+                        position: 'relative',
+                        borderTop: hasOverdue ? '4px solid #dc2626' : undefined
+                    }}
+                    onMouseEnter={(e) => {
+                        if (!isSelected) e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                        if (!isSelected) e.currentTarget.style.boxShadow = 'none';
+                    }}
+                >
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '8px'
+                    }}>
+                        <div style={{
+                            fontSize: '14px',
+                            fontWeight: '700',
+                            color: isToday ? '#1e40af' : '#374151'
+                        }}>
+                            {day}
+                        </div>
+                        {dayEvents.length > 0 && (
+                            <div style={{
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                backgroundColor: '#3b82f6',
+                                color: '#ffffff',
+                                padding: '2px 6px',
+                                borderRadius: '9999px',
+                                minWidth: '20px',
+                                textAlign: 'center'
+                            }}>
+                                {dayEvents.length}
+                            </div>
+                        )}
+                    </div>
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '4px',
+                        maxHeight: '90px',
+                        overflowY: 'auto'
+                    }}>
+                        {dayEvents.slice(0, 3).map((event, idx) => {
+                            const colors = getEventColor(event.type);
+                            const Icon = getEventIcon(event.type);
+                            return (
+                                <div
+                                    key={idx}
+                                    style={{
+                                        fontSize: '11px',
+                                        padding: '6px 8px',
+                                        borderRadius: '6px',
+                                        backgroundColor: colors.bg,
+                                        color: '#ffffff',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                    }}
+                                    title={`${event.title} - ${event.description}`}
+                                >
+                                    <Icon size={12} color="#ffffff" style={{ flexShrink: 0 }} />
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: '500' }}>
+                                        {event.title}
+                                    </span>
+                                    {event.is_overdue && (
+                                        <AlertTriangle size={12} color="#ffffff" style={{ flexShrink: 0 }} />
+                                    )}
+                                </div>
+                            );
+                        })}
+                        {dayEvents.length > 3 && (
+                            <div style={{
+                                fontSize: '11px',
+                                color: '#6b7280',
+                                fontWeight: '600',
+                                paddingLeft: '8px'
+                            }}>
+                                +{dayEvents.length - 3} more
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+            }}>
+                {weekDays.map(day => (
+                    <div 
+                        key={day} 
+                        style={{
+                            backgroundColor: '#1f2937',
+                            color: '#ffffff',
+                            padding: '12px',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            fontSize: '14px'
+                        }}
+                    >
+                        {day}
+                    </div>
+                ))}
+                {days}
+            </div>
+        );
+    };
+
+    const renderListView = () => {
+        const groupedEvents: { [key: string]: CalendarEvent[] } = {};
+        const filtered = getFilteredEvents();
+
+        filtered.forEach(event => {
+            if (!groupedEvents[event.date]) {
+                groupedEvents[event.date] = [];
+            }
+            groupedEvents[event.date].push(event);
+        });
+
+        const sortedDates = Object.keys(groupedEvents).sort();
+
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {sortedDates.map(date => (
+                    <div key={date} style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+                        <div style={{ background: 'linear-gradient(to right, #2563eb, #1e40af)', color: '#ffffff', padding: '20px' }}>
+                            <h3 style={{ fontSize: '20px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                                <CalendarIcon size={24} />
+                                {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            </h3>
+                        </div>
+                        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {groupedEvents[date].map((event, idx) => {
+                                const colors = getEventColor(event.type);
+                                const Icon = getEventIcon(event.type);
+                                
+                                return (
+                                    <div key={idx} style={{ display: 'flex', gap: '16px', padding: '20px', border: '2px solid #f3f4f6', borderRadius: '8px' }}>
+                                        <div style={{ padding: '14px', borderRadius: '50%', backgroundColor: colors.bg, display: 'flex' }}>
+                                            <Icon size={24} color="#ffffff" />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <h4 style={{ fontWeight: 'bold', fontSize: '16px', margin: '0 0 8px 0' }}>{event.title}</h4>
+                                            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 12px 0' }}>{event.description}</p>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                                {event.project_code && <span style={{ padding: '4px 8px', backgroundColor: '#f3f4f6', borderRadius: '4px', fontSize: '12px' }}>📋 {event.project_code}</span>}
+                                                {event.wo_number && <span style={{ padding: '4px 8px', backgroundColor: '#f3f4f6', borderRadius: '4px', fontSize: '12px' }}>🔧 {event.wo_number}</span>}
+                                                {event.vendor_name && <span style={{ padding: '4px 8px', backgroundColor: '#f3f4f6', borderRadius: '4px', fontSize: '12px' }}>🚚 {event.vendor_name}</span>}
+                                            </div>
+                                        </div>
+                                        {event.days_remaining !== undefined && (
+                                            <div style={{ textAlign: 'center', padding: '12px', backgroundColor: event.is_overdue ? '#fee2e2' : '#dcfce7', borderRadius: '8px' }}>
+                                                <p style={{ fontSize: '24px', fontWeight: 'bold', color: event.is_overdue ? '#dc2626' : '#16a34a', margin: 0 }}>
+                                                    {Math.abs(event.days_remaining)}
+                                                </p>
+                                                <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                                                    {event.is_overdue ? 'overdue' : 'days left'}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    if (loading) {
+        return (
+            <div style={{ minHeight: '100vh', padding: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center' }}>
+                    <Loader2 size={48} color="#2563eb" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+                    <p style={{ color: '#6b7280' }}>Loading calendar data from all sources...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ minHeight: '100vh', padding: '24px', backgroundColor: '#f3f4f6' }}>
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            
+            <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+                <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '12px', padding: '32px', color: '#ffffff', marginBottom: '24px' }}>
+                    <h1 style={{ fontSize: '36px', fontWeight: 'bold', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <CalendarIcon size={40} />
+                        Comprehensive Project Calendar
+                    </h1>
+                    <p style={{ margin: 0, opacity: 0.9 }}>Centralized tracking of all project activities and deadlines</p>
+                </div>
+
+                {error && (
+                    <div style={{ backgroundColor: '#fef2f2', border: '2px solid #dc2626', borderRadius: '8px', padding: '16px', marginBottom: '24px' }}>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <XCircle size={24} color="#dc2626" />
+                            <div>
+                                <p style={{ fontWeight: 'bold', margin: '0 0 4px 0' }}>Error Loading Data</p>
+                                <p style={{ margin: 0 }}>{error}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {stats && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                        {[
+                            { label: 'Total Events', value: stats.total_events, color: '#3b82f6', icon: CalendarIcon },
+                            { label: 'Overdue', value: stats.overdue, color: '#dc2626', icon: AlertTriangle },
+                            { label: 'This Week', value: stats.this_week, color: '#10b981', icon: Clock },
+                            { label: 'Critical', value: stats.by_priority.Critical || 0, color: '#ef4444', icon: AlertCircle }
+                        ].map((stat, idx) => {
+                            const Icon = stat.icon;
+                            return (
+                                <div key={idx} style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '20px', border: '1px solid #e5e7eb' }}>
+                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                        <div style={{ padding: '12px', borderRadius: '8px', backgroundColor: `${stat.color}20` }}>
+                                            <Icon size={24} color={stat.color} />
+                                        </div>
+                                        <div>
+                                            <p style={{ fontSize: '28px', fontWeight: 'bold', color: stat.color, margin: 0 }}>{stat.value}</p>
+                                            <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>{stat.label}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '20px', alignItems: 'center' }}>
+                        <button onClick={() => navigateMonth('prev')} style={{ padding: '10px', borderRadius: '6px', border: '2px solid #d1d5db', backgroundColor: '#ffffff', color: '#000000', cursor: 'pointer' }}>
+                            <ChevronLeft size={20} />
+                        </button>
+                        <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#000000', minWidth: '220px', textAlign: 'center', margin: 0 }}>
+                            {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                        </h2>
+                        <button onClick={() => navigateMonth('next')} style={{ padding: '10px', borderRadius: '6px', border: '2px solid #d1d5db', backgroundColor: '#ffffff', color: '#000000', cursor: 'pointer' }}>
+                            <ChevronRight size={20} />
+                        </button>
+                        <button onClick={goToToday} style={{ padding: '10px 20px', borderRadius: '6px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', cursor: 'pointer', fontWeight: '600' }}>
+                            Today
+                        </button>
+                        <button onClick={loadAllData} style={{ padding: '10px 20px', borderRadius: '6px', backgroundColor: '#10b981', color: '#ffffff', border: 'none', cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+                            <RefreshCw size={16} />
+                            Refresh Data
+                        </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' }}>
+                        <input
+                            type="text"
+                            placeholder="Search events..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            style={{ flex: 1, minWidth: '200px', padding: '10px', border: '2px solid #d1d5db', borderRadius: '6px' }}
+                        />
+                        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ padding: '10px', border: '2px solid #d1d5db', borderRadius: '6px' }}>
+                            <option value="all">All Types</option>
+                            <option value="project">Projects</option>
+                            <option value="work_order">Work Orders</option>
+                            <option value="milestone">Milestones</option>
+                            <option value="inspection">Inspections</option>
+                            <option value="sla">SLA</option>
+                            <option value="deadline">Deadlines</option>
+                            <option value="backjob">Backjobs</option>
+                            <option value="escalation">Escalations</option>
+                        </select>
+                        <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} style={{ padding: '10px', border: '2px solid #d1d5db', borderRadius: '6px' }}>
+                            <option value="all">All Priorities</option>
+                            <option value="Critical">Critical</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                        </select>
+                        <div style={{ display: 'flex', gap: '4px', backgroundColor: '#e5e7eb', borderRadius: '6px', padding: '4px' }}>
+                            <button onClick={() => setView('calendar')} style={{ padding: '10px 16px', color: '#000000', borderRadius: '6px', fontWeight: '600', border: 'none', cursor: 'pointer', backgroundColor: view === 'calendar' ? '#ffffff' : 'transparent' }}>
+                                Calendar
+                            </button>
+                            <button onClick={() => setView('list')} style={{ padding: '10px 16px', color: '#000000', borderRadius: '6px', fontWeight: '600', border: 'none', cursor: 'pointer', backgroundColor: view === 'list' ? '#ffffff' : 'transparent' }}>
+                                List
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px' }}>
+                    {view === 'calendar' ? renderCalendarView() : renderListView()}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default ProjectCalendarDashboard;

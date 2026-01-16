@@ -39,7 +39,7 @@ USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Update ALLOWED_HOSTS
-ALLOWED_HOSTS = ['aimswo.online', 'www.aimswo.online', '72.61.215.239']
+ALLOWED_HOSTS = ['aimswo.online', 'www.aimswo.online', '72.61.215.239', "localhost", '127.0.0.1']
 
 # Static and media URLs
 STATIC_URL = '/api/static/'

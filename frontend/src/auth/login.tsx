@@ -112,6 +112,7 @@ export default function LoginPage() {
 
         // Store user role in localStorage
         localStorage.setItem('userRole', normalizedRole);
+        localStorage.setItem('user', JSON.stringify(data.user));
         // Store authentication data in sessionStorage (to match dashboard)
         sessionStorage.setItem('auth_token', data.token);
         sessionStorage.setItem('user_data', JSON.stringify(data.user));

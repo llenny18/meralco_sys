@@ -3,7 +3,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 import uuid
-
+from django.conf import settings
 
 from django.db import models
 from django.contrib.auth.models import AbstractUser
@@ -36,7 +36,9 @@ class User(AbstractUser):
     user_id = models.AutoField(primary_key=True)
     role = models.ForeignKey(UserRole, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
     email = models.EmailField(blank=True, null=True)
-    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    first_name = models.CharField(max_length=20, blank=True, null=True)
+    last_name = models.CharField(max_length=255, blank=True, null=True)
+    phone_number = models.CharField(max_length=255, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     last_login = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -48,6 +50,11 @@ class User(AbstractUser):
     class Meta:
         db_table = 'users'
         ordering = ['-created_at']
+        
+    def get_full_name(self):
+        first = self.first_name or ""
+        last = self.last_name or ""
+        return f"{first} {last}".strip()
 
     def __str__(self):
         return f"{self.get_full_name()} ({self.username})"
@@ -111,7 +118,7 @@ class UserSession(models.Model):
 # ============================================
 
 class Vendor(models.Model):
-    vendor_id = models.UUIDField(primary_key=True,  editable=False)
+    vendor_id = models.AutoField(primary_key=True)
     vendor_code = models.CharField(max_length=50, unique=True)
     vendor_name = models.CharField(max_length=255)
     company_name = models.CharField(max_length=255, blank=True, null=True)
@@ -130,6 +137,7 @@ class Vendor(models.Model):
     blacklist_date = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='vendors')
 
     class Meta:
         managed = False
@@ -141,7 +149,7 @@ class Vendor(models.Model):
 
 
 class VendorContact(models.Model):
-    contact_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    contact_id = models.IntegerField(primary_key=True,  editable=False)
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='contacts')
     contact_name = models.CharField(max_length=100)
     contact_position = models.CharField(max_length=100, blank=True, null=True)
@@ -161,6 +169,7 @@ class VendorContact(models.Model):
 
 
 class VendorPerformance(models.Model):
+    performance_id = models.AutoField(primary_key=True) 
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='performance_records')
     evaluation_date = models.DateField()
     on_time_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
@@ -315,6 +324,7 @@ class ProjectTeam(models.Model):
 # ============================================
 
 class WorkflowStage(models.Model):
+    stage_id = models.IntegerField(primary_key=True,  editable=False)
     stage_name = models.CharField(max_length=100, unique=True)
     stage_description = models.TextField(blank=True, null=True)
     stage_order = models.IntegerField(null=True, blank=True)
@@ -594,6 +604,7 @@ class QIPerformance(models.Model):
 # ============================================
 
 class PenaltyRule(models.Model):
+    penalty_rule_id = models.IntegerField(primary_key=True,  editable=False)
     rule_name = models.CharField(max_length=100, unique=True)
     rule_description = models.TextField(blank=True, null=True)
     violation_type = models.CharField(max_length=100)
@@ -723,6 +734,7 @@ class NotificationTemplate(models.Model):
         ('Push', 'Push'),
     ]
 
+    template_id =models.IntegerField(primary_key=True, default=uuid.uuid4, editable=False)
     template_name = models.CharField(max_length=100, unique=True)
     template_subject = models.CharField(max_length=255, blank=True, null=True)
     template_body = models.TextField()
@@ -788,6 +800,7 @@ class Notification(models.Model):
 # ============================================
 
 class EscalationRule(models.Model):
+    escalation_rule_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     rule_name = models.CharField(max_length=100, unique=True)
     rule_description = models.TextField(blank=True, null=True)
     trigger_condition = models.CharField(max_length=255)
@@ -966,6 +979,7 @@ class ChangeLog(models.Model):
         ('DELETE', 'DELETE'),
     ]
 
+    log_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     table_name = models.CharField(max_length=100)
     record_id = models.IntegerField()
     change_type = models.CharField(max_length=20, choices=CHANGE_CHOICES)
@@ -1043,153 +1057,188 @@ class SystemSetting(models.Model):
     
 # make this new tables be created, abovemodels are already exisiting
 
+
+
+
 # ============================================
 # WORK ORDER MODELS (Main Database - C1 Sheet)
 # ============================================
 
+
 class WorkOrder(models.Model):
-    """Main work order tracking - represents C1 sheet"""
+    id = models.AutoField(primary_key=True)
+
+    # Basic Info
+    date_received_jacket_ps = models.DateField(null=True, blank=True)
+    date_received_awarding_wo = models.DateField(null=True, blank=True)
+    vip = models.BooleanField(default=False)
+    wo_no = models.CharField(max_length=50, unique=True)  # NOT NULL in DB
+    description = models.TextField(blank=True)
+    location = models.CharField(max_length=255, blank=True)
+    municipality = models.CharField(max_length=255, blank=True)
+    area_of_responsibility = models.CharField(max_length=255, blank=True)
     
-    PRIORITY_CHOICES = [
-        ('VIP', 'VIP'),
-        ('High', 'High'),
-        ('Medium', 'Medium'),
-        ('Low', 'Low'),
-    ]
+    # Remarks & Status
+    vendor_remarks = models.TextField(blank=True)
+    c1_remarks = models.TextField(blank=True)
+    assigned = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=100, blank=True)
     
-    STATUS_CHOICES = [
-        ('NEW', 'New'),
-        ('FOR AUDIT', 'For Audit'),
-        ('AUDITED', 'Audited'),
-        ('NO COC', 'No COC'),
-        ('PAID', 'Paid'),
-        ('CANCELLED', 'Cancelled'),
-    ]
+    # Work Dates
+    date_wmtrl = models.DateField(null=True, blank=True)
+    date_sched = models.DateField(null=True, blank=True)
+    date_received_by_vc = models.DateField(null=True, blank=True)
+    actual_date_completed_on_site = models.DateField(null=True, blank=True)
+    date_fcomp = models.DateField(null=True, blank=True)
+    date_comp = models.DateField(null=True, blank=True)
     
-    wo_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    wo_no = models.CharField(max_length=100, unique=True)  # Work Order Number
+    # Durations (APT / SPT)
+    days_wmtrl_to_fcomp = models.IntegerField(null=True, blank=True)
+    days_sched_to_fcomp = models.IntegerField(null=True, blank=True)
+    days_comp = models.IntegerField(null=True, blank=True)
+    date_needed_075_wmtrl_to_fcomp = models.DateField(null=True, blank=True)
+    date_needed_095_fcomp = models.DateField(null=True, blank=True)
+    date_needed_50days_wmtrl_to_fcomp = models.DateField(null=True, blank=True)
+    computed_index_wmtrl_to_fcomp = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    computed_index_comp = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    spt_m = models.IntegerField(null=True, blank=True)
+    spt_l = models.IntegerField(null=True, blank=True)
+    duration_075_days = models.IntegerField(null=True, blank=True)
+    duration_095_days = models.IntegerField(null=True, blank=True)
+    target_days = models.IntegerField(null=True, blank=True)
+    spt_m_comp = models.IntegerField(null=True, blank=True)
+    duration_comp_days = models.IntegerField(null=True, blank=True)
+    target_days_comp = models.IntegerField(null=True, blank=True)
+    date_needed_to_comp = models.DateField(null=True, blank=True)
+    ageing_days_since_fcomp = models.IntegerField(null=True, blank=True)
     
-    # Dates
-    date_received_jacket = models.DateField(null=True, blank=True)
-    date_received_awarding = models.DateField(null=True, blank=True)
-    date_energized = models.DateField(null=True, blank=True)  # Completion date
-    date_coc_received = models.DateField(null=True, blank=True)
-    date_for_audit = models.DateField(null=True, blank=True)
-    date_audited = models.DateField(null=True, blank=True)
+    # Exclusions
+    exclusion_reason = models.TextField(blank=True)
+    ccti_exclusion = models.BooleanField(default=False)
+    encoded_in_eam = models.BooleanField(default=False)
+    validated_by_dcsam = models.BooleanField(default=False)
+    apt_exclusion = models.BooleanField(default=False)
+    exclusion_start_date = models.DateField(null=True, blank=True)
+    exclusion_duration = models.IntegerField(null=True, blank=True)
+    exclusion_end_date = models.DateField(null=True, blank=True)
     
-    # Project Details
-    wo_initiator = models.CharField(max_length=50, blank=True, null=True)
-    description = models.TextField(blank=True, null=True)
-    location = models.CharField(max_length=255, blank=True, null=True)
-    municipality = models.CharField(max_length=100, blank=True, null=True)
-    area_of_responsibility = models.CharField(max_length=100, blank=True, null=True)
+    # COC
+    remarks_follow_up = models.TextField(blank=True)
+    remarks_2 = models.TextField(blank=True)
+    date_needed_submit_coc = models.DateField(null=True, blank=True)
+    ageing_submission_coc = models.IntegerField(null=True, blank=True)
+    date_completed_from_coc = models.DateField(null=True, blank=True)
+    actual_received_coc = models.DateField(null=True, blank=True)
     
-    # Assignments
-    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='work_orders')
-    assigned_crew = models.CharField(max_length=50, blank=True, null=True)  # AVECO, CHALLENGER, etc.
-    supervisor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='supervised_work_orders')
-    assigned_qi = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='qi_work_orders')
+    # Audit / Backjob
+    date_audit = models.DateField(null=True, blank=True)
+    audit_by = models.CharField(max_length=255, blank=True)
+    with_backjob = models.BooleanField(default=False)
+    backjob_tagged_in_eam = models.BooleanField(default=False)
     
-    # Financial
-    total_manhours = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    total_estimated_cost = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    billed_cost = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+    # Contractor / Correction
+    date_received_by_contractor = models.DateField(null=True, blank=True)
+    date_corrected = models.DateField(null=True, blank=True)
+    date_material_balancing = models.DateField(null=True, blank=True)
+    material_balancing_by = models.CharField(max_length=255, blank=True)
+    emailed_to_meter = models.BooleanField(default=False)
+    dt_correction_method = models.CharField(max_length=255, blank=True)
+    tln = models.CharField(max_length=100, blank=True)
+    with_pole_replacement = models.BooleanField(default=False)
+    actual_field_status = models.CharField(max_length=255, blank=True)
+    remarks_3 = models.TextField(blank=True)
+    abf_printed_by = models.CharField(max_length=255, blank=True)
+    date_printed_pole_tag = models.DateField(null=True, blank=True)
+    pole_tln_tags = models.TextField(blank=True)
     
-    # Status & Priority
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='NEW')
-    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='Medium')
-    is_vip = models.BooleanField(default=False)
-    eam_status = models.CharField(max_length=50, blank=True, null=True)
+    # APT / CCTI with Exclusion
+    apt_days_exclusion = models.IntegerField(null=True, blank=True)
+    apt_with_exclusion = models.IntegerField(null=True, blank=True)
+    ccti_days_exclusion = models.IntegerField(null=True, blank=True)
+    duration_ccti_with_exclusion = models.IntegerField(null=True, blank=True)
+    ccti_with_exclusion = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     
-    # Remarks
-    vendor_remarks = models.TextField(blank=True, null=True)
-    c1_remarks = models.TextField(blank=True, null=True)
-    clerk_remarks = models.TextField(blank=True, null=True)
-    de_remarks = models.TextField(blank=True, null=True)
+    # Performance
+    e2e_prdi = models.IntegerField(null=True, blank=True)
+    current_ccti_with_exclusion = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    current_ccti = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    final_ccti = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    prdi = models.IntegerField(null=True, blank=True)
+    days_ageing = models.IntegerField(null=True, blank=True)
+    rev_nonrev = models.CharField(max_length=50, blank=True)
+    age_bracket = models.CharField(max_length=100, blank=True)
     
-    # Calculated Fields
-    days_from_energized_to_coc = models.IntegerField(null=True, blank=True)
-    days_from_coc_to_audit = models.IntegerField(null=True, blank=True)
-    days_from_audit_to_billing = models.IntegerField(null=True, blank=True)
-    total_resolution_days = models.IntegerField(null=True, blank=True)
+    # NTC
+    ntc_date_created = models.DateField(null=True, blank=True)
+    ntc_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    ntc_reference = models.CharField(max_length=100, blank=True)
+    ntc_date_received_by_contractor = models.DateField(null=True, blank=True)
+    ntc_date_completed = models.DateField(null=True, blank=True)
+    ntc_running_days = models.IntegerField(null=True, blank=True)
     
-    # SLA Tracking
-    target_completion_date = models.DateField(null=True, blank=True)
-    is_delayed = models.BooleanField(default=False)
-    delay_days = models.IntegerField(default=0)
+    # NOV / Debit
+    nov_debit_date_created = models.DateField(null=True, blank=True)
+    nov_debit_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    nov_debit_date_received_by_contractor = models.DateField(null=True, blank=True)
     
-    # Metadata
+    # Supervisor
+    ext = models.CharField(max_length=50, blank=True)
+    updated_supv = models.BooleanField(default=False)
+    supv_name = models.CharField(max_length=255, blank=True)
+    status_040425 = models.CharField(max_length=100, blank=True)
+    diff_days_wmtrl_to_sched = models.IntegerField(null=True, blank=True)
+    supervisor_full_name = models.CharField(max_length=255, blank=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        db_table = 'work_orders'
-        ordering = ['-date_received_jacket']
-        indexes = [
-            models.Index(fields=['wo_no']),
-            models.Index(fields=['status']),
-            models.Index(fields=['vendor']),
-            models.Index(fields=['assigned_crew']),
-        ]
-    
+        db_table = "work_order"
+        managed = False  # Important: Don't let Django manage this table
+
     def __str__(self):
-        return f"{self.wo_no} - {self.description[:50]}"
-    
-    def save(self, *args, **kwargs):
-        # Auto-calculate days
-        if self.date_energized and self.date_coc_received:
-            self.days_from_energized_to_coc = (self.date_coc_received - self.date_energized).days
-        
-        if self.date_coc_received and self.date_for_audit:
-            self.days_from_coc_to_audit = (self.date_for_audit - self.date_coc_received).days
-        
-        if self.date_for_audit and self.date_audited:
-            self.days_from_audit_to_billing = (self.date_audited - self.date_for_audit).days
-        
-        # Calculate total resolution days
-        if self.date_energized and self.date_audited:
-            self.total_resolution_days = (self.date_audited - self.date_energized).days
-        
-        # Check if delayed (target is 60 days)
-        if self.total_resolution_days and self.total_resolution_days > 60:
-            self.is_delayed = True
-            self.delay_days = self.total_resolution_days - 60
-        
-        super().save(*args, **kwargs)
+        return self.wo_no
+
+
 
 
 class WorkOrderDocument(models.Model):
-    """Track documents for work orders - COC, permits, etc."""
+    """Model for storing documents related to work orders"""
     
-    DOC_TYPE_CHOICES = [
+    DOCUMENT_TYPES = [
         ('COC', 'Certificate of Completion'),
-        ('PERMIT', 'Permit'),
-        ('INSPECTION', 'Inspection Report'),
-        ('INVOICE', 'Invoice'),
+        ('PHOTO', 'Site Photo'),
+        ('PERMIT', 'Building Permit'),
+        ('RECEIPT', 'Material Receipt'),
+        ('SAFETY', 'Safety Compliance Form'),
+        ('DRAWING', 'As-Built Drawing'),
         ('OTHER', 'Other'),
     ]
     
-    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name='wo_documents')
-    document_type = models.CharField(max_length=50, choices=DOC_TYPE_CHOICES)
-    document_name = models.CharField(max_length=255)
-    document_file = models.FileField(upload_to='work_orders/%Y/%m/', null=True, blank=True)
-    document_path = models.CharField(max_length=500, blank=True, null=True)
-    
-    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    upload_date = models.DateTimeField(auto_now_add=True)
-    
-    is_approved = models.BooleanField(default=False)
-    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_wo_documents')
-    approval_date = models.DateTimeField(null=True, blank=True)
-    
-    notes = models.TextField(blank=True, null=True)
+    work_order = models.ForeignKey(
+        WorkOrder, 
+        on_delete=models.CASCADE, 
+        related_name='documents'
+    )
+    document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPES)
+    file = models.FileField(upload_to='work_order_documents/%Y/%m/')
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='uploaded_workorder_documents'
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
         db_table = 'work_order_documents'
-        ordering = ['-upload_date']
+        ordering = ['-uploaded_at']
     
     def __str__(self):
-        return f"{self.work_order.wo_no} - {self.document_type}"
+        return f"{self.work_order.wo_no} - {self.title}"
 
 
 # ============================================
@@ -1696,3 +1745,110 @@ class EmailNotificationLog(models.Model):
     
     def __str__(self):
         return f"{self.notification_type} - {self.notification_date}"
+
+
+class VendorDailyActivity(models.Model):
+    """Track vendor daily sign-on activities"""
+    
+    ACTIVITY_STATUS_CHOICES = [
+        ('SIGNED_ON', 'Signed On'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('COMPLETED', 'Completed'),
+        ('CAUTION', 'Caution Required'),
+    ]
+    
+    activity_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='daily_activities')
+    activity_date = models.DateField(default=timezone.now)
+    
+    # Office & Assignment Details
+    office = models.CharField(max_length=100, blank=True, null=True)  # e.g., C1
+    team_leader = models.CharField(max_length=100, blank=True, null=True)
+    design_engineer = models.CharField(max_length=100, blank=True, null=True)
+    crew_name = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Crew Details (JSON for flexibility)
+    crew_composition = models.JSONField(default=dict, blank=True)
+    # Example: {
+    #   "basket_trucks": [{"vehicle": "NFY-7254", "foreman": "GAVANZO", "lineman1": "SACE", ...}],
+    #   "boom_trucks": [...],
+    #   "cranes": [...]
+    # }
+    
+    # Work Order Details
+    work_orders = models.JSONField(default=list, blank=True)
+    # Example: [
+    #   {
+    #     "wo_no": "X25072368898",
+    #     "location": "KAUNLARAN MOLINO BACOOR CAVITE",
+    #     "nature_of_work": "ENERGIZE 1-LEG 20KV.LINE",
+    #     "circuit": "422-WK",
+    #     "tln": "046585"
+    #   }
+    # ]
+    
+    # Activity Details
+    activity_description = models.TextField()
+    status = models.CharField(max_length=50, choices=ACTIVITY_STATUS_CHOICES, default='SIGNED_ON')
+    
+    # Caution/Safety
+    has_caution = models.BooleanField(default=False)
+    caution_details = models.TextField(blank=True, null=True)
+    
+    # Images
+    activity_photos = models.JSONField(default=list, blank=True)
+    # Store image paths/URLs
+    
+    # Sign-on Details
+    signed_on_at = models.DateTimeField(auto_now_add=True)
+    signed_on_by = models.IntegerField(default=0)
+    
+    # Completion
+    completed_at = models.DateTimeField(null=True, blank=True)
+    completion_notes = models.TextField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'vendor_daily_activities'
+        ordering = ['-activity_date', '-signed_on_at']
+        indexes = [
+            models.Index(fields=['vendor', 'activity_date']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.vendor.vendor_code} - {self.activity_date} - {self.crew_name}"
+
+
+class VendorActivityPhoto(models.Model):
+    """Store photos for vendor activities"""
+    
+    PHOTO_TYPE_CHOICES = [
+        ('SIGN_ON', 'Sign On Photo'),
+        ('PROGRESS', 'Progress Photo'),
+        ('COMPLETION', 'Completion Photo'),
+        ('CAUTION', 'Caution/Safety Photo'),
+    ]
+    
+    photo_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    activity = models.ForeignKey(VendorDailyActivity, on_delete=models.CASCADE, related_name='photos')
+    photo_type = models.CharField(max_length=50, choices=PHOTO_TYPE_CHOICES)
+    
+    photo_file = models.ImageField(upload_to='vendor_activities/%Y/%m/%d/', null=True, blank=True)
+    photo_url = models.URLField(max_length=500, blank=True, null=True)
+    
+    caption = models.CharField(max_length=255, blank=True, null=True)
+    location_coordinates = models.CharField(max_length=100, blank=True, null=True)
+    
+    uploaded_by = models.IntegerField(default=0)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'vendor_activity_photos'
+        ordering = ['-uploaded_at']
+    
+    def __str__(self):
+        return f"{self.activity.vendor.vendor_code} - {self.photo_type} - {self.uploaded_at}"
+

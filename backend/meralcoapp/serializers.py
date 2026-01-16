@@ -801,62 +801,6 @@ class UpcomingDeadlinesSerializer(serializers.Serializer):
 
 
 
-# serializers.py - Add these serializers
-
-from rest_framework import serializers
-from .models import *
-
-# ============================================
-# WORK ORDER SERIALIZERS
-# ============================================
-
-class WorkOrderSerializer(serializers.ModelSerializer):
-    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
-    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
-    supervisor_name = serializers.SerializerMethodField()
-    qi_name = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = WorkOrder
-        fields = '__all__'
-        read_only_fields = ['wo_id', 'created_at', 'updated_at', 'days_from_energized_to_coc', 
-                           'days_from_coc_to_audit', 'days_from_audit_to_billing', 
-                           'total_resolution_days', 'is_delayed', 'delay_days']
-    
-    def get_supervisor_name(self, obj):
-        return obj.supervisor.get_full_name() if obj.supervisor else None
-    
-    def get_qi_name(self, obj):
-        return obj.assigned_qi.get_full_name() if obj.assigned_qi else None
-
-
-class WorkOrderDocumentSerializer(serializers.ModelSerializer):
-    uploaded_by_name = serializers.CharField(source='uploaded_by.get_full_name', read_only=True)
-    approved_by_name = serializers.CharField(source='approved_by.get_full_name', read_only=True)
-    
-    class Meta:
-        model = WorkOrderDocument
-        fields = '__all__'
-        read_only_fields = ['upload_date']
-
-
-class WorkOrderListSerializer(serializers.ModelSerializer):
-    """Simplified serializer for list views"""
-    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
-    supervisor_name = serializers.SerializerMethodField()
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
-    
-    class Meta:
-        model = WorkOrder
-        fields = ['wo_id', 'wo_no', 'description', 'location', 'vendor_name', 
-                 'supervisor_name', 'status', 'status_display', 'priority', 
-                 'date_energized', 'total_resolution_days', 'is_delayed', 
-                 'delay_days', 'created_at']
-    
-    def get_supervisor_name(self, obj):
-        return obj.supervisor.get_full_name() if obj.supervisor else None
-
-
 # ============================================
 # CREW MONITORING SERIALIZERS
 # ============================================
@@ -926,51 +870,298 @@ from .models import *
 # WORK ORDER SERIALIZERS
 # ============================================
 
+from rest_framework import serializers
+from .models import WorkOrder
+
+class WorkOrderListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for list views"""
+
+    class Meta:
+        model = WorkOrder
+        fields = [
+            # Primary / Basic
+            'id',
+            'wo_no',
+            'vip',
+            'description',
+            'location',
+            'municipality',
+            'area_of_responsibility',
+            
+
+            # Dates – Basic
+            'date_received_jacket_ps',
+            'date_received_awarding_wo',
+
+            # Remarks & Status
+            'vendor_remarks',
+            'c1_remarks',
+            'assigned',
+            'status',
+
+            # Work Dates
+            'date_wmtrl',
+            'date_sched',
+            'date_received_by_vc',
+            'actual_date_completed_on_site',
+            'date_fcomp',
+            'date_comp',
+
+            # Durations (APT / SPT)
+            'days_wmtrl_to_fcomp',
+            'days_sched_to_fcomp',
+            'days_comp',
+            'date_needed_075_wmtrl_to_fcomp',
+            'date_needed_095_fcomp',
+            'date_needed_50days_wmtrl_to_fcomp',
+            'computed_index_wmtrl_to_fcomp',
+            'computed_index_comp',
+            'spt_m',
+            'spt_l',
+            'duration_075_days',
+            'duration_095_days',
+            'target_days',
+            'spt_m_comp',
+            'duration_comp_days',
+            'target_days_comp',
+            'date_needed_to_comp',
+            'ageing_days_since_fcomp',
+
+            # Exclusions
+            'exclusion_reason',
+            'ccti_exclusion',
+            'encoded_in_eam',
+            'validated_by_dcsam',
+            'apt_exclusion',
+            'exclusion_start_date',
+            'exclusion_duration',
+            'exclusion_end_date',
+
+            # COC
+            'remarks_follow_up',
+            'remarks_2',
+            'date_needed_submit_coc',
+            'ageing_submission_coc',
+            'date_completed_from_coc',
+            'actual_received_coc',
+
+            # Audit / Backjob
+            'date_audit',
+            'audit_by',
+            'with_backjob',
+            'backjob_tagged_in_eam',
+
+            # Contractor / Correction
+            'date_received_by_contractor',
+            'date_corrected',
+            'date_material_balancing',
+            'material_balancing_by',
+            'emailed_to_meter',
+            'dt_correction_method',
+            'tln',
+            'with_pole_replacement',
+            'actual_field_status',
+            'remarks_3',
+            'abf_printed_by',
+            'date_printed_pole_tag',
+            'pole_tln_tags',
+
+            # APT / CCTI with Exclusion
+            'apt_days_exclusion',
+            'apt_with_exclusion',
+            'ccti_days_exclusion',
+            'duration_ccti_with_exclusion',
+            'ccti_with_exclusion',
+
+            # Performance
+            'e2e_prdi',
+            'current_ccti_with_exclusion',
+            'current_ccti',
+            'final_ccti',
+            'prdi',
+            'days_ageing',
+            'rev_nonrev',
+            'age_bracket',
+
+            # NTC
+            'ntc_date_created',
+            'ntc_amount',
+            'ntc_reference',
+            'ntc_date_received_by_contractor',
+            'ntc_date_completed',
+            'ntc_running_days',
+
+            # NOV / Debit
+            'nov_debit_date_created',
+            'nov_debit_amount',
+            'nov_debit_date_received_by_contractor',
+
+            # Supervisor
+            'ext',
+            'updated_supv',
+            'supv_name',
+            'status_040425',
+            'diff_days_wmtrl_to_sched',
+            'supervisor_full_name',
+
+            # Timestamps
+            'created_at',
+            'updated_at',
+        ]
+
+    
+
+
+
 class WorkOrderSerializer(serializers.ModelSerializer):
-    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
-    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
-    supervisor_name = serializers.SerializerMethodField()
-    qi_name = serializers.SerializerMethodField()
+    """Full serializer for detail views"""
+
     
     class Meta:
         model = WorkOrder
         fields = '__all__'
-        read_only_fields = ['wo_id', 'created_at', 'updated_at', 'days_from_energized_to_coc', 
-                           'days_from_coc_to_audit', 'days_from_audit_to_billing', 
-                           'total_resolution_days', 'is_delayed', 'delay_days']
+        read_only_fields = ['id', 'created_at', 'updated_at', 
+                           'days_wmtrl_to_fcomp', 'days_sched_to_fcomp', 
+                           'days_comp', 'computed_index_wmtrl_to_fcomp', 
+                           'computed_index_comp']
     
-    def get_supervisor_name(self, obj):
-        return obj.supervisor.get_full_name() if obj.supervisor else None
     
-    def get_qi_name(self, obj):
-        return obj.assigned_qi.get_full_name() if obj.assigned_qi else None
+    def get_timeline_summary(self, obj):
+        """Get a summary of the work order timeline"""
+        return {
+            'received_jacket': obj.date_received_jacket_ps,
+            'received_awarding': obj.date_received_awarding_wo,
+            'wmtrl_date': obj.date_wmtrl,
+            'scheduled_date': obj.date_sched,
+            'received_by_vc': obj.date_received_by_vc,
+            'completed_on_site': obj.actual_date_completed_on_site,
+            'fcomp_date': obj.date_fcomp,
+            'completion_date': obj.date_comp,
+            'days_wmtrl_to_fcomp': obj.days_wmtrl_to_fcomp,
+            'days_sched_to_fcomp': obj.days_sched_to_fcomp,
+            'total_days': obj.days_comp
+        }
+
+
+class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for create and update operations"""
+    
+    class Meta:
+        model = WorkOrder
+        exclude = ['created_at', 'updated_at', 'days_wmtrl_to_fcomp', 
+                   'days_sched_to_fcomp', 'days_comp', 
+                   'computed_index_wmtrl_to_fcomp', 'computed_index_comp']
+    
+    def validate_wo_no(self, value):
+        """Ensure WO number is unique"""
+        if self.instance is None:  # Creating new
+            if WorkOrder.objects.filter(wo_no=value).exists():
+                raise serializers.ValidationError("Work Order number already exists")
+        return value
+    
+    def validate(self, data):
+        """Cross-field validation"""
+        # Ensure completion date is after start date
+        if data.get('date_received_jacket_ps') and data.get('date_comp'):
+            if data['date_comp'] < data['date_received_jacket_ps']:
+                raise serializers.ValidationError(
+                    "Completion date cannot be before received date"
+                )
+        
+        # Ensure FCOMP is before COMP
+        if data.get('date_fcomp') and data.get('date_comp'):
+            if data['date_comp'] < data['date_fcomp']:
+                raise serializers.ValidationError(
+                    "Completion date cannot be before FCOMP date"
+                )
+        
+        return data
 
 
 class WorkOrderDocumentSerializer(serializers.ModelSerializer):
-    uploaded_by_name = serializers.CharField(source='uploaded_by.get_full_name', read_only=True)
-    approved_by_name = serializers.CharField(source='approved_by.get_full_name', read_only=True)
-    
+    uploaded_by_username = serializers.CharField(
+        source='uploaded_by.username',
+        read_only=True
+    )
+    file_url = serializers.SerializerMethodField()
+
     class Meta:
         model = WorkOrderDocument
-        fields = '__all__'
-        read_only_fields = ['upload_date']
+        fields = [
+            'id',
+            'work_order',
+            'document_type',
+            'file',
+            'file_url',
+            'title',
+            'description',
+            'uploaded_by',
+            'uploaded_by_username',
+            'uploaded_at',
+        ]
+        read_only_fields = [
+            'uploaded_by',
+            'uploaded_at',
+        ]
+
+    def get_file_url(self, obj):
+        request = self.context.get('request')
+        if obj.file and request:
+            return request.build_absolute_uri(obj.file.url)
+        return None
 
 
-class WorkOrderListSerializer(serializers.ModelSerializer):
-    """Simplified serializer for list views"""
-    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
-    supervisor_name = serializers.SerializerMethodField()
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+class WorkOrderTimelineSerializer(serializers.ModelSerializer):
+    """Specialized serializer for timeline view"""
+    milestones = serializers.SerializerMethodField()
     
     class Meta:
         model = WorkOrder
-        fields = ['wo_id', 'wo_no', 'description', 'location', 'vendor_name', 
-                 'supervisor_name', 'status', 'status_display', 'priority', 
-                 'date_energized', 'total_resolution_days', 'is_delayed', 
-                 'delay_days', 'created_at']
+        fields = ['id', 'wo_no', 'description', 'status', 'milestones']
     
-    def get_supervisor_name(self, obj):
-        return obj.supervisor.get_full_name() if obj.supervisor else None
+    def get_milestones(self, obj):
+        """Get all timeline milestones"""
+        milestones = []
+        
+        milestone_mapping = [
+            ('Jacket Received (PS)', obj.date_received_jacket_ps),
+            ('Awarding WO Received', obj.date_received_awarding_wo),
+            ('WMTRL', obj.date_wmtrl),
+            ('Scheduled', obj.date_sched),
+            ('Received by VC', obj.date_received_by_vc),
+            ('Completed On-Site', obj.actual_date_completed_on_site),
+            ('FCOMP', obj.date_fcomp),
+            ('Completed', obj.date_comp),
+            ('Received by Contractor', obj.date_received_by_contractor),
+            ('Corrected', obj.date_corrected),
+        ]
+        
+        for label, date in milestone_mapping:
+            if date:
+                milestones.append({
+                    'label': label,
+                    'date': date,
+                    'completed': True
+                })
+        
+        return sorted(milestones, key=lambda x: x['date'])
+
+
+class WorkOrderStatsSerializer(serializers.Serializer):
+    """Serializer for dashboard statistics"""
+    total_count = serializers.IntegerField()
+    status_breakdown = serializers.ListField()
+    vip_count = serializers.IntegerField()
+    overdue_count = serializers.IntegerField()
+    overdue_percentage = serializers.FloatField()
+    avg_completion_days = serializers.FloatField()
+    completion_rate = serializers.FloatField()
+    by_municipality = serializers.ListField()
+    by_assigned = serializers.ListField()
+    recent_work_orders = WorkOrderListSerializer(many=True)
+
+
+
 
 
 # ============================================
@@ -1192,3 +1383,76 @@ class UpcomingDeadlineSerializer(serializers.Serializer):
     priority = serializers.CharField()
     status = serializers.CharField()
     assigned_to = serializers.CharField(required=False, allow_null=True)
+    
+
+
+class VendorActivityPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VendorActivityPhoto
+        fields = '__all__'
+        read_only_fields = ['photo_id', 'uploaded_at']
+
+
+class VendorDailyActivitySerializer(serializers.ModelSerializer):
+    photos = VendorActivityPhotoSerializer(many=True, read_only=True)
+    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
+    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
+    
+    class Meta:
+        model = VendorDailyActivity
+        fields = '__all__'
+        read_only_fields = ['activity_id', 'signed_on_at', 'created_at', 'updated_at']
+
+# Add to serializers.py
+
+class COCChecklistSerializer(serializers.ModelSerializer):
+    """Serializer for COC Checklist - Work Orders needing COC review"""
+    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
+    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
+    supervisor_name = serializers.SerializerMethodField()
+    days_since_energized = serializers.SerializerMethodField()
+    days_since_coc = serializers.SerializerMethodField()
+    needs_attention = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = WorkOrder
+        fields = [
+            'wo_id', 'wo_no', 'description', 'location', 'municipality',
+            'vendor', 'vendor_name', 'vendor_code', 'assigned_crew',
+            'supervisor', 'supervisor_name', 'status',
+            'date_energized', 'date_coc_received', 'date_for_audit',
+            'days_since_energized', 'days_since_coc', 'needs_attention',
+            'vendor_remarks', 'clerk_remarks', 'total_estimated_cost',
+            'created_at', 'updated_at'
+        ]
+    
+    def get_supervisor_name(self, obj):
+        if obj.supervisor:
+            return obj.supervisor.get_full_name() or obj.supervisor.username
+        return None
+    
+    def get_days_since_energized(self, obj):
+        if obj.date_energized:
+            from django.utils import timezone
+            delta = timezone.now().date() - obj.date_energized
+            return delta.days
+        return None
+    
+    def get_days_since_coc(self, obj):
+        if obj.date_coc_received:
+            from django.utils import timezone
+            delta = timezone.now().date() - obj.date_coc_received
+            return delta.days
+        return None
+    
+    def get_needs_attention(self, obj):
+        """Determine if work order needs immediate attention"""
+        if obj.date_energized and not obj.date_coc_received:
+            from django.utils import timezone
+            days = (timezone.now().date() - obj.date_energized).days
+            return days > 7  # Alert if no COC after 7 days
+        if obj.date_coc_received and not obj.date_for_audit:
+            from django.utils import timezone
+            days = (timezone.now().date() - obj.date_coc_received).days
+            return days > 3  # Alert if not sent for audit after 3 days
+        return False

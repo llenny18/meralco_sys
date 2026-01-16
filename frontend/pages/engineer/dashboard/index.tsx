@@ -2,7 +2,7 @@ import Head from 'next/head';
 import SidebarLayout from '@/layouts/SidebarLayout';
 import { Grid, Container } from '@mui/material';
 
-import AdminDashboard from '@/admin';
+import AdminDashboard from '@/engineer';
 
 function ApplicationsTransactions() {
   return (

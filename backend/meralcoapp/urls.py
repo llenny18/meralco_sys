@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import *
-
+from django.conf.urls.static import static
 
 # Import Excel / bulk operation functions from file_handlers.py
 from .file_handlers import (
@@ -154,6 +154,9 @@ router.register(r'calendar', CalendarDashboardViewSet, basename='calendar')
 # System Administrator Portal
 router.register(r'system-admin', SystemAdministratorViewSet, basename='system-admin')
 
+# Vendor Daily Activities
+router.register(r'vendor-daily-activities', VendorDailyActivityViewSet, basename='vendor-daily-activity')
+router.register(r'vendor-activity-photos', VendorActivityPhotoViewSet, basename='vendor-activity-photo')
 
 # URL patterns
 urlpatterns = [
@@ -205,3 +208,8 @@ urlpatterns = [
     path('a-calendar/stats/', get_calendar_stats, name='calendar-stats'),
     
 ]
+
+
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
