@@ -1,1415 +1,937 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  AlertCircle, CheckCircle, TrendingUp, FileText, Users, Plus, Edit2, 
-  Trash2, X, Save, Eye, Clock, AlertTriangle, DollarSign, Calendar,
-  Activity, Briefcase, ClipboardCheck, FileCheck, BarChart3, Settings,
-  Download, Upload, Filter, Search, RefreshCw, Send, MessageSquare,
-  Target, Award, Zap, TrendingDown, Package, CheckSquare, XCircle,
-  Building2, MapPin, UserCheck, PieChart, TrendingUp as Up, Database
+import {
+    Loader2,
+    AlertCircle,
+    FileText,
+    Clock,
+    ChevronLeft,
+    ChevronRight,
+    XCircle,
+    AlertTriangle,
+    TrendingUp,
+    BarChart3,
+    CheckCircle,
+    Calendar as CalendarIcon,
+    List,
+    Users,
+    Wrench,
+    Shield,
+    DollarSign,
+    Package,
+    Bell,
+    Activity,
+    Target,
+    Flag,
+    Truck,
+    ClipboardCheck,
+    BarChart2,
+    FileCheck,
+    UserCheck,
+    CircleDot,
+    RefreshCw
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000';
-
-const styles = {
-  container: {
-    minHeight: '100vh',
-    background: 'linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%)',
-    padding: '2rem',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  },
-  maxWidth: {
-    maxWidth: '1800px',
-    margin: '0 auto',
-  },
-  card: {
-    backgroundColor: '#2d3748',
-    borderRadius: '16px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-    padding: '2rem',
-    marginBottom: '1.5rem',
-    border: '1px solid #4a5568',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '2.5rem',
-    flexWrap: 'wrap',
-    gap: '1rem',
-  },
-  title: {
-    fontSize: '2.5rem',
-    fontWeight: '800',
-    color: '#ffffff',
-    marginBottom: '0.5rem',
-  },
-  subtitle: {
-    color: '#a0aec0',
-    fontSize: '1.125rem',
-  },
-  button: {
-    padding: '0.75rem 1.5rem',
-    border: 'none',
-    borderRadius: '12px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    fontSize: '1rem',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-  buttonPrimary: {
-    backgroundColor: '#4299e1',
-    color: '#ffffff',
-  },
-  buttonSuccess: {
-    backgroundColor: '#48bb78',
-    color: '#ffffff',
-  },
-  buttonDanger: {
-    backgroundColor: '#f56565',
-    color: '#ffffff',
-  },
-  buttonWarning: {
-    backgroundColor: '#ed8936',
-    color: '#ffffff',
-  },
-  buttonSecondary: {
-    backgroundColor: '#4a5568',
-    color: '#cbd5e1',
-  },
-  statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-    gap: '1.25rem',
-    marginBottom: '2rem',
-  },
-  statCard: {
-    backgroundColor: '#4a5568',
-    borderRadius: '16px',
-    padding: '1.5rem',
-    textAlign: 'center',
-    border: '2px solid #718096',
-    transition: 'all 0.3s ease',
-  },
-  featureGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-    gap: '1.5rem',
-    marginBottom: '2rem',
-  },
-  featureCard: {
-    padding: '2rem',
-    border: '3px solid #4a5568',
-    borderRadius: '16px',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    backgroundColor: '#2d3748',
-    textAlign: 'left',
-  },
-  badge: {
-    padding: '0.5rem 1rem',
-    borderRadius: '20px',
-    fontSize: '0.875rem',
-    fontWeight: '600',
-    display: 'inline-block',
-  },
-  modal: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1000,
-    padding: '2rem',
-    overflow: 'auto',
-  },
-  modalContent: {
-    backgroundColor: '#2d3748',
-    borderRadius: '16px',
-    padding: '2rem',
-    maxWidth: '900px',
-    width: '100%',
-    maxHeight: '90vh',
-    overflowY: 'auto',
-    border: '1px solid #4a5568',
-  },
-  formGroup: {
-    marginBottom: '1.5rem',
-  },
-  label: {
-    display: 'block',
-    color: '#cbd5e1',
-    marginBottom: '0.5rem',
-    fontWeight: '600',
-    fontSize: '0.95rem',
-  },
-  input: {
-    width: '100%',
-    padding: '0.75rem',
-    backgroundColor: '#4a5568',
-    border: '2px solid #718096',
-    borderRadius: '8px',
-    color: '#ffffff',
-    fontSize: '1rem',
-  },
-  select: {
-    width: '100%',
-    padding: '0.75rem',
-    backgroundColor: '#4a5568',
-    border: '2px solid #718096',
-    borderRadius: '8px',
-    color: '#ffffff',
-    fontSize: '1rem',
-    cursor: 'pointer',
-  },
-  textarea: {
-    width: '100%',
-    padding: '0.75rem',
-    backgroundColor: '#4a5568',
-    border: '2px solid #718096',
-    borderRadius: '8px',
-    color: '#ffffff',
-    fontSize: '1rem',
-    minHeight: '100px',
-    resize: 'vertical',
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    marginTop: '1rem',
-  },
-  th: {
-    backgroundColor: '#4a5568',
-    padding: '1rem',
-    textAlign: 'left',
-    fontWeight: '700',
-    color: '#cbd5e1',
-    borderBottom: '2px solid #718096',
-    fontSize: '0.95rem',
-  },
-  td: {
-    padding: '1rem',
-    borderBottom: '1px solid #4a5568',
-    color: '#cbd5e1',
-    fontSize: '0.95rem',
-  },
-  actionButtons: {
-    display: 'flex',
-    gap: '0.5rem',
-    flexWrap: 'wrap',
-  },
-  iconButton: {
-    padding: '0.5rem',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  spinner: {
-    border: '4px solid #4a5568',
-    borderTop: '4px solid #4299e1',
-    borderRadius: '50%',
-    width: '56px',
-    height: '56px',
-    animation: 'spin 1s linear infinite',
-  },
-  alert: {
-    padding: '1rem',
-    borderRadius: '12px',
-    marginBottom: '1.5rem',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-  },
-  alertSuccess: {
-    backgroundColor: '#22543d',
-    border: '2px solid #48bb78',
-    color: '#9ae6b4',
-  },
-  alertError: {
-    backgroundColor: '#742a2a',
-    border: '2px solid #f56565',
-    color: '#fc8181',
-  },
-  tabs: {
-    display: 'flex',
-    gap: '0.5rem',
-    borderBottom: '2px solid #4a5568',
-    marginBottom: '2rem',
-    flexWrap: 'wrap',
-  },
-  tab: {
-    padding: '0.875rem 1.5rem',
-    border: 'none',
-    background: 'none',
-    cursor: 'pointer',
-    fontWeight: '600',
-    color: '#a0aec0',
-    borderBottom: '3px solid transparent',
-    transition: 'all 0.3s ease',
-    fontSize: '0.95rem',
-  },
-  tabActive: {
-    color: '#4299e1',
-    borderBottomColor: '#4299e1',
-  },
-  detailCard: {
-    backgroundColor: '#4a5568',
-    borderRadius: '12px',
-    padding: '1.5rem',
-    marginBottom: '1rem',
-    border: '2px solid #718096',
-  },
-  searchBar: {
-    display: 'flex',
-    gap: '1rem',
-    marginBottom: '1.5rem',
-    flexWrap: 'wrap',
-  },
-  chartContainer: {
-    backgroundColor: '#4a5568',
-    borderRadius: '12px',
-    padding: '1.5rem',
-    marginBottom: '1.5rem',
-  },
-};
-
-class APIService {
-  constructor(baseURL, token) {
-    this.baseURL = baseURL;
-    this.token = token;
-  }
-
-  async request(endpoint, options = {}) {
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
-      ...options,
-      headers: {
-        'Authorization': `Token ${this.token}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `API Error: ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-
-  async get(endpoint) {
-    return this.request(endpoint, { method: 'GET' });
-  }
-
-  async post(endpoint, data) {
-    return this.request(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async put(endpoint, data) {
-    return this.request(endpoint, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async patch(endpoint, data) {
-    return this.request(endpoint, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async delete(endpoint) {
-    return this.request(endpoint, { method: 'DELETE' });
-  }
+interface CalendarEvent {
+    id: string;
+    date: string;
+    type: 'project' | 'deadline' | 'inspection' | 'sla' | 'work_order' | 'milestone' | 
+          'vendor_evaluation' | 'payment' | 'document' | 'crew_monitoring' | 'qi_target' |
+          'pca_goal' | 'backjob' | 'escalation' | 'audit' | 'training' | 'penalty' | 
+          'invoice' | 'workflow' | 'notification';
+    title: string;
+    description: string;
+    priority: 'Critical' | 'High' | 'Medium' | 'Low';
+    status: string;
+    project_code?: string;
+    wo_number?: string;
+    vendor_name?: string;
+    assigned_to?: string;
+    days_remaining?: number;
+    is_overdue?: boolean;
+    related_entity?: string;
+    action_required?: string;
+    completion_percentage?: number;
 }
 
-const SectorManagerDashboard = () => {
-  const [state, setState] = useState({
-    user: null,
-    token: null,
-    loading: false,
-    error: null,
-    success: null,
-    isAuth: false,
-  });
+interface CalendarStats {
+    total_events: number;
+    overdue: number;
+    this_week: number;
+    by_type: Record<string, number>;
+    by_priority: Record<string, number>;
+    by_status: Record<string, number>;
+}
 
-  const [view, setView] = useState('dashboard');
-  const [data, setData] = useState(null);
-  const [modal, setModal] = useState({ show: false, type: '', item: null });
-  const [form, setForm] = useState({});
-  const [selectedTab, setSelectedTab] = useState(0);
-  const [metadata, setMetadata] = useState({
-    vendors: [],
-    sectors: [],
-    statuses: [],
-    users: [],
-    inspectionTypes: [],
-    documentTypes: [],
-  });
-  const [filters, setFilters] = useState({
-    search: '',
-    status: '',
-    priority: '',
-    vendor: '',
-    dateFrom: '',
-    dateTo: '',
-  });
+const ProjectCalendarDashboard: React.FC = () => {
+    const [events, setEvents] = useState<CalendarEvent[]>([]);
+    const [stats, setStats] = useState<CalendarStats | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [filterType, setFilterType] = useState<string>('all');
+    const [filterPriority, setFilterPriority] = useState<string>('all');
+    const [filterStatus, setFilterStatus] = useState<string>('all');
+    const [view, setView] = useState<'calendar' | 'list'>('calendar');
+    const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    const token = sessionStorage.getItem('auth_token');
-    const user = sessionStorage.getItem('user_data');
-    if (token && user) {
-      setState(p => ({ ...p, token, user: JSON.parse(user), isAuth: true }));
-      loadMetadata(token);
-      loadData('dashboard', token);
-    }
-  }, []);
+    const API_BASE_URL = 'http://localhost:8000/api/v1';
 
-  const api = state.token ? new APIService(API_BASE, state.token) : null;
+    useEffect(() => {
+        loadAllData();
+    }, []);
 
-  const loadMetadata = async (token) => {
-    const tempApi = new APIService(API_BASE, token);
-    try {
-      const [vendors, sectors, statuses, users, inspectionTypes, documentTypes] = await Promise.all([
-        tempApi.get('/api/v1/vendors/'),
-        tempApi.get('/api/v1/sectors/'),
-        tempApi.get('/api/v1/project-statuses/'),
-        tempApi.get('/api/v1/users/'),
-        tempApi.get('/api/v1/inspection-types/'),
-        tempApi.get('/api/v1/document-types/'),
-      ]);
-      setMetadata({ vendors, sectors, statuses, users, inspectionTypes, documentTypes });
-    } catch (error) {
-      console.error('Failed to load metadata:', error);
-    }
-  };
+    useEffect(() => {
+        if (events.length > 0) {
+            calculateStats();
+        }
+    }, [events, filterType, filterPriority, filterStatus]);
 
-  const showSuccess = (message) => {
-    setState(p => ({ ...p, success: message }));
-    setTimeout(() => setState(p => ({ ...p, success: null })), 3000);
-  };
+    const loadAllData = async () => {
+        setLoading(true);
+        setError(null);
 
-  const showError = (message) => {
-    setState(p => ({ ...p, error: message }));
-    setTimeout(() => setState(p => ({ ...p, error: null })), 5000);
-  };
+        try {
+            const allEvents: CalendarEvent[] = [];
 
-  const loadData = async (v, tkn = state.token) => {
-    setState(p => ({ ...p, loading: true, error: null }));
-    try {
-      const endpoints = {
-        dashboard: '/api/v1/sector-manager/dashboard/',
-        projects: '/api/v1/sector-manager/sector_projects/',
-        workorders: '/api/v1/sector-manager/sector_work_orders/',
-        team: '/api/v1/sector-manager/sector_team/',
-        vendors: '/api/v1/sector-manager/sector_vendors/',
-        budget: '/api/v1/sector-manager/sector_budget/',
-        kpis: '/api/v1/sector-manager/sector_kpis/',
-        inspections: '/api/v1/sector-manager/quality_metrics/',
-        documents: '/api/v1/project-documents/',
-        milestones: '/api/v1/project-milestones/',
-        sla: '/api/v1/sla-tracking/',
-        invoices: '/api/v1/invoices/',
-      };
-      
-      const result = await fetch(`${API_BASE}${endpoints[v] || endpoints.dashboard}`, {
-        headers: { 'Authorization': `Token ${tkn}` }
-      }).then(r => r.json());
-      
-      setData(result);
-    } catch (err) {
-      showError(err.message || 'Failed to load data');
-    } finally {
-      setState(p => ({ ...p, loading: false }));
-    }
-  };
+            // Fetch Projects
+            const projects = await fetchData(`${API_BASE_URL}/projects/`);
+            projects.forEach((project: any) => {
+                if (project.start_date) {
+                    allEvents.push({
+                        id: `project-${project.project_id}`,
+                        date: project.start_date,
+                        type: 'project',
+                        title: `Project Start: ${project.project_name}`,
+                        description: project.project_description || 'Project start date',
+                        priority: project.priority || 'Medium',
+                        status: project.status?.status_name || 'Active',
+                        project_code: project.project_code,
+                        vendor_name: project.vendor?.vendor_name,
+                        assigned_to: project.assigned_engineer?.username
+                    });
+                }
+                if (project.completion_date) {
+                    const daysRemaining = Math.floor((new Date(project.completion_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `project-deadline-${project.project_id}`,
+                        date: project.completion_date,
+                        type: 'deadline',
+                        title: `Project Deadline: ${project.project_name}`,
+                        description: 'Project completion deadline',
+                        priority: daysRemaining < 7 ? 'Critical' : project.priority || 'High',
+                        status: project.status?.status_name || 'Pending',
+                        project_code: project.project_code,
+                        days_remaining: daysRemaining,
+                        is_overdue: daysRemaining < 0
+                    });
+                }
+            });
 
-  const openModal = (type, item = null) => {
-    setModal({ show: true, type, item });
-    setForm(item || {});
-  };
+            // Fetch Work Orders
+            const workOrders = await fetchData(`${API_BASE_URL}/work-orders/`);
+            workOrders.forEach((wo: any) => {
+                if (wo.date_received_jacket_ps) {
+                    allEvents.push({
+                        id: `wo-received-${wo.id}`,
+                        date: wo.date_received_jacket_ps,
+                        type: 'work_order',
+                        title: `WO Received: ${wo.wo_no}`,
+                        description: wo.description || 'Work order received',
+                        priority: wo.priority || 'Medium',
+                        status: wo.status || 'NEW',
+                        wo_number: wo.wo_no,
+                        vendor_name: wo.vendor?.vendor_name,
+                        assigned_to: wo.supervisor?.username
+                    });
+                }
+                if (wo.date_sched) {
+                    allEvents.push({
+                        id: `wo-energized-${wo.id}`,
+                        date: wo.date_sched,
+                        type: 'work_order',
+                        title: `WO Energized: ${wo.wo_no}`,
+                        description: 'Work order energization completed',
+                        priority: 'Medium',
+                        status: wo.status || 'Completed',
+                        wo_number: wo.wo_no
+                    });
+                }
+                if (wo.date_received_by_vc) {
+                    allEvents.push({
+                        id: `wo-audit-${wo.id}`,
+                        date: wo.date_received_by_vc,
+                        type: 'audit',
+                        title: `WO For Audit: ${wo.wo_no}`,
+                        description: 'Work order ready for audit',
+                        priority: 'High',
+                        status: 'FOR AUDIT',
+                        wo_number: wo.wo_no,
+                        action_required: 'Audit required'
+                    });
+                }
+            });
 
-  const closeModal = () => {
-    setModal({ show: false, type: '', item: null });
-    setForm({});
-  };
+            // Fetch Milestones
+            const milestones = await fetchData(`${API_BASE_URL}/project-milestones/`);
+            milestones.forEach((milestone: any) => {
+                if (milestone.target_date) {
+                    const daysRemaining = Math.floor((new Date(milestone.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `milestone-${milestone.milestone_id}`,
+                        date: milestone.target_date,
+                        type: 'milestone',
+                        title: milestone.milestone_name,
+                        description: milestone.milestone_description || 'Project milestone',
+                        priority: daysRemaining < 7 ? 'High' : 'Medium',
+                        status: milestone.is_completed ? 'Completed' : 'Pending',
+                        project_code: milestone.project?.project_code,
+                        days_remaining: daysRemaining,
+                        is_overdue: !milestone.is_completed && daysRemaining < 0
+                    });
+                }
+            });
 
-  const handleSubmit = async () => {
-    if (!api) return;
-    
-    setState(p => ({ ...p, loading: true }));
-    try {
-      const endpoints = {
-        sector: modal.item ? `/api/v1/sectors/${modal.item.sector_id}/` : '/api/v1/sectors/',
-        resource: '/api/v1/project-team/',
-        note: '/api/v1/projects/',
-      };
-      
-      const method = modal.item ? 'put' : 'post';
-      await api[method](endpoints[modal.type], form);
-      
-      showSuccess(`${modal.type} ${modal.item ? 'updated' : 'created'} successfully`);
-      closeModal();
-      loadData(view);
-    } catch (err) {
-      showError(err.message || 'Operation failed');
-    } finally {
-      setState(p => ({ ...p, loading: false }));
-    }
-  };
+            // Fetch QI Inspections
+            const inspections = await fetchData(`${API_BASE_URL}/qi-inspections/`);
+            inspections.forEach((inspection: any) => {
+                if (inspection.scheduled_date) {
+                    const daysRemaining = Math.floor((new Date(inspection.scheduled_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `inspection-${inspection.inspection_id}`,
+                        date: inspection.scheduled_date,
+                        type: 'inspection',
+                        title: `QI Inspection: ${inspection.inspection_type?.inspection_name || 'Inspection'}`,
+                        description: inspection.findings || 'Quality inspection scheduled',
+                        priority: daysRemaining < 3 ? 'High' : 'Medium',
+                        status: inspection.is_completed ? 'Completed' : 'Scheduled',
+                        project_code: inspection.project?.project_code,
+                        assigned_to: inspection.assigned_qi?.username,
+                        days_remaining: daysRemaining,
+                        is_overdue: !inspection.is_completed && daysRemaining < 0
+                    });
+                }
+            });
 
-  const generateReport = async (reportType) => {
-    if (!api) return;
-    
-    setState(p => ({ ...p, loading: true }));
-    try {
-      const report = await api.post('/api/v1/sector-manager/generate_report/', {
-        report_type: reportType,
-        filters: filters,
-      });
-      
-      showSuccess('Report generated successfully');
-      // Handle report download or display
-      console.log('Report data:', report);
-    } catch (err) {
-      showError(err.message || 'Report generation failed');
-    } finally {
-      setState(p => ({ ...p, loading: false }));
-    }
-  };
+            // Fetch SLA Tracking
+            const slaTracking = await fetchData(`${API_BASE_URL}/sla-tracking/`);
+            slaTracking.forEach((sla: any) => {
+                if (sla.due_date) {
+                    const daysRemaining = Math.floor((new Date(sla.due_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `sla-${sla.sla_tracking_id}`,
+                        date: sla.due_date,
+                        type: 'sla',
+                        title: `SLA: ${sla.sla_rule?.rule_name || 'SLA Deadline'}`,
+                        description: sla.sla_rule?.rule_description || 'SLA compliance deadline',
+                        priority: daysRemaining < 2 ? 'Critical' : 'High',
+                        status: sla.status || 'Open',
+                        project_code: sla.project?.project_code,
+                        days_remaining: daysRemaining,
+                        is_overdue: sla.is_breached || daysRemaining < 0,
+                        action_required: daysRemaining < 2 ? 'Immediate action required' : undefined
+                    });
+                }
+            });
 
-  const renderDashboard = () => (
-    <div>
-      <div style={styles.statsGrid}>
-        {[
-          { icon: Briefcase, label: 'Sector Projects', value: data?.stats?.total_projects || 0, color: '#4299e1' },
-          { icon: Activity, label: 'Active Projects', value: data?.stats?.active_projects || 0, color: '#48bb78' },
-          { icon: FileCheck, label: 'Work Orders', value: data?.stats?.work_orders || 0, color: '#ed8936' },
-          { icon: Users, label: 'Team Members', value: data?.stats?.team_members || 0, color: '#9f7aea' },
-          { icon: Package, label: 'Sector Vendors', value: data?.stats?.sector_vendors || 0, color: '#38b2ac' },
-          { icon: Target, label: 'Milestones Due', value: data?.stats?.milestones_due || 0, color: '#f56565' },
-          { icon: DollarSign, label: 'Sector Budget', value: `₱${(data?.stats?.sector_budget || 0).toLocaleString()}`, color: '#ed8936' },
-          { icon: CheckCircle, label: 'SLA Compliance', value: `${data?.stats?.sla_compliance || 0}%`, color: '#48bb78' },
-        ].map((stat, i) => (
-          <div key={i} style={styles.statCard}>
-            <stat.icon size={40} color={stat.color} style={{ margin: '0 auto 1rem' }} />
-            <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#fff', marginBottom: '0.5rem' }}>
-              {stat.value}
-            </div>
-            <div style={{ color: '#a0aec0', fontWeight: '600' }}>{stat.label}</div>
-          </div>
-        ))}
-      </div>
+            // Fetch Vendor Performance
+            const vendorPerformance = await fetchData(`${API_BASE_URL}/vendor-performance/`);
+            vendorPerformance.forEach((perf: any) => {
+                if (perf.evaluation_date) {
+                    allEvents.push({
+                        id: `vendor-eval-${perf.id}`,
+                        date: perf.evaluation_date,
+                        type: 'vendor_evaluation',
+                        title: `Vendor Evaluation: ${perf.vendor?.vendor_name || 'Vendor'}`,
+                        description: `Overall Rating: ${perf.overall_rating || 'N/A'}`,
+                        priority: 'Medium',
+                        status: 'Completed',
+                        vendor_name: perf.vendor?.vendor_name
+                    });
+                }
+            });
 
-      <div style={styles.card}>
-        <h2 style={{ fontSize: '1.75rem', fontWeight: '700', color: '#fff', marginBottom: '1.5rem' }}>
-          Sector Manager Functions
-        </h2>
-        <div style={styles.featureGrid}>
-          {[
-            { icon: Building2, label: 'Sector Management', desc: 'Manage sector information and resource allocation', view: 'sector', color: '#4299e1' },
-            { icon: Briefcase, label: 'Sector Projects', desc: 'View and monitor all sector projects', view: 'projects', color: '#48bb78' },
-            { icon: FileCheck, label: 'Work Orders', desc: 'Track sector work orders and progress', view: 'workorders', color: '#ed8936' },
-            { icon: Users, label: 'Team Coordination', desc: 'Manage sector team members and assignments', view: 'team', color: '#9f7aea' },
-            { icon: Package, label: 'Vendor Coordination', desc: 'Monitor vendor performance and compliance', view: 'vendors', color: '#38b2ac' },
-            { icon: DollarSign, label: 'Budget Tracking', desc: 'Track sector budget and project costs', view: 'budget', color: '#f56565' },
-            { icon: BarChart3, label: 'Sector KPIs', desc: 'Monitor sector key performance indicators', view: 'kpis', color: '#4299e1' },
-            { icon: Award, label: 'Quality Metrics', desc: 'Review inspection results and quality metrics', view: 'inspections', color: '#48bb78' },
-            { icon: FileText, label: 'Documents', desc: 'Review and manage project documents', view: 'documents', color: '#ed8936' },
-            { icon: Target, label: 'Milestones', desc: 'Track project milestones and timelines', view: 'milestones', color: '#9f7aea' },
-            { icon: Clock, label: 'SLA Compliance', desc: 'Monitor SLA compliance across sector', view: 'sla', color: '#38b2ac' },
-            { icon: FileText, label: 'Reports', desc: 'Generate sector performance reports', view: 'reports', color: '#f56565' },
-          ].map((feature, i) => (
-            <button
-              key={i}
-              onClick={() => { setView(feature.view); loadData(feature.view); }}
-              style={{ ...styles.featureCard, border: `3px solid ${feature.color}` }}
-            >
-              <feature.icon size={48} color={feature.color} style={{ marginBottom: '1rem' }} />
-              <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#fff', marginBottom: '0.5rem' }}>
-                {feature.label}
-              </div>
-              <div style={{ color: '#a0aec0', lineHeight: '1.5' }}>{feature.desc}</div>
-            </button>
-          ))}
-        </div>
-      </div>
+            // Fetch Invoices
+            const invoices = await fetchData(`${API_BASE_URL}/invoices/`);
+            invoices.forEach((invoice: any) => {
+                if (invoice.due_date) {
+                    const daysRemaining = Math.floor((new Date(invoice.due_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `invoice-${invoice.id}`,
+                        date: invoice.due_date,
+                        type: 'invoice',
+                        title: `Invoice Due: ${invoice.invoice_number}`,
+                        description: `Amount: $${invoice.net_amount}`,
+                        priority: daysRemaining < 5 ? 'High' : 'Medium',
+                        status: invoice.payment_status || 'Unpaid',
+                        vendor_name: invoice.vendor?.vendor_name,
+                        days_remaining: daysRemaining,
+                        is_overdue: invoice.payment_status === 'Overdue' || daysRemaining < 0
+                    });
+                }
+            });
 
-      {data?.recent_activity && (
-        <div style={styles.card}>
-          <h3 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#fff', marginBottom: '1rem' }}>
-            Recent Sector Activity
-          </h3>
-          {data.recent_activity.map((activity, i) => (
-            <div key={i} style={{...styles.detailCard, marginBottom: '0.75rem'}}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ color: '#fff', fontWeight: '600', marginBottom: '0.25rem' }}>{activity.description}</div>
-                  <div style={{ color: '#a0aec0', fontSize: '0.875rem' }}>{activity.timestamp}</div>
-                </div>
-                <span style={{
-                  ...styles.badge,
-                  backgroundColor: activity.type === 'success' ? '#22543d' : activity.type === 'warning' ? '#7c2d12' : '#1e3a8a',
-                  color: activity.type === 'success' ? '#9ae6b4' : activity.type === 'warning' ? '#fbd38d' : '#90cdf4'
-                }}>
-                  {activity.type}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+            // Fetch Payments
+            const payments = await fetchData(`${API_BASE_URL}/payments/`);
+            payments.forEach((payment: any) => {
+                if (payment.payment_date) {
+                    allEvents.push({
+                        id: `payment-${payment.id}`,
+                        date: payment.payment_date,
+                        type: 'payment',
+                        title: `Payment: ${payment.invoice?.invoice_number || 'Payment'}`,
+                        description: `Amount: $${payment.payment_amount}`,
+                        priority: 'Low',
+                        status: 'Completed',
+                        vendor_name: payment.invoice?.vendor?.vendor_name
+                    });
+                }
+            });
 
-      {data?.sector_alerts && (
-        <div style={styles.card}>
-          <h3 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <AlertTriangle size={24} color="#ed8936" />
-            Sector Alerts & Notifications
-          </h3>
-          {data.sector_alerts.map((alert, i) => (
-            <div key={i} style={{...styles.detailCard, marginBottom: '0.75rem', borderLeft: `4px solid ${alert.priority === 'high' ? '#f56565' : '#ed8936'}`}}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: '#fff', fontWeight: '700', marginBottom: '0.5rem' }}>{alert.title}</div>
-                  <div style={{ color: '#cbd5e1', fontSize: '0.95rem' }}>{alert.message}</div>
-                </div>
-                <button
-                  style={{ ...styles.button, ...styles.buttonPrimary, padding: '0.5rem 1rem' }}
-                  onClick={() => setView(alert.action_view)}
+            // Fetch Document Compliance
+            const docCompliance = await fetchData(`${API_BASE_URL}/document-compliance/`);
+            docCompliance.forEach((doc: any) => {
+                if (doc.due_date) {
+                    const daysRemaining = Math.floor((new Date(doc.due_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `doc-${doc.compliance_id}`,
+                        date: doc.due_date,
+                        type: 'document',
+                        title: `Document Due: ${doc.doc_type?.doc_type_name || 'Document'}`,
+                        description: 'Document submission deadline',
+                        priority: daysRemaining < 3 ? 'High' : 'Medium',
+                        status: doc.is_submitted ? 'Submitted' : 'Pending',
+                        project_code: doc.project?.project_code,
+                        days_remaining: daysRemaining,
+                        is_overdue: doc.is_overdue || daysRemaining < 0,
+                        action_required: !doc.is_submitted ? 'Submission required' : undefined
+                    });
+                }
+            });
+
+            // Fetch Penalties
+            const penalties = await fetchData(`${API_BASE_URL}/penalties/`);
+            penalties.forEach((penalty: any) => {
+                if (penalty.violation_date) {
+                    allEvents.push({
+                        id: `penalty-${penalty.id}`,
+                        date: penalty.violation_date,
+                        type: 'penalty',
+                        title: `Penalty: ${penalty.penalty_rule?.rule_name || 'Penalty'}`,
+                        description: `Amount: $${penalty.penalty_amount}`,
+                        priority: 'High',
+                        status: penalty.penalty_status || 'Draft',
+                        project_code: penalty.project?.project_code,
+                        vendor_name: penalty.vendor?.vendor_name
+                    });
+                }
+            });
+
+            // Fetch Escalations
+            const escalations = await fetchData(`${API_BASE_URL}/escalations/`);
+            escalations.forEach((esc: any) => {
+                if (esc.escalation_date) {
+                    allEvents.push({
+                        id: `escalation-${esc.id}`,
+                        date: esc.escalation_date.split('T')[0],
+                        type: 'escalation',
+                        title: `Escalation: ${esc.escalation_rule?.rule_name || 'Issue'}`,
+                        description: esc.escalation_reason || 'Project escalation',
+                        priority: 'Critical',
+                        status: esc.status || 'Open',
+                        project_code: esc.project?.project_code,
+                        action_required: esc.status === 'Open' ? 'Resolution required' : undefined
+                    });
+                }
+            });
+
+            // Fetch Backjobs
+            const backjobs = await fetchData(`${API_BASE_URL}/backjob-monitoring/`);
+            backjobs.forEach((backjob: any) => {
+                if (backjob.target_resolution_date) {
+                    const daysRemaining = Math.floor((new Date(backjob.target_resolution_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    allEvents.push({
+                        id: `backjob-${backjob.id}`,
+                        date: backjob.target_resolution_date,
+                        type: 'backjob',
+                        title: `Backjob: ${backjob.issue_category || 'Issue'}`,
+                        description: backjob.issue_description || 'Backjob resolution required',
+                        priority: backjob.is_overdue ? 'Critical' : 'High',
+                        status: backjob.status || 'PENDING',
+                        wo_number: backjob.work_order?.wo_no,
+                        days_remaining: daysRemaining,
+                        is_overdue: backjob.is_overdue || daysRemaining < 0,
+                        action_required: 'Resolution required'
+                    });
+                }
+            });
+
+            // Fetch QI Daily Targets
+            const qiTargets = await fetchData(`${API_BASE_URL}/qi-daily-targets/`);
+            qiTargets.forEach((target: any) => {
+                if (target.target_date) {
+                    allEvents.push({
+                        id: `qi-target-${target.id}`,
+                        date: target.target_date,
+                        type: 'qi_target',
+                        title: `QI Target: ${target.qi_user?.username || 'QI'}`,
+                        description: `Target: ${target.target_audits} audits`,
+                        priority: target.target_met ? 'Low' : 'Medium',
+                        status: target.target_met ? 'Met' : 'Pending',
+                        assigned_to: target.qi_user?.username
+                    });
+                }
+            });
+
+            // Fetch Notifications
+            const notifications = await fetchData(`${API_BASE_URL}/notifications/`);
+            notifications.forEach((notif: any) => {
+                if (notif.sent_at) {
+                    allEvents.push({
+                        id: `notification-${notif.id}`,
+                        date: notif.sent_at.split('T')[0],
+                        type: 'notification',
+                        title: notif.subject || 'Notification',
+                        description: notif.message || 'System notification',
+                        priority: 'Low',
+                        status: notif.status || 'Sent'
+                    });
+                }
+            });
+
+            setEvents(allEvents);
+        } catch (err) {
+            console.error('Error loading calendar data:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load calendar data');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchData = async (url: string) => {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                console.warn(`Failed to fetch from ${url}: ${response.status}`);
+                return [];
+            }
+            const data = await response.json();
+            return Array.isArray(data) ? data : data.results || [];
+        } catch (error) {
+            console.warn(`Error fetching from ${url}:`, error);
+            return [];
+        }
+    };
+
+    const calculateStats = () => {
+        const filtered = getFilteredEvents();
+        
+        const statsByType: Record<string, number> = {};
+        const statsByPriority: Record<string, number> = {
+            Critical: 0,
+            High: 0,
+            Medium: 0,
+            Low: 0
+        };
+        const statsByStatus: Record<string, number> = {
+            pending: 0,
+            in_progress: 0,
+            completed: 0,
+            overdue: 0
+        };
+
+        let overdueCount = 0;
+        let thisWeekCount = 0;
+        const weekFromNow = new Date();
+        weekFromNow.setDate(weekFromNow.getDate() + 7);
+
+        filtered.forEach(event => {
+            statsByType[event.type] = (statsByType[event.type] || 0) + 1;
+            statsByPriority[event.priority] = (statsByPriority[event.priority] || 0) + 1;
+
+            if (event.is_overdue) {
+                overdueCount++;
+                statsByStatus.overdue++;
+            } else if (event.status.toLowerCase().includes('complet')) {
+                statsByStatus.completed++;
+            } else if (event.status.toLowerCase().includes('progress')) {
+                statsByStatus.in_progress++;
+            } else {
+                statsByStatus.pending++;
+            }
+
+            const eventDate = new Date(event.date);
+            if (eventDate >= new Date() && eventDate <= weekFromNow) {
+                thisWeekCount++;
+            }
+        });
+
+        setStats({
+            total_events: filtered.length,
+            overdue: overdueCount,
+            this_week: thisWeekCount,
+            by_type: statsByType,
+            by_priority: statsByPriority,
+            by_status: statsByStatus
+        });
+    };
+
+    const getFilteredEvents = () => {
+        return events.filter(event => {
+            const matchesType = filterType === 'all' || event.type === filterType;
+            const matchesPriority = filterPriority === 'all' || event.priority === filterPriority;
+            const matchesStatus = filterStatus === 'all' || 
+                (filterStatus === 'overdue' && event.is_overdue) ||
+                event.status.toLowerCase().includes(filterStatus.toLowerCase());
+            const matchesSearch = searchQuery === '' || 
+                event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (event.project_code && event.project_code.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (event.wo_number && event.wo_number.toLowerCase().includes(searchQuery.toLowerCase()));
+            
+            return matchesType && matchesPriority && matchesStatus && matchesSearch;
+        });
+    };
+
+    const getDaysInMonth = (date: Date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startingDayOfWeek = firstDay.getDay();
+        return { daysInMonth, startingDayOfWeek, year, month };
+    };
+
+    const getEventsForDate = (date: Date) => {
+        const dateStr = date.toISOString().split('T')[0];
+        return getFilteredEvents().filter(event => event.date === dateStr);
+    };
+
+    const navigateMonth = (direction: 'prev' | 'next') => {
+        setCurrentDate(prev => {
+            const newDate = new Date(prev);
+            if (direction === 'prev') {
+                newDate.setMonth(prev.getMonth() - 1);
+            } else {
+                newDate.setMonth(prev.getMonth() + 1);
+            }
+            return newDate;
+        });
+    };
+
+    const goToToday = () => {
+        setCurrentDate(new Date());
+        setSelectedDate(null);
+    };
+
+    const getEventIcon = (type: string) => {
+        const iconMap: Record<string, any> = {
+            project: Flag,
+            deadline: Clock,
+            sla: AlertTriangle,
+            inspection: CheckCircle,
+            work_order: Wrench,
+            milestone: Target,
+            vendor_evaluation: Users,
+            payment: DollarSign,
+            document: FileText,
+            crew_monitoring: Users,
+            qi_target: Shield,
+            pca_goal: Target,
+            backjob: AlertCircle,
+            escalation: TrendingUp,
+            audit: FileCheck,
+            penalty: XCircle,
+            invoice: DollarSign,
+            workflow: Activity,
+            notification: Bell,
+            training: UserCheck
+        };
+        return iconMap[type] || CircleDot;
+    };
+
+    const getEventColor = (type: string) => {
+        const colors: Record<string, any> = {
+            project: { bg: '#9333ea', light: '#f3e8ff', text: '#581c87', border: '#c084fc' },
+            deadline: { bg: '#f97316', light: '#ffedd5', text: '#9a3412', border: '#fb923c' },
+            sla: { bg: '#dc2626', light: '#fee2e2', text: '#991b1b', border: '#f87171' },
+            inspection: { bg: '#3b82f6', light: '#dbeafe', text: '#1e40af', border: '#60a5fa' },
+            work_order: { bg: '#0891b2', light: '#cffafe', text: '#155e75', border: '#22d3ee' },
+            milestone: { bg: '#8b5cf6', light: '#ede9fe', text: '#5b21b6', border: '#a78bfa' },
+            vendor_evaluation: { bg: '#ec4899', light: '#fce7f3', text: '#9f1239', border: '#f472b6' },
+            payment: { bg: '#10b981', light: '#d1fae5', text: '#065f46', border: '#34d399' },
+            document: { bg: '#6366f1', light: '#e0e7ff', text: '#3730a3', border: '#818cf8' },
+            crew_monitoring: { bg: '#f59e0b', light: '#fef3c7', text: '#92400e', border: '#fbbf24' },
+            qi_target: { bg: '#14b8a6', light: '#ccfbf1', text: '#134e4a', border: '#2dd4bf' },
+            pca_goal: { bg: '#a855f7', light: '#f3e8ff', text: '#6b21a8', border: '#c084fc' },
+            backjob: { bg: '#ef4444', light: '#fee2e2', text: '#991b1b', border: '#f87171' },
+            escalation: { bg: '#f43f5e', light: '#ffe4e6', text: '#9f1239', border: '#fb7185' },
+            audit: { bg: '#06b6d4', light: '#cffafe', text: '#155e75', border: '#22d3ee' },
+            penalty: { bg: '#b91c1c', light: '#fee2e2', text: '#7f1d1d', border: '#dc2626' },
+            invoice: { bg: '#059669', light: '#d1fae5', text: '#065f46', border: '#10b981' },
+            workflow: { bg: '#7c3aed', light: '#ede9fe', text: '#5b21b6', border: '#8b5cf6' },
+            notification: { bg: '#64748b', light: '#f1f5f9', text: '#334155', border: '#94a3b8' }
+        };
+        return colors[type] || colors.project;
+    };
+
+    const getPriorityColor = (priority: string, isOverdue: boolean) => {
+        if (isOverdue) return { bg: '#fef2f2', text: '#991b1b', border: '#fca5a5' };
+        const colors: Record<string, any> = {
+            Critical: { bg: '#fef2f2', text: '#991b1b', border: '#fca5a5' },
+            High: { bg: '#fff7ed', text: '#9a3412', border: '#fdba74' },
+            Medium: { bg: '#eff6ff', text: '#1e40af', border: '#93c5fd' },
+            Low: { bg: '#f9fafb', text: '#374151', border: '#d1d5db' }
+        };
+        return colors[priority] || colors.Low;
+    };
+
+    const renderCalendarView = () => {
+        const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentDate);
+        const days = [];
+        const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+        for (let i = 0; i < startingDayOfWeek; i++) {
+            days.push(
+                <div 
+                    key={`empty-${i}`} 
+                    style={{
+                        minHeight: '140px',
+                        backgroundColor: '#f9fafb',
+                        border: '1px solid #e5e7eb'
+                    }}
+                />
+            );
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const currentDateObj = new Date(year, month, day);
+            const dayEvents = getEventsForDate(currentDateObj);
+            const isToday = currentDateObj.toDateString() === new Date().toDateString();
+            const isSelected = selectedDate && currentDateObj.toDateString() === selectedDate.toDateString();
+            const hasOverdue = dayEvents.some(e => e.is_overdue);
+
+            days.push(
+                <div
+                    key={day}
+                    onClick={() => setSelectedDate(currentDateObj)}
+                    style={{
+                        minHeight: '140px',
+                        border: isToday ? '3px solid #3b82f6' : '1px solid #e5e7eb',
+                        backgroundColor: isToday ? '#eff6ff' : '#ffffff',
+                        padding: '8px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: isSelected ? '0 0 0 3px rgba(59, 130, 246, 0.5)' : 'none',
+                        position: 'relative',
+                        borderTop: hasOverdue ? '4px solid #dc2626' : undefined
+                    }}
+                    onMouseEnter={(e) => {
+                        if (!isSelected) e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                        if (!isSelected) e.currentTarget.style.boxShadow = 'none';
+                    }}
                 >
-                  View
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
-  const renderProjects = () => (
-    <div style={styles.card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <h2 style={{ fontSize: '1.75rem', fontWeight: '700', color: '#fff' }}>
-          Sector Projects
-        </h2>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button
-            onClick={() => generateReport('projects')}
-            style={{ ...styles.button, ...styles.buttonSuccess }}
-          >
-            <Download size={18} />
-            Export Report
-          </button>
-          <button
-            onClick={() => setView('dashboard')}
-            style={{ ...styles.button, ...styles.buttonSecondary }}
-          >
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
-
-      <div style={styles.searchBar}>
-        <div style={{ flex: 1, minWidth: '250px' }}>
-          <input
-            type="text"
-            placeholder="Search projects..."
-            style={{ ...styles.input }}
-            value={filters.search}
-            onChange={(e) => setFilters({...filters, search: e.target.value})}
-          />
-        </div>
-        <select
-          style={{ ...styles.select, minWidth: '150px' }}
-          value={filters.status}
-          onChange={(e) => setFilters({...filters, status: e.target.value})}
-        >
-          <option value="">All Status</option>
-          {metadata.statuses.map(s => (
-            <option key={s.status_id} value={s.status_id}>{s.status_name}</option>
-          ))}
-        </select>
-        <select
-          style={{ ...styles.select, minWidth: '150px' }}
-          value={filters.vendor}
-          onChange={(e) => setFilters({...filters, vendor: e.target.value})}
-        >
-          <option value="">All Vendors</option>
-          {metadata.vendors.map(v => (
-            <option key={v.vendor_id} value={v.vendor_id}>{v.vendor_name}</option>
-          ))}
-        </select>
-        <button
-          onClick={() => loadData('projects')}
-          style={{ ...styles.iconButton, backgroundColor: '#4299e1', padding: '0.75rem' }}
-        >
-          <RefreshCw size={18} color="#fff" />
-        </button>
-      </div>
-
-      <div style={styles.tabs}>
-        {['All Projects', 'Active', 'On Track', 'At Risk', 'Delayed', 'Completed'].map((tab, idx) => (
-          <button
-            key={idx}
-            onClick={() => setSelectedTab(idx)}
-            style={{
-              ...styles.tab,
-              ...(selectedTab === idx ? styles.tabActive : {})
-            }}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {state.loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
-          <div style={styles.spinner} />
-        </div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Project Code</th>
-                <th style={styles.th}>Project Name</th>
-                <th style={styles.th}>Vendor</th>
-                <th style={styles.th}>Status</th>
-                <th style={styles.th}>Progress</th>
-                <th style={styles.th}>Budget</th>
-                <th style={styles.th}>Timeline</th>
-                <th style={styles.th}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.projects?.map((p) => (
-                <tr key={p.project_id}>
-                  <td style={styles.td}>{p.project_code}</td>
-                  <td style={styles.td}>{p.project_name}</td>
-                  <td style={styles.td}>{p.vendor?.vendor_name || 'N/A'}</td>
-                  <td style={styles.td}>
-                    <span style={{
-                      ...styles.badge,
-                      backgroundColor: p.is_delayed ? '#742a2a' : '#22543d',
-                      color: p.is_delayed ? '#fc8181' : '#9ae6b4'
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '8px'
                     }}>
-                      {p.status?.status_name || 'N/A'}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={{ width: '100%', backgroundColor: '#4a5568', borderRadius: '8px', height: '8px' }}>
-                      <div style={{
-                        width: `${p.progress || 0}%`,
-                        backgroundColor: p.progress > 75 ? '#48bb78' : p.progress > 50 ? '#ed8936' : '#f56565',
-                        height: '100%',
-                        borderRadius: '8px',
-                        transition: 'width 0.3s ease'
-                      }} />
+                        <div style={{
+                            fontSize: '14px',
+                            fontWeight: '700',
+                            color: isToday ? '#1e40af' : '#374151'
+                        }}>
+                            {day}
+                        </div>
+                        {dayEvents.length > 0 && (
+                            <div style={{
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                backgroundColor: '#3b82f6',
+                                color: '#ffffff',
+                                padding: '2px 6px',
+                                borderRadius: '9999px',
+                                minWidth: '20px',
+                                textAlign: 'center'
+                            }}>
+                                {dayEvents.length}
+                            </div>
+                        )}
                     </div>
-                    <span style={{ fontSize: '0.875rem', color: '#a0aec0' }}>{p.progress || 0}%</span>
-                  </td>
-                  <td style={styles.td}>₱{(p.contract_value || 0).toLocaleString()}</td>
-                  <td style={styles.td}>
-                    <div style={{ fontSize: '0.875rem' }}>
-                      <div style={{ color: '#cbd5e1' }}>Start: {p.start_date || 'N/A'}</div>
-                      <div style={{ color: '#cbd5e1' }}>End: {p.completion_date || 'N/A'}</div>
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '4px',
+                        maxHeight: '90px',
+                        overflowY: 'auto'
+                    }}>
+                        {dayEvents.slice(0, 3).map((event, idx) => {
+                            const colors = getEventColor(event.type);
+                            const Icon = getEventIcon(event.type);
+                            return (
+                                <div
+                                    key={idx}
+                                    style={{
+                                        fontSize: '11px',
+                                        padding: '6px 8px',
+                                        borderRadius: '6px',
+                                        backgroundColor: colors.bg,
+                                        color: '#ffffff',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                    }}
+                                    title={`${event.title} - ${event.description}`}
+                                >
+                                    <Icon size={12} color="#ffffff" style={{ flexShrink: 0 }} />
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: '500' }}>
+                                        {event.title}
+                                    </span>
+                                    {event.is_overdue && (
+                                        <AlertTriangle size={12} color="#ffffff" style={{ flexShrink: 0 }} />
+                                    )}
+                                </div>
+                            );
+                        })}
+                        {dayEvents.length > 3 && (
+                            <div style={{
+                                fontSize: '11px',
+                                color: '#6b7280',
+                                fontWeight: '600',
+                                paddingLeft: '8px'
+                            }}>
+                                +{dayEvents.length - 3} more
+                            </div>
+                        )}
                     </div>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={styles.actionButtons}>
-                      <button
-                        onClick={() => openModal('note', p)}
-                        style={{ ...styles.iconButton, backgroundColor: '#4299e1' }}
-                        title="Add Note"
-                      >
-                        <MessageSquare size={16} color="#fff" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderWorkOrders = () => (
-    <div style={styles.card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <h2 style={{ fontSize: '1.75rem', fontWeight: '700', color: '#fff' }}>
-          Sector Work Orders
-        </h2>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button
-            onClick={() => generateReport('workorders')}
-            style={{ ...styles.button, ...styles.buttonSuccess }}
-          >
-            <Download size={18} />
-            Export
-          </button>
-          <button
-            onClick={() => setView('dashboard')}
-            style={{ ...styles.button, ...styles.buttonSecondary }}
-          >
-            Back
-          </button>
-        </div>
-      </div>
-
-      <div style={styles.tabs}>
-        {['All', 'New', 'For Audit', 'Audited', 'Delayed', 'Completed'].map((tab, idx) => (
-          <button
-            key={idx}
-            onClick={() => setSelectedTab(idx)}
-            style={{ ...styles.tab, ...(selectedTab === idx ? styles.tabActive : {}) }}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ overflowX: 'auto' }}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>WO No.</th>
-              <th style={styles.th}>Description</th>
-              <th style={styles.th}>Location</th>
-              <th style={styles.th}>Vendor</th>
-              <th style={styles.th}>Supervisor</th>
-              <th style={styles.th}>Status</th>
-              <th style={styles.th}>Days Open</th>
-              <th style={styles.th}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.work_orders?.map((wo) => (
-              <tr key={wo.wo_id}>
-                <td style={styles.td}>{wo.wo_no}</td>
-                <td style={styles.td}>{wo.description}</td>
-                <td style={styles.td}>{wo.location}</td>
-                <td style={styles.td}>{wo.vendor?.vendor_name || 'N/A'}</td>
-                <td style={styles.td}>{wo.supervisor?.first_name || 'N/A'}</td>
-                <td style={styles.td}>
-                  <span style={{
-                    ...styles.badge,
-                    backgroundColor: wo.is_delayed ? '#742a2a' : '#1e3a8a',
-                    color: wo.is_delayed ? '#fc8181' : '#90cdf4'
-                  }}>
-                    {wo.status}
-                  </span>
-                </td>
-                <td style={styles.td}>
-                  <span style={{ color: wo.total_resolution_days > 60 ? '#fc8181' : '#9ae6b4' }}>
-                    {wo.total_resolution_days || 0} days
-                  </span>
-                </td>
-                <td style={styles.td}>
-                  <button
-                    onClick={() => openModal('view', wo)}
-                    style={{ ...styles.iconButton, backgroundColor: '#5a67d8' }}
-                  >
-                    <Eye size={16} color="#fff" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
-  const renderTeam = () => (
-    <div style={styles.card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.75rem', fontWeight: '700', color: '#fff' }}>
-          Sector Team Management
-        </h2>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button
-            onClick={() => openModal('resource')}
-            style={{ ...styles.button, ...styles.buttonPrimary }}
-          >
-            <Plus size={18} />
-            Assign Resource
-          </button>
-          <button
-            onClick={() => setView('dashboard')}
-            style={{ ...styles.button, ...styles.buttonSecondary }}
-          >
-            Back
-          </button>
-        </div>
-      </div>
-
-      <div style={styles.tabs}>
-        {['All Team', 'Engineers', 'Supervisors', 'QI Inspectors', 'Support Staff'].map((tab, idx) => (
-          <button
-            key={idx}
-            onClick={() => setSelectedTab(idx)}
-            style={{ ...styles.tab, ...(selectedTab === idx ? styles.tabActive : {}) }}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      <div style={styles.statsGrid}>
-        {[
-          { label: 'Total Team Members', value: data?.team_stats?.total || 0, color: '#4299e1' },
-          { label: 'Active Members', value: data?.team_stats?.active || 0, color: '#48bb78' },
-          { label: 'Projects Assigned', value: data?.team_stats?.projects || 0, color: '#ed8936' },
-          { label: 'Avg Workload', value: `${data?.team_stats?.avg_workload || 0}%`, color: '#9f7aea' },
-        ].map((stat, i) => (
-          <div key={i} style={{...styles.statCard, textAlign: 'left'}}>
-            <div style={{ fontSize: '2rem', fontWeight: '800', color: stat.color, marginBottom: '0.5rem' }}>
-              {stat.value}
-            </div>
-            <div style={{ color: '#a0aec0', fontWeight: '600' }}>{stat.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {data?.team_members?.map((member) => (
-        <div key={member.user_id} style={styles.detailCard}>
-          <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1 }}>
-              <h4 style={{ color: '#fff', fontWeight: '700', marginBottom: '0.5rem', fontSize: '1.125rem' }}>
-                {member.first_name} {member.last_name}
-              </h4>
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                <span style={{ color: '#a0aec0', fontSize: '0.95rem' }}>
-                  <UserCheck size={16} style={{ display: 'inline', marginRight: '0.25rem' }} />
-                  {member.role?.role_name}
-                </span>
-                <span style={{ color: '#a0aec0', fontSize: '0.95rem' }}>
-                  <Briefcase size={16} style={{ display: 'inline', marginRight: '0.25rem' }} />
-                  {member.assigned_projects || 0} Projects
-                </span>
-              </div>
-              <div style={{ color: '#cbd5e1', fontSize: '0.875rem' }}>
-                Email: {member.email} | Phone: {member.phone_number}
-              </div>
-            </div>
-            <div style={styles.actionButtons}>
-              <button
-                onClick={() => openModal('view', member)}
-                style={{ ...styles.button, ...styles.buttonPrimary }}
-              >
-                <Eye size={16} />
-                View Details
-              </button>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-
-  const renderVendors = () => (
-    <div style={styles.card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.75rem', fontWeight: '700', color: '#fff' }}>
-          Sector Vendor Performance
-        </h2>
-        <button
-          onClick={() => setView('dashboard')}
-          style={{ ...styles.button, ...styles.buttonSecondary }}
-        >
-          Back
-        </button>
-      </div>
-
-      <div style={styles.statsGrid}>
-        {[
-          { label: 'Active Vendors', value: data?.vendor_stats?.active || 0, color: '#4299e1' },
-          { label: 'Avg Compliance', value: `${data?.vendor_stats?.avg_compliance || 0}%`, color: '#48bb78' },
-          { label: 'On-time Rate', value: `${data?.vendor_stats?.ontime_rate || 0}%`, color: '#ed8936' },
-          { label: 'Quality Score', value: `${data?.vendor_stats?.quality_score || 0}%`, color: '#9f7aea' },
-        ].map((stat, i) => (
-          <div key={i} style={{...styles.statCard, textAlign: 'left'}}>
-            <div style={{ fontSize: '2rem', fontWeight: '800', color: stat.color, marginBottom: '0.5rem' }}>
-              {stat.value}
-            </div>
-            <div style={{ color: '#a0aec0', fontWeight: '600' }}>{stat.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {data?.vendors?.map((vendor) => (
-        <div key={vendor.vendor_id} style={styles.detailCard}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1 }}>
-              <h4 style={{ color: '#fff', fontWeight: '700', marginBottom: '0.5rem', fontSize: '1.125rem' }}>
-                {vendor.vendor_code} - {vendor.vendor_name}
-              </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
-                <div>
-                  <div style={{ color: '#a0aec0', fontSize: '0.875rem' }}>Compliance Score</div>
-                  <div style={{ color: '#48bb78', fontWeight: '700', fontSize: '1.25rem' }}>
-                    {vendor.compliance_score}%
-                  </div>
                 </div>
-                <div>
-                  <div style={{ color: '#a0aec0', fontSize: '0.875rem' }}>Active Projects</div>
-                  <div style={{ color: '#4299e1', fontWeight: '700', fontSize: '1.25rem' }}>
-                    {vendor.active_projects || 0}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ color: '#a0aec0', fontSize: '0.875rem' }}>On-time Rate</div>
-                  <div style={{ color: '#ed8936', fontWeight: '700', fontSize: '1.25rem' }}>
-                    {vendor.ontime_rate || 0}%
-                  </div>
-                </div>
-                <div>
-                  <div style={{ color: '#a0aec0', fontSize: '0.875rem' }}>Quality Score</div>
-                  <div style={{ color: '#9f7aea', fontWeight: '700', fontSize: '1.25rem' }}>
-                    {vendor.quality_score || 0}%
-                  </div>
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => openModal('view', vendor)}
-              style={{ ...styles.button, ...styles.buttonPrimary }}
-            >
-              <Eye size={16} />
-              View Details
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+            );
+        }
 
-  const renderBudget = () => (
-    <div style={styles.card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.75rem', fontWeight: '700', color: '#fff' }}>
-          Sector Budget & Cost Tracking
-        </h2>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button
-            onClick={() => generateReport('budget')}
-            style={{ ...styles.button, ...styles.buttonSuccess }}
-          >
-            <Download size={18} />
-            Export Budget Report
-          </button>
-          <button
-            onClick={() => setView('dashboard')}
-            style={{ ...styles.button, ...styles.buttonSecondary }}
-          >
-            Back
-          </button>
-        </div>
-      </div>
-
-      <div style={styles.statsGrid}>
-        {[
-          { label: 'Total Budget', value: `₱${(data?.budget?.total_budget || 0).toLocaleString()}`, color: '#4299e1' },
-          { label: 'Allocated', value: `₱${(data?.budget?.allocated || 0).toLocaleString()}`, color: '#48bb78' },
-          { label: 'Spent', value: `₱${(data?.budget?.spent || 0).toLocaleString()}`, color: '#ed8936' },
-          { label: 'Remaining', value: `₱${(data?.budget?.remaining || 0).toLocaleString()}`, color: '#9f7aea' },
-        ].map((stat, i) => (
-          <div key={i} style={styles.statCard}>
-            <div style={{ fontSize: '2rem', fontWeight: '800', color: stat.color, marginBottom: '0.5rem' }}>
-              {stat.value}
-            </div>
-            <div style={{ color: '#a0aec0', fontWeight: '600' }}>{stat.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={styles.chartContainer}>
-        <h3 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '1rem' }}>Budget Utilization</h3>
-        <div style={{ height: '300px', display: 'flex', alignItems: 'flex-end', gap: '1rem', padding: '1rem 0' }}>
-          {data?.budget_breakdown?.map((item, i) => (
-            <div key={i} style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{
-                height: `${(item.amount / data.budget.total_budget) * 200}px`,
-                backgroundColor: ['#4299e1', '#48bb78', '#ed8936', '#9f7aea'][i % 4],
-                borderRadius: '8px 8px 0 0',
-                marginBottom: '0.5rem',
-              }} />
-              <div style={{ color: '#cbd5e1', fontSize: '0.875rem', fontWeight: '600' }}>
-                {item.category}
-              </div>
-              <div style={{ color: '#a0aec0', fontSize: '0.75rem' }}>
-                ₱{item.amount.toLocaleString()}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={styles.card}>
-        <h3 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '1rem' }}>Project Cost Summary</h3>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Project</th>
-              <th style={styles.th}>Contract Value</th>
-              <th style={styles.th}>Spent</th>
-              <th style={styles.th}>Remaining</th>
-              <th style={styles.th}>% Used</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.project_costs?.map((pc) => (
-              <tr key={pc.project_id}>
-                <td style={styles.td}>{pc.project_code}</td>
-                <td style={styles.td}>₱{pc.contract_value.toLocaleString()}</td>
-                <td style={styles.td}>₱{pc.spent.toLocaleString()}</td>
-                <td style={styles.td}>₱{pc.remaining.toLocaleString()}</td>
-                <td style={styles.td}>
-                  <span style={{ color: pc.percentage > 90 ? '#fc8181' : pc.percentage > 70 ? '#fbd38d' : '#9ae6b4' }}>
-                    {pc.percentage}%
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
-  const renderKPIs = () => (
-    <div style={styles.card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.75rem', fontWeight: '700', color: '#fff' }}>
-          Sector KPIs & Performance
-        </h2>
-        <button
-          onClick={() => setView('dashboard')}
-          style={{ ...styles.button, ...styles.buttonSecondary }}
-        >
-          Back
-        </button>
-      </div>
-
-      <div style={styles.statsGrid}>
-        {[
-          { label: 'Project Completion Rate', value: `${data?.kpis?.completion_rate || 0}%`, target: 85, color: '#48bb78' },
-          { label: 'On-Time Delivery', value: `${data?.kpis?.ontime_delivery || 0}%`, target: 90, color: '#4299e1' },
-          { label: 'Budget Adherence', value: `${data?.kpis?.budget_adherence || 0}%`, target: 95, color: '#ed8936' },
-          { label: 'Quality Score', value: `${data?.kpis?.quality_score || 0}%`, target: 90, color: '#9f7aea' },
-          { label: 'SLA Compliance', value: `${data?.kpis?.sla_compliance || 0}%`, target: 95, color: '#38b2ac' },
-          { label: 'Vendor Performance', value: `${data?.kpis?.vendor_performance || 0}%`, target: 85, color: '#f56565' },
-        ].map((kpi, i) => (
-          <div key={i} style={styles.statCard}>
-            <div style={{ fontSize: '2.5rem', fontWeight: '800', color: kpi.color, marginBottom: '0.5rem' }}>
-              {kpi.value}
-            </div>
-            <div style={{ color: '#a0aec0', fontWeight: '600', marginBottom: '0.5rem' }}>{kpi.label}</div>
-            <div style={{ fontSize: '0.875rem', color: '#718096' }}>Target: {kpi.target}%</div>
+        return (
             <div style={{
-              width: '100%',
-              height: '4px',
-              backgroundColor: '#4a5568',
-              borderRadius: '2px',
-              marginTop: '0.5rem',
-              overflow: 'hidden'
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
             }}>
-              <div style={{
-                width: `${Math.min(100, (parseFloat(kpi.value) / kpi.target) * 100)}%`,
-                height: '100%',
-                backgroundColor: kpi.color,
-                transition: 'width 0.3s ease'
-              }} />
+                {weekDays.map(day => (
+                    <div 
+                        key={day} 
+                        style={{
+                            backgroundColor: '#1f2937',
+                            color: '#ffffff',
+                            padding: '12px',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            fontSize: '14px'
+                        }}
+                    >
+                        {day}
+                    </div>
+                ))}
+                {days}
             </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+        );
+    };
 
-  const renderModal = () => {
-    if (!modal.show) return null;
+    const renderListView = () => {
+        const groupedEvents: { [key: string]: CalendarEvent[] } = {};
+        const filtered = getFilteredEvents();
+
+        filtered.forEach(event => {
+            if (!groupedEvents[event.date]) {
+                groupedEvents[event.date] = [];
+            }
+            groupedEvents[event.date].push(event);
+        });
+
+        const sortedDates = Object.keys(groupedEvents).sort();
+
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {sortedDates.map(date => (
+                    <div key={date} style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+                        <div style={{ background: 'linear-gradient(to right, #2563eb, #1e40af)', color: '#ffffff', padding: '20px' }}>
+                            <h3 style={{ fontSize: '20px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                                <CalendarIcon size={24} />
+                                {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            </h3>
+                        </div>
+                        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {groupedEvents[date].map((event, idx) => {
+                                const colors = getEventColor(event.type);
+                                const Icon = getEventIcon(event.type);
+                                
+                                return (
+                                    <div key={idx} style={{ display: 'flex', gap: '16px', padding: '20px', border: '2px solid #f3f4f6', borderRadius: '8px' }}>
+                                        <div style={{ padding: '14px', borderRadius: '50%', backgroundColor: colors.bg, display: 'flex' }}>
+                                            <Icon size={24} color="#ffffff" />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <h4 style={{ fontWeight: 'bold', fontSize: '16px', margin: '0 0 8px 0' }}>{event.title}</h4>
+                                            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 12px 0' }}>{event.description}</p>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                                {event.project_code && <span style={{ padding: '4px 8px', backgroundColor: '#f3f4f6', borderRadius: '4px', fontSize: '12px' }}>📋 {event.project_code}</span>}
+                                                {event.wo_number && <span style={{ padding: '4px 8px', backgroundColor: '#f3f4f6', borderRadius: '4px', fontSize: '12px' }}>🔧 {event.wo_number}</span>}
+                                                {event.vendor_name && <span style={{ padding: '4px 8px', backgroundColor: '#f3f4f6', borderRadius: '4px', fontSize: '12px' }}>🚚 {event.vendor_name}</span>}
+                                            </div>
+                                        </div>
+                                        {event.days_remaining !== undefined && (
+                                            <div style={{ textAlign: 'center', padding: '12px', backgroundColor: event.is_overdue ? '#fee2e2' : '#dcfce7', borderRadius: '8px' }}>
+                                                <p style={{ fontSize: '24px', fontWeight: 'bold', color: event.is_overdue ? '#dc2626' : '#16a34a', margin: 0 }}>
+                                                    {Math.abs(event.days_remaining)}
+                                                </p>
+                                                <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                                                    {event.is_overdue ? 'overdue' : 'days left'}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    if (loading) {
+        return (
+            <div style={{ minHeight: '100vh', padding: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center' }}>
+                    <Loader2 size={48} color="#2563eb" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+                    <p style={{ color: '#6b7280' }}>Loading calendar data from all sources...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
-      <div style={styles.modal} onClick={closeModal}>
-        <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-            <h2 style={{ fontSize: '1.75rem', fontWeight: '700', color: '#fff' }}>
-              {modal.type === 'view' ? 'View Details' : modal.item ? 'Edit' : 'Create'} {modal.type}
-            </h2>
-            <button onClick={closeModal} style={{ ...styles.iconButton, backgroundColor: '#4a5568' }}>
-              <X size={20} color="#cbd5e1" />
-            </button>
-          </div>
+        <div style={{ minHeight: '100vh', padding: '24px', backgroundColor: '#f3f4f6' }}>
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            
+            <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+                <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '12px', padding: '32px', color: '#ffffff', marginBottom: '24px' }}>
+                    <h1 style={{ fontSize: '36px', fontWeight: 'bold', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <CalendarIcon size={40} />
+                        Comprehensive Project Calendar
+                    </h1>
+                    <p style={{ margin: 0, opacity: 0.9 }}>Centralized tracking of all project activities and deadlines</p>
+                </div>
 
-          {modal.type === 'view' ? (
-            <div style={{ color: '#cbd5e1' }}>
-              <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.95rem', lineHeight: '1.6', backgroundColor: '#4a5568', padding: '1.5rem', borderRadius: '8px' }}>
-                {JSON.stringify(modal.item, null, 2)}
-              </pre>
-            </div>
-          ) : modal.type === 'sector' ? (
-            <>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Sector Code *</label>
-                <input
-                  type="text"
-                  style={styles.input}
-                  value={form.sector_code || ''}
-                  onChange={(e) => setForm({ ...form, sector_code: e.target.value })}
-                />
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Sector Name *</label>
-                <input
-                  type="text"
-                  style={styles.input}
-                  value={form.sector_name || ''}
-                  onChange={(e) => setForm({ ...form, sector_name: e.target.value })}
-                />
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Location</label>
-                <input
-                  type="text"
-                  style={styles.input}
-                  value={form.location || ''}
-                  onChange={(e) => setForm({ ...form, location: e.target.value })}
-                />
-              </div>
-            </>
-          ) : modal.type === 'resource' ? (
-            <>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Team Member *</label>
-                <select
-                  style={styles.select}
-                  value={form.user || ''}
-                  onChange={(e) => setForm({ ...form, user: e.target.value })}
-                >
-                  <option value="">Select team member</option>
-                  {metadata.users.map(u => (
-                    <option key={u.user_id} value={u.user_id}>
-                      {u.first_name} {u.last_name} - {u.role?.role_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Role in Project</label>
-                <input
-                  type="text"
-                  style={styles.input}
-                  value={form.role_in_project || ''}
-                  onChange={(e) => setForm({ ...form, role_in_project: e.target.value })}
-                />
-              </div>
-            </>
-          ) : modal.type === 'note' ? (
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Notes</label>
-              <textarea
-                style={styles.textarea}
-                value={form.notes || ''}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Add coordination notes..."
-              />
-            </div>
-          ) : null}
+                {error && (
+                    <div style={{ backgroundColor: '#fef2f2', border: '2px solid #dc2626', borderRadius: '8px', padding: '16px', marginBottom: '24px' }}>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <XCircle size={24} color="#dc2626" />
+                            <div>
+                                <p style={{ fontWeight: 'bold', margin: '0 0 4px 0' }}>Error Loading Data</p>
+                                <p style={{ margin: 0 }}>{error}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
-          {modal.type !== 'view' && (
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-              <button
-                onClick={handleSubmit}
-                style={{ ...styles.button, ...styles.buttonPrimary, flex: 1 }}
-                disabled={state.loading}
-              >
-                <Save size={18} />
-                {state.loading ? 'Saving...' : modal.item ? 'Update' : 'Create'}
-              </button>
-              <button
-                onClick={closeModal}
-                style={{ ...styles.button, ...styles.buttonSecondary }}
-              >
-                Cancel
-              </button>
+                {stats && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                        {[
+                            { label: 'Total Events', value: stats.total_events, color: '#3b82f6', icon: CalendarIcon },
+                            { label: 'Overdue', value: stats.overdue, color: '#dc2626', icon: AlertTriangle },
+                            { label: 'This Week', value: stats.this_week, color: '#10b981', icon: Clock },
+                            { label: 'Critical', value: stats.by_priority.Critical || 0, color: '#ef4444', icon: AlertCircle }
+                        ].map((stat, idx) => {
+                            const Icon = stat.icon;
+                            return (
+                                <div key={idx} style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '20px', border: '1px solid #e5e7eb' }}>
+                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                        <div style={{ padding: '12px', borderRadius: '8px', backgroundColor: `${stat.color}20` }}>
+                                            <Icon size={24} color={stat.color} />
+                                        </div>
+                                        <div>
+                                            <p style={{ fontSize: '28px', fontWeight: 'bold', color: stat.color, margin: 0 }}>{stat.value}</p>
+                                            <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>{stat.label}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '20px', alignItems: 'center' }}>
+                        <button onClick={() => navigateMonth('prev')} style={{ padding: '10px', borderRadius: '6px', border: '2px solid #d1d5db', backgroundColor: '#ffffff', color: '#000000', cursor: 'pointer' }}>
+                            <ChevronLeft size={20} />
+                        </button>
+                        <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#000000', minWidth: '220px', textAlign: 'center', margin: 0 }}>
+                            {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                        </h2>
+                        <button onClick={() => navigateMonth('next')} style={{ padding: '10px', borderRadius: '6px', border: '2px solid #d1d5db', backgroundColor: '#ffffff', color: '#000000', cursor: 'pointer' }}>
+                            <ChevronRight size={20} />
+                        </button>
+                        <button onClick={goToToday} style={{ padding: '10px 20px', borderRadius: '6px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', cursor: 'pointer', fontWeight: '600' }}>
+                            Today
+                        </button>
+                        <button onClick={loadAllData} style={{ padding: '10px 20px', borderRadius: '6px', backgroundColor: '#10b981', color: '#ffffff', border: 'none', cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+                            <RefreshCw size={16} />
+                            Refresh Data
+                        </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' }}>
+                        <input
+                            type="text"
+                            placeholder="Search events..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            style={{ flex: 1, minWidth: '200px', padding: '10px', border: '2px solid #d1d5db', borderRadius: '6px' }}
+                        />
+                        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ padding: '10px', border: '2px solid #d1d5db', borderRadius: '6px' }}>
+                            <option value="all">All Types</option>
+                            <option value="project">Projects</option>
+                            <option value="work_order">Work Orders</option>
+                            <option value="milestone">Milestones</option>
+                            <option value="inspection">Inspections</option>
+                            <option value="sla">SLA</option>
+                            <option value="deadline">Deadlines</option>
+                            <option value="backjob">Backjobs</option>
+                            <option value="escalation">Escalations</option>
+                        </select>
+                        <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} style={{ padding: '10px', border: '2px solid #d1d5db', borderRadius: '6px' }}>
+                            <option value="all">All Priorities</option>
+                            <option value="Critical">Critical</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                        </select>
+                        <div style={{ display: 'flex', gap: '4px', backgroundColor: '#e5e7eb', borderRadius: '6px', padding: '4px' }}>
+                            <button onClick={() => setView('calendar')} style={{ padding: '10px 16px', color: '#000000', borderRadius: '6px', fontWeight: '600', border: 'none', cursor: 'pointer', backgroundColor: view === 'calendar' ? '#ffffff' : 'transparent' }}>
+                                Calendar
+                            </button>
+                            <button onClick={() => setView('list')} style={{ padding: '10px 16px', color: '#000000', borderRadius: '6px', fontWeight: '600', border: 'none', cursor: 'pointer', backgroundColor: view === 'list' ? '#ffffff' : 'transparent' }}>
+                                List
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px' }}>
+                    {view === 'calendar' ? renderCalendarView() : renderListView()}
+                </div>
             </div>
-          )}
         </div>
-      </div>
     );
-  };
-
-  if (!state.isAuth) {
-    return (
-      <div style={{ minHeight: '100vh', background: '#1a1f2e', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
-        <div style={{ background: '#2d3748', padding: '3rem', borderRadius: '16px', textAlign: 'center', maxWidth: '500px', border: '1px solid #4a5568' }}>
-          <AlertCircle size={64} color="#f56565" style={{ marginBottom: '1.5rem' }} />
-          <h2 style={{ fontSize: '1.75rem', fontWeight: '700', color: '#fff', marginBottom: '1rem' }}>
-            Authentication Required
-          </h2>
-          <p style={{ color: '#a0aec0', fontSize: '1.125rem', lineHeight: '1.6' }}>
-            Please login to access the Sector Manager Dashboard.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={styles.container}>
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        button:hover { opacity: 0.9; transform: translateY(-2px); }
-        button:active { transform: translateY(0); }
-        input:focus, select:focus, textarea:focus {
-          outline: none;
-          border-color: #4299e1;
-          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-        }
-      `}</style>
-
-      <div style={styles.maxWidth}>
-        <div style={styles.header}>
-          <div>
-            <h1 style={styles.title}>Sector Manager Dashboard</h1>
-            <p style={styles.subtitle}>
-              Welcome, {state.user?.first_name} {state.user?.last_name} - Comprehensive Sector Management
-            </p>
-          </div>
-          <span style={{
-            ...styles.badge,
-            backgroundColor: '#4299e1',
-            color: '#fff',
-            fontSize: '1rem',
-            padding: '0.625rem 1.25rem',
-            border: '2px solid #63b3ed'
-          }}>
-            {state.user?.role_name}
-          </span>
-        </div>
-
-        {state.success && (
-          <div style={{ ...styles.alert, ...styles.alertSuccess }}>
-            <CheckCircle size={24} />
-            <span style={{ fontWeight: '600' }}>{state.success}</span>
-          </div>
-        )}
-
-        {state.error && (
-          <div style={{ ...styles.alert, ...styles.alertError }}>
-            <AlertCircle size={24} />
-            <span style={{ fontWeight: '600' }}>{state.error}</span>
-          </div>
-        )}
-
-        {view === 'dashboard' && renderDashboard()}
-        {view === 'projects' && renderProjects()}
-        {view === 'workorders' && renderWorkOrders()}
-        {view === 'team' && renderTeam()}
-        {view === 'vendors' && renderVendors()}
-        {view === 'budget' && renderBudget()}
-        {view === 'kpis' && renderKPIs()}
-        {view === 'sector' && (
-          <div style={styles.card}>
-            <h2 style={{ color: '#fff', fontSize: '1.75rem', marginBottom: '1rem' }}>Sector Information Management</h2>
-            <button onClick={() => openModal('sector')} style={{ ...styles.button, ...styles.buttonPrimary, marginRight: '0.5rem' }}>
-              <Edit2 size={18} />
-              Edit Sector Info
-            </button>
-            <button onClick={() => setView('dashboard')} style={{ ...styles.button, ...styles.buttonSecondary }}>
-              Back
-            </button>
-          </div>
-        )}
-        {view === 'inspections' && (
-          <div style={styles.card}>
-            <h2 style={{ color: '#fff', fontSize: '1.75rem', marginBottom: '1rem' }}>Quality Metrics & Inspections</h2>
-            <p style={{ color: '#a0aec0' }}>Review inspection results and monitor quality metrics across sector</p>
-            <button onClick={() => setView('dashboard')} style={{ ...styles.button, ...styles.buttonSecondary, marginTop: '1rem' }}>
-              Back
-            </button>
-          </div>
-        )}
-        {view === 'documents' && (
-          <div style={styles.card}>
-            <h2 style={{ color: '#fff', fontSize: '1.75rem', marginBottom: '1rem' }}>Project Documents</h2>
-            <p style={{ color: '#a0aec0' }}>Review and manage sector project documentation</p>
-            <button onClick={() => setView('dashboard')} style={{ ...styles.button, ...styles.buttonSecondary, marginTop: '1rem' }}>
-              Back
-            </button>
-          </div>
-        )}
-        {view === 'milestones' && (
-          <div style={styles.card}>
-            <h2 style={{ color: '#fff', fontSize: '1.75rem', marginBottom: '1rem' }}>Project Milestones</h2>
-            <p style={{ color: '#a0aec0' }}>Track milestones and project timelines across sector</p>
-            <button onClick={() => setView('dashboard')} style={{ ...styles.button, ...styles.buttonSecondary, marginTop: '1rem' }}>
-              Back
-            </button>
-          </div>
-        )}
-        {view === 'sla' && (
-          <div style={styles.card}>
-            <h2 style={{ color: '#fff', fontSize: '1.75rem', marginBottom: '1rem' }}>SLA Compliance Monitoring</h2>
-            <p style={{ color: '#a0aec0' }}>Monitor SLA compliance across all sector projects</p>
-            <button onClick={() => setView('dashboard')} style={{ ...styles.button, ...styles.buttonSecondary, marginTop: '1rem' }}>
-              Back
-            </button>
-          </div>
-        )}
-        {view === 'reports' && (
-          <div style={styles.card}>
-            <h2 style={{ color: '#fff', fontSize: '1.75rem', marginBottom: '1.5rem' }}>Sector Reports & Analytics</h2>
-            <div style={styles.featureGrid}>
-              {[
-                { label: 'Project Summary Report', type: 'projects' },
-                { label: 'Work Order Report', type: 'workorders' },
-                { label: 'Budget Report', type: 'budget' },
-                { label: 'Vendor Performance Report', type: 'vendors' },
-                { label: 'Team Performance Report', type: 'team' },
-                { label: 'KPI Dashboard Report', type: 'kpis' },
-              ].map((report, i) => (
-                <button
-                  key={i}
-                  onClick={() => generateReport(report.type)}
-                  style={{ ...styles.featureCard, border: '2px solid #4299e1' }}
-                >
-                  <Download size={32} color="#4299e1" style={{ marginBottom: '0.5rem' }} />
-                  <div style={{ color: '#fff', fontWeight: '700' }}>{report.label}</div>
-                </button>
-              ))}
-            </div>
-            <button onClick={() => setView('dashboard')} style={{ ...styles.button, ...styles.buttonSecondary, marginTop: '1rem' }}>
-              Back
-            </button>
-          </div>
-        )}
-      </div>
-
-      {renderModal()}
-    </div>
-  );
 };
 
-export default SectorManagerDashboard;
+export default ProjectCalendarDashboard;

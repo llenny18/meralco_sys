@@ -58,11 +58,11 @@ class KPICalculationService:
     def calculate_ccti(cls, period_start, period_end):
         """Calculate Customer Connection Timeliness Index"""
         work_orders = WorkOrder.objects.filter(
-            date_energized__range=[period_start, period_end],
-            date_received_awarding__isnull=False,
-            date_energized__isnull=False,
-            total_manhours__isnull=False,
-            total_estimated_cost__isnull=False
+            date_sched__range=[period_start, period_end],
+            date_received_awarding_wo__isnull=False,
+            date_sched__isnull=False,
+            exclusion_duration__isnull=False,
+            ntc_amount__isnull=False
         )
         
         if not work_orders.exists():
@@ -77,11 +77,11 @@ class KPICalculationService:
         
         for wo in work_orders:
             # Use estimated cost as proxy for applied load
-            applied_load = float(wo.total_estimated_cost or 0) / 1000  # Convert to kW equivalent
-            manhours = float(wo.total_manhours or 0)
+            applied_load = float(wo.ntc_amount or 0) / 1000  # Convert to kW equivalent
+            manhours = float(wo.exclusion_duration or 0)
             
             # Calculate duration
-            duration = (wo.date_energized - wo.date_received_awarding).days
+            duration = (wo.date_sched - wo.date_received_awarding_wo).days
             
             # Get SPT values
             spt_m = cls.get_spt_by_manhour(manhours)
@@ -112,24 +112,24 @@ class KPICalculationService:
         """Calculate PCA Conversion Rate"""
         # Get carryover (WOs from before period that are not completed)
         carryover = WorkOrder.objects.filter(
-            date_received_jacket__lt=period_start,
+            date_received_jacket_ps__lt=period_start,
             status__in=['NEW', 'FOR AUDIT']
         ).count()
         
         # Get received in period
         received = WorkOrder.objects.filter(
-            date_received_jacket__range=[period_start, period_end]
+            date_received_jacket_ps__range=[period_start, period_end]
         ).count()
         
         # Get cancelled
         cancelled = WorkOrder.objects.filter(
-            date_received_jacket__range=[period_start, period_end],
+            date_received_jacket_ps__range=[period_start, period_end],
             status='CANCELLED'
         ).count()
         
         # Get completed
         completed = WorkOrder.objects.filter(
-            date_audited__range=[period_start, period_end],
+            date_audit__range=[period_start, period_end],
             status__in=['AUDITED', 'PAID']
         ).count()
         
@@ -157,13 +157,13 @@ class KPICalculationService:
         """Calculate Completion of Ageing PCAs"""
         # Total ageing WOs (from 2024 and prior)
         total_ageing = WorkOrder.objects.filter(
-            date_received_jacket__year__lte=ageing_cutoff_year
+            date_received_jacket_ps__year__lte=ageing_cutoff_year
         ).count()
         
         # Completed ageing WOs in this period
         completed_ageing = WorkOrder.objects.filter(
-            date_received_jacket__year__lte=ageing_cutoff_year,
-            date_audited__range=[period_start, period_end],
+            date_received_jacket_ps__year__lte=ageing_cutoff_year,
+            date_audit__range=[period_start, period_end],
             status__in=['AUDITED', 'PAID']
         ).count()
         
@@ -187,9 +187,9 @@ class KPICalculationService:
     def calculate_termination_apt(cls, period_start, period_end):
         """Calculate PCA Termination/Modification Average Processing Time"""
         work_orders = WorkOrder.objects.filter(
-            date_audited__range=[period_start, period_end],
-            date_received_awarding__isnull=False,
-            date_audited__isnull=False
+            date_audit__range=[period_start, period_end],
+            date_received_awarding_wo__isnull=False,
+            date_audit__isnull=False
         )
         
         if not work_orders.exists():
@@ -203,7 +203,7 @@ class KPICalculationService:
         details = []
         
         for wo in work_orders:
-            days = (wo.date_audited - wo.date_received_awarding).days
+            days = (wo.date_audit - wo.date_received_awarding_wo).days
             total_days += days
             details.append({
                 'wo_no': wo.wo_no,
@@ -222,9 +222,9 @@ class KPICalculationService:
     def calculate_prdi(cls, period_start, period_end, spt_days=60.0):
         """Calculate Project Resolution Duration Index"""
         work_orders = WorkOrder.objects.filter(
-            date_audited__range=[period_start, period_end],
-            date_energized__isnull=False,
-            date_audited__isnull=False
+            date_audit__range=[period_start, period_end],
+            date_sched__isnull=False,
+            date_audit__isnull=False
         )
         
         if not work_orders.exists():
@@ -238,7 +238,7 @@ class KPICalculationService:
         details = []
         
         for wo in work_orders:
-            duration = (wo.date_audited - wo.date_energized).days
+            duration = (wo.date_audit - wo.date_sched).days
             prdi_component = duration / spt_days
             total_prdi += prdi_component
             
@@ -262,17 +262,17 @@ class KPICalculationService:
         # TECO/CLOSED cost (Paid)
         teco_closed_cost = WorkOrder.objects.filter(
             status='PAID'
-        ).aggregate(total=Sum('billed_cost'))['total'] or 0
+        ).aggregate(total=Sum('nov_debit_amount'))['total'] or 0
         
         # Pending cost
         pending_cost = WorkOrder.objects.filter(
             status='NEW'
-        ).aggregate(total=Sum('total_estimated_cost'))['total'] or 0
+        ).aggregate(total=Sum('ntc_amount'))['total'] or 0
         
         # COMP cost (Audited but not paid)
         comp_cost = WorkOrder.objects.filter(
             status='AUDITED'
-        ).aggregate(total=Sum('billed_cost'))['total'] or 0
+        ).aggregate(total=Sum('nov_debit_amount'))['total'] or 0
         
         total_cost = float(pending_cost) + float(comp_cost) + float(teco_closed_cost)
         
@@ -298,12 +298,12 @@ class KPICalculationService:
         """Calculate Quality Management Index"""
         # Total audited WOs
         audited_wos = WorkOrder.objects.filter(
-            date_audited__range=[period_start, period_end]
+            date_audit__range=[period_start, period_end]
         ).count()
         
         # Passed WOs (assuming status AUDITED or PAID means passed)
         passed_wos = WorkOrder.objects.filter(
-            date_audited__range=[period_start, period_end],
+            date_audit__range=[period_start, period_end],
             status__in=['AUDITED', 'PAID']
         ).count()
         

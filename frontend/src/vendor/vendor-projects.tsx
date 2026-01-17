@@ -1,204 +1,415 @@
-// pages/vendor/vendor-projects.tsx
-import { FC, useState, useEffect, ChangeEvent } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import SidebarLayout from '@/layouts/SidebarLayout';
-import PageTitleWrapper from '@/components/PageTitleWrapper';
-import { Container, Grid, Card, CardHeader, CardContent, Divider, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Alert, Snackbar, Typography, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, TableContainer, Tooltip, IconButton, Chip, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import Footer from '@/components/Footer';
-import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
-import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
-import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
+import { useState, useEffect } from 'react';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
-const ENDPOINT = 'projects';
-const COLUMNS = ['project_code', 'project_name', 'status', 'start_date', 'completion_date', 'assigned_engineer'];
 
-function VendorProjects() {
-  const router = useRouter();
+export default function VendorProjectInitiation() {
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [uploadModal, setUploadModal] = useState(false);
+  const [vendorId, setVendorId] = useState('');
+  const [documents, setDocuments] = useState({
+    coc: null,
+    photos: [],
+    permits: null,
+    receipts: null,
+    safety: null,
+    drawings: null
+  });
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    const authToken = localStorage.getItem('authToken');
-    const userRole = localStorage.getItem('userRole');
+    const storedVendorId = localStorage?.getItem('user')?.user_id || '1';
+    setVendorId(storedVendorId);
+    fetchVendorProjects(storedVendorId);
+  }, []);
 
-    // If not authenticated or missing token, redirect to login
-    if (!userRole) {
-      router.push('/login');
-      return;
-    }
-
-    // Optional: Check if user has admin role
-    if (userRole !== 'vendor') {
-      // Redirect non-admin users to their appropriate dashboard
-      router.push('/unauthorized'); // or router.push('/dashboard');
-    }
-  }, [router]);
-
-  const [tableData, setTableData] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState<boolean>(false);
-  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
-  const [currentRecord, setCurrentRecord] = useState<any>({});
-  const [formData, setFormData] = useState<any>({});
-  const [successMessage, setSuccessMessage] = useState<string>('');
-  const [page, setPage] = useState<number>(0);
-  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
-
-  useEffect(() => { fetchTableData(); }, []);
-
-  const fetchTableData = async () => {
-    setLoading(true); setError(null);
+  const fetchVendorProjects = async (vId) => {
+    setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/`);
-      if (!response.ok) throw new Error(`Failed to fetch data: ${response.statusText}`);
+      const response = await fetch(`${API_BASE_URL}/projects/?vendor=${vId}`);
+      if (!response.ok) throw new Error('Failed to fetch projects');
       const data = await response.json();
-      setTableData(Array.isArray(data) ? data : data.results || []);
-    } catch (err: any) { setError(err.message); setTableData([]); } finally { setLoading(false); }
+      setProjects(data.results || data || []);
+    } catch (err) {
+      console.error('Error fetching projects:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const showSuccess = (message: string) => { setSuccessMessage(message); setTimeout(() => setSuccessMessage(''), 3000); };
-  const handleAdd = () => { setModalMode('add'); setFormData({}); setCurrentRecord({}); setShowModal(true); };
-  const handleEdit = (row: any) => { setModalMode('edit'); setCurrentRecord(row); setFormData({ ...row }); setShowModal(true); };
+  const handleFileChange = (type, files) => {
+    if (type === 'photos') {
+      setDocuments(prev => ({ ...prev, photos: [...prev.photos, ...Array.from(files)] }));
+    } else {
+      setDocuments(prev => ({ ...prev, [type]: files[0] }));
+    }
+  };
 
-  const handleDelete = async (row: any) => {
-    if (!window.confirm('Are you sure you want to delete this record?')) return;
+  const handleMarkCompleted = async (projectId) => {
     try {
-      const primaryKey = row.id || row.user_id;
-      if (!primaryKey) throw new Error('Cannot determine record ID');
-      const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/${primaryKey}/`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } });
-      if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(errorData.detail || `Failed to delete: ${response.statusText}`); }
-      showSuccess('Record deleted successfully!'); fetchTableData();
-    } catch (err: any) { setError('Error deleting record: ' + err.message); }
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          status: 3, // Assuming status 3 = Completed
+          completion_date: new Date().toISOString().split('T')[0]
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to mark as completed');
+      
+      alert('✅ Project marked as completed! Please upload documents.');
+      setSelectedProject(projectId);
+      setUploadModal(true);
+      fetchVendorProjects(vendorId);
+    } catch (err) {
+      alert('❌ Error: ' + err.message);
+    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setError(null);
+  const handleDocumentUpload = async () => {
+    if (!selectedProject) return;
+
     try {
-      const primaryKey = currentRecord.id || currentRecord.user_id;
-      const url = modalMode === 'add' ? `${API_BASE_URL}/${ENDPOINT}/` : `${API_BASE_URL}/${ENDPOINT}/${primaryKey}/`;
-      const method = modalMode === 'add' ? 'POST' : 'PUT';
-      const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
-      if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(JSON.stringify(errorData) || `Failed to save: ${response.statusText}`); }
-      showSuccess(`Record ${modalMode === 'add' ? 'added' : 'updated'} successfully!`); setShowModal(false); fetchTableData();
-    } catch (err: any) { setError('Error saving record: ' + err.message); }
+      const formData = new FormData();
+      
+      // Upload each document type
+      const docTypes = [
+        { key: 'coc', type: 'COC', file: documents.coc },
+        { key: 'permits', type: 'PERMIT', file: documents.permits },
+        { key: 'receipts', type: 'RECEIPT', file: documents.receipts },
+        { key: 'safety', type: 'SAFETY', file: documents.safety },
+        { key: 'drawings', type: 'DRAWING', file: documents.drawings }
+      ];
+
+      for (const doc of docTypes) {
+        if (doc.file) {
+          const fd = new FormData();
+          fd.append('project', selectedProject);
+          fd.append('doc_type', doc.type);
+          fd.append('document_name', doc.file.name);
+          fd.append('document_path', doc.file);
+          fd.append('uploaded_by', vendorId);
+
+          await fetch(`${API_BASE_URL}/project-documents/`, {
+            method: 'POST',
+            body: fd
+          });
+        }
+      }
+
+      // Upload photos
+      for (const photo of documents.photos) {
+        const fd = new FormData();
+        fd.append('project', selectedProject);
+        fd.append('doc_type', 'PHOTO');
+        fd.append('document_name', photo.name);
+        fd.append('document_path', photo);
+        fd.append('uploaded_by', vendorId);
+
+        await fetch(`${API_BASE_URL}/project-documents/`, {
+          method: 'POST',
+          body: fd
+        });
+      }
+
+      alert('✅ Documents uploaded successfully! Confirmation number: ' + Math.random().toString(36).substr(2, 9).toUpperCase());
+      setUploadModal(false);
+      setDocuments({ coc: null, photos: [], permits: null, receipts: null, safety: null, drawings: null });
+      fetchVendorProjects(vendorId);
+    } catch (err) {
+      alert('❌ Upload error: ' + err.message);
+    }
   };
 
-  const handleInputChange = (column: string, value: any) => { setFormData((prev: any) => ({ ...prev, [column]: value })); };
-  const handleChangePage = (_event: unknown, newPage: number) => setPage(newPage);
-  const handleChangeRowsPerPage = (event: ChangeEvent<HTMLInputElement>) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
-
-  const renderCellValue = (value: any) => {
-    if (value === null || value === undefined) return '-';
-    if (typeof value === 'boolean') return <Chip label={value ? 'Yes' : 'No'} color={value ? 'success' : 'default'} size="small" />;
-    if (typeof value === 'object') return JSON.stringify(value);
-    const strValue = String(value);
-    return strValue.length > 50 ? <Tooltip title={strValue} arrow><span>{strValue.substring(0, 50) + '...'}</span></Tooltip> : strValue;
+  const getStatusBadge = (statusId) => {
+    const statuses = {
+      1: { label: 'Created', color: '#2196f3' },
+      2: { label: 'In Progress', color: '#ff9800' },
+      3: { label: 'Completed', color: '#4caf50' },
+      4: { label: 'Awaiting Documents', color: '#f44336' }
+    };
+    const status = statuses[statusId] || { label: 'Unknown', color: '#999' };
+    return <span style={{ background: status.color, color: 'white', padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{status.label}</span>;
   };
 
-  const paginatedData = tableData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const calculateSLADays = (completionDate) => {
+    if (!completionDate) return null;
+    const days = Math.floor((new Date() - new Date(completionDate)) / (1000 * 60 * 60 * 24));
+    return days;
+  };
 
   return (
-    <>
-      <Head><title>My Projects - Vendor Portal</title></Head>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center">
-          <Grid item>
-            <Typography variant="h3" component="h3" gutterBottom>📋 My Projects</Typography>
-            <Typography variant="subtitle2">View your assigned projects</Typography>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
-        <Grid container direction="row" justifyContent="center" alignItems="stretch" spacing={3}>
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="My Projects Management" />
-              <Divider />
-              <CardContent>
-                {successMessage && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>{successMessage}</Alert>}
-                {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
-                {loading && <Box sx={{ textAlign: 'center', py: 8 }}><Typography variant="body1" color="text.secondary">Loading data...</Typography></Box>}
-                {!loading && !error && tableData.length === 0 && (
-                  <Box sx={{ textAlign: 'center', py: 8 }}>
-                    <Typography variant="h4" color="text.secondary" gutterBottom>📭</Typography>
-                    <Typography variant="h6" color="text.secondary">No data available</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Click "Add New" to create your first record</Typography>
-                  </Box>
+    <div style={{ minHeight: '100vh', padding: '20px' }}>
+      {/* Header */}
+      <div style={{ background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '20px', boxShadow: '0 8px 32px rgba(0,0,0,0.1)' }}>
+        <h1 style={{ margin: '0 0 8px 0', fontSize: '32px', color: '#1a1a2e', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          Project Initiation & Document Submission
+        </h1>
+        <p style={{ margin: 0, color: '#666', fontSize: '16px' }}>
+          Complete physical work → Mark as completed → Upload required documents
+        </p>
+      </div>
+
+      {/* Projects Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
+        {projects.map((project) => {
+          const slaDays = calculateSLADays(project.completion_date);
+          const isOverdue = slaDays > 7;
+
+          return (
+            <div key={project.project_id} style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '24px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+              border: isOverdue ? '3px solid #f44336' : 'none'
+            }}>
+              {/* Project Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px' }}>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ margin: '0 0 8px 0', fontSize: '20px', color: '#1a1a2e' }}>{project.project_code}</h3>
+                  <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>{project.project_name}</p>
+                  {getStatusBadge(project.status)}
+                </div>
+              </div>
+
+              {/* Project Details */}
+              <div style={{ background: '#f5f5f5', padding: '12px', borderRadius: '8px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '14px' }}>
+                  <p style={{ margin: 0, color: "black" }}><strong>Location:</strong> {project.project_location || 'N/A'}</p>
+                  <p style={{ margin: 0, color: "black"  }}><strong>Contract Value:</strong> ₱{project.contract_value?.toLocaleString() || '0'}</p>
+                  <p style={{ margin: 0, color: "black"  }}><strong>Assigned QI:</strong> {project.assigned_qi || 'Not yet assigned'}</p>
+                  {project.completion_date && (
+                    <p style={{ margin: 0 }}><strong>Completed:</strong> {new Date(project.completion_date).toLocaleDateString()}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* SLA Countdown */}
+              {project.completion_date && (
+                <div style={{
+                  background: isOverdue ? '#ffebee' : '#e3f2fd',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  border: `2px solid ${isOverdue ? '#f44336' : '#2196f3'}`
+                }}>
+                  <p style={{ margin: '0 0 4px 0', fontSize: '12px', fontWeight: 'bold', color: isOverdue ? '#f44336' : '#2196f3' }}>
+                    SLA COUNTDOWN
+                  </p>
+                  <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: isOverdue ? '#f44336' : '#2196f3' }}>
+                    {slaDays !== null ? `${7 - slaDays} days remaining` : 'N/A'}
+                  </p>
+                  {isOverdue && (
+                    <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#f44336' }}>
+                      ⚠️ OVERDUE! Penalty may apply
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {project.status !== 3 && (
+                  <button
+                    onClick={() => handleMarkCompleted(project.project_id)}
+                    style={{
+                      flex: 1,
+                      background: '#4caf50',
+                      color: 'white',
+                      border: 'none',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      fontSize: '14px'
+                    }}
+                  >
+                    ✅ Mark Completed
+                  </button>
                 )}
-                {!loading && !error && tableData.length > 0 && (
-                  <>
-                    <TableContainer>
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            {COLUMNS.map((column) => <TableCell key={column}><Typography variant="subtitle2" fontWeight="bold">{column.replace(/_/g, ' ').toUpperCase()}</Typography></TableCell>)}
-                            <TableCell align="center"><Typography variant="subtitle2" fontWeight="bold">ACTIONS</Typography></TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {paginatedData.map((row, index) => (
-                            <TableRow hover key={row.id || index}>
-                              {COLUMNS.map((column) => <TableCell key={column}>{renderCellValue(row[column])}</TableCell>)}
-                              <TableCell align="center">
-                                <Tooltip title="Edit" arrow><IconButton color="primary" size="small" onClick={() => handleEdit(row)} sx={{ mr: 1 }}><EditTwoToneIcon fontSize="small" /></IconButton></Tooltip>
-                                <Tooltip title="Delete" arrow><IconButton color="error" size="small" onClick={() => handleDelete(row)}><DeleteTwoToneIcon fontSize="small" /></IconButton></Tooltip>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                    <Box p={2}><TablePagination component="div" count={tableData.length} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} page={page} rowsPerPage={rowsPerPage} rowsPerPageOptions={[5, 10, 25, 50]} /></Box>
-                  </>
+                {project.status === 3 && (
+                  <button
+                    onClick={() => { setSelectedProject(project.project_id); setUploadModal(true); }}
+                    style={{
+                      flex: 1,
+                      background: '#2196f3',
+                      color: 'white',
+                      border: 'none',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      fontSize: '14px'
+                    }}
+                  >
+                    📤 Upload Documents
+                  </button>
                 )}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Container>
-      <Footer />
-      <Dialog open={showModal} onClose={() => setShowModal(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{modalMode === 'add' ? '➕ Add New Record' : '✏️ Edit Record'}</DialogTitle>
-        <DialogContent dividers>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          <Box component="form" onSubmit={handleSubmit}>
-            <Grid container spacing={2}>
-              {COLUMNS.map((column) => {
-                const currentValue = formData[column];
-                const isBoolean = typeof currentValue === 'boolean' || (currentRecord[column] !== undefined && typeof currentRecord[column] === 'boolean');
-                return (
-                  <Grid item xs={12} sm={6} key={column}>
-                    {isBoolean ? (
-                      <FormControl fullWidth>
-                        <InputLabel>{column.replace(/_/g, ' ').toUpperCase()}</InputLabel>
-                        <Select value={currentValue === true ? 'true' : currentValue === false ? 'false' : ''} onChange={(e) => handleInputChange(column, e.target.value === 'true')} label={column.replace(/_/g, ' ').toUpperCase()}>
-                          <MenuItem value="">Select...</MenuItem>
-                          <MenuItem value="true">Yes</MenuItem>
-                          <MenuItem value="false">No</MenuItem>
-                        </Select>
-                      </FormControl>
-                    ) : (
-                      <TextField fullWidth label={column.replace(/_/g, ' ').toUpperCase()} value={currentValue || ''} onChange={(e) => handleInputChange(column, e.target.value)} placeholder={`Enter ${column.replace(/_/g, ' ')}`} />
-                    )}
-                  </Grid>
-                );
-              })}
-            </Grid>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowModal(false)} color="inherit">Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained" color="primary">{modalMode === 'add' ? 'Add Record' : 'Save Changes'}</Button>
-        </DialogActions>
-      </Dialog>
-      <Snackbar open={!!successMessage} autoHideDuration={3000} onClose={() => setSuccessMessage('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
-        <Alert severity="success" sx={{ width: '100%' }}>{successMessage}</Alert>
-      </Snackbar>
-    </>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Upload Modal */}
+      {uploadModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '20px',
+          overflow: 'auto'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '600px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflow: 'auto'
+          }}>
+            <h2 style={{ margin: '0 0 24px 0', fontSize: '24px', color: '#1a1a2e' }}>📤 Upload Project Documents</h2>
+
+            {/* Document Upload Fields */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>
+                  Certificate of Completion (COC) *
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => handleFileChange('coc', e.target.files)}
+                  style={{ width: '100%', padding: '8px', border: '2px dashed #ddd', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>
+                  Site Photos (Before/During/After) *
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleFileChange('photos', e.target.files)}
+                  style={{ width: '100%', padding: '8px', border: '2px dashed #ddd', borderRadius: '8px' }}
+                />
+                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#666' }}>
+                  Selected: {documents.photos.length} photo(s)
+                </p>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>
+                  Building Permits
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => handleFileChange('permits', e.target.files)}
+                  style={{ width: '100%', padding: '8px', border: '2px dashed #ddd', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>
+                  Material Receipts
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => handleFileChange('receipts', e.target.files)}
+                  style={{ width: '100%', padding: '8px', border: '2px dashed #ddd', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>
+                  Safety Forms
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => handleFileChange('safety', e.target.files)}
+                  style={{ width: '100%', padding: '8px', border: '2px dashed #ddd', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>
+                  As-Built Drawings
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.dwg,.jpg,.jpeg,.png"
+                  onChange={(e) => handleFileChange('drawings', e.target.files)}
+                  style={{ width: '100%', padding: '8px', border: '2px dashed #ddd', borderRadius: '8px' }}
+                />
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <button
+                onClick={() => setUploadModal(false)}
+                style={{
+                  flex: 1,
+                  background: '#fff',
+                  color: '#666',
+                  border: '2px solid #ddd',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDocumentUpload}
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(45deg, #667eea, #764ba2)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                Upload Documents
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: 'white',
+          padding: '24px',
+          borderRadius: '16px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+        }}>
+          <p style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>Loading...</p>
+        </div>
+      )}
+    </div>
   );
 }
-
-VendorProjects.getLayout = (page) => <SidebarLayout userRole="vendor">{page}</SidebarLayout>;
-export default VendorProjects;

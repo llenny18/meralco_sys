@@ -1,204 +1,371 @@
-// pages/vendor/vendor-billing.tsx
-import { FC, useState, useEffect, ChangeEvent } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import SidebarLayout from '@/layouts/SidebarLayout';
-import PageTitleWrapper from '@/components/PageTitleWrapper';
-import { Container, Grid, Card, CardHeader, CardContent, Divider, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Alert, Snackbar, Typography, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, TableContainer, Tooltip, IconButton, Chip, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import Footer from '@/components/Footer';
-import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
-import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
-import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
+import { useState, useEffect } from 'react';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
-const ENDPOINT = 'invoices';
-const COLUMNS = ['invoice_number', 'invoice_date', 'due_date', 'invoice_amount', 'penalty_amount', 'net_amount', 'payment_status'];
 
-function VendorBilling() {
-  const router = useRouter();
+export default function VendorPaymentTracking() {
+  const [invoices, setInvoices] = useState([]);
+  const [performanceData, setPerformanceData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [vendorId, setVendorId] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    const authToken = localStorage.getItem('authToken');
-    const userRole = localStorage.getItem('userRole');
-
-    // If not authenticated or missing token, redirect to login
-    if (!userRole) {
-      router.push('/login');
+    const userRole = localStorage?.getItem('userRole');
+    if (userRole !== 'vendor') {
+      window.location.href = '/unauthorized';
       return;
     }
+    
+    const storedVendorId = JSON.parse(localStorage?.getItem('user'))?.vendor_id || '1';
+    setVendorId(storedVendorId);
+    fetchInvoices(storedVendorId);
+    fetchPerformance(storedVendorId);
+  }, []);
 
-    // Optional: Check if user has admin role
-    if (userRole !== 'vendor') {
-      // Redirect non-admin users to their appropriate dashboard
-      router.push('/unauthorized'); // or router.push('/dashboard');
-    }
-  }, [router]);
-
-  const [tableData, setTableData] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState<boolean>(false);
-  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
-  const [currentRecord, setCurrentRecord] = useState<any>({});
-  const [formData, setFormData] = useState<any>({});
-  const [successMessage, setSuccessMessage] = useState<string>('');
-  const [page, setPage] = useState<number>(0);
-  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
-
-  useEffect(() => { fetchTableData(); }, []);
-
-  const fetchTableData = async () => {
-    setLoading(true); setError(null);
+  const fetchInvoices = async (vId) => {
+    setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/`);
-      if (!response.ok) throw new Error(`Failed to fetch data: ${response.statusText}`);
+      const response = await fetch(`${API_BASE_URL}/invoices/?vendor=${vId}`);
+      if (!response.ok) throw new Error('Failed to fetch invoices');
       const data = await response.json();
-      setTableData(Array.isArray(data) ? data : data.results || []);
-    } catch (err: any) { setError(err.message); setTableData([]); } finally { setLoading(false); }
+      setInvoices(data.results || data || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const showSuccess = (message: string) => { setSuccessMessage(message); setTimeout(() => setSuccessMessage(''), 3000); };
-  const handleAdd = () => { setModalMode('add'); setFormData({}); setCurrentRecord({}); setShowModal(true); };
-  const handleEdit = (row: any) => { setModalMode('edit'); setCurrentRecord(row); setFormData({ ...row }); setShowModal(true); };
-
-  const handleDelete = async (row: any) => {
-    if (!window.confirm('Are you sure you want to delete this record?')) return;
+  const fetchPerformance = async (vId) => {
     try {
-      const primaryKey = row.id || row.user_id;
-      if (!primaryKey) throw new Error('Cannot determine record ID');
-      const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/${primaryKey}/`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } });
-      if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(errorData.detail || `Failed to delete: ${response.statusText}`); }
-      showSuccess('Record deleted successfully!'); fetchTableData();
-    } catch (err: any) { setError('Error deleting record: ' + err.message); }
+      const response = await fetch(`${API_BASE_URL}/vendor-performance/?vendor=${vId}`);
+      if (!response.ok) throw new Error('Failed to fetch performance');
+      const data = await response.json();
+      const records = data.results || data || [];
+      if (records.length > 0) {
+        setPerformanceData(records[0]);
+      }
+    } catch (err) {
+      console.error('Error fetching performance:', err);
+    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setError(null);
-    try {
-      const primaryKey = currentRecord.id || currentRecord.user_id;
-      const url = modalMode === 'add' ? `${API_BASE_URL}/${ENDPOINT}/` : `${API_BASE_URL}/${ENDPOINT}/${primaryKey}/`;
-      const method = modalMode === 'add' ? 'POST' : 'PUT';
-      const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
-      if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(JSON.stringify(errorData) || `Failed to save: ${response.statusText}`); }
-      showSuccess(`Record ${modalMode === 'add' ? 'added' : 'updated'} successfully!`); setShowModal(false); fetchTableData();
-    } catch (err: any) { setError('Error saving record: ' + err.message); }
+  const downloadInvoice = (invoice) => {
+    // In a real app, this would generate/download the PDF
+    alert(`Downloading invoice ${invoice.invoice_number}`);
   };
 
-  const handleInputChange = (column: string, value: any) => { setFormData((prev: any) => ({ ...prev, [column]: value })); };
-  const handleChangePage = (_event: unknown, newPage: number) => setPage(newPage);
-  const handleChangeRowsPerPage = (event: ChangeEvent<HTMLInputElement>) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
-
-  const renderCellValue = (value: any) => {
-    if (value === null || value === undefined) return '-';
-    if (typeof value === 'boolean') return <Chip label={value ? 'Yes' : 'No'} color={value ? 'success' : 'default'} size="small" />;
-    if (typeof value === 'object') return JSON.stringify(value);
-    const strValue = String(value);
-    return strValue.length > 50 ? <Tooltip title={strValue} arrow><span>{strValue.substring(0, 50) + '...'}</span></Tooltip> : strValue;
+  const downloadReceipt = (invoice) => {
+    // In a real app, this would download the payment receipt
+    alert(`Downloading receipt for payment ${invoice.payment_reference}`);
   };
 
-  const paginatedData = tableData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Paid': return '#4caf50';
+      case 'Unpaid': return '#ff9800';
+      case 'Partially Paid': return '#2196f3';
+      case 'Overdue': return '#f44336';
+      default: return '#9e9e9e';
+    }
+  };
+
+  const getDaysUntilDue = (dueDate) => {
+    const today = new Date();
+    const due = new Date(dueDate);
+    const diffTime = due - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
 
   return (
-    <>
-      <Head><title>Billing Summary - Vendor Portal</title></Head>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center">
-          <Grid item>
-            <Typography variant="h3" component="h3" gutterBottom>💰 Billing Summary</Typography>
-            <Typography variant="subtitle2">View invoices and billing information</Typography>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
-        <Grid container direction="row" justifyContent="center" alignItems="stretch" spacing={3}>
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="Billing Summary Management" />
-              <Divider />
-              <CardContent>
-                {successMessage && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>{successMessage}</Alert>}
-                {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
-                {loading && <Box sx={{ textAlign: 'center', py: 8 }}><Typography variant="body1" color="text.secondary">Loading data...</Typography></Box>}
-                {!loading && !error && tableData.length === 0 && (
-                  <Box sx={{ textAlign: 'center', py: 8 }}>
-                    <Typography variant="h4" color="text.secondary" gutterBottom>📭</Typography>
-                    <Typography variant="h6" color="text.secondary">No data available</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Click "Add New" to create your first record</Typography>
-                  </Box>
-                )}
-                {!loading && !error && tableData.length > 0 && (
-                  <>
-                    <TableContainer>
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            {COLUMNS.map((column) => <TableCell key={column}><Typography variant="subtitle2" fontWeight="bold">{column.replace(/_/g, ' ').toUpperCase()}</Typography></TableCell>)}
-                            <TableCell align="center"><Typography variant="subtitle2" fontWeight="bold">ACTIONS</Typography></TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {paginatedData.map((row, index) => (
-                            <TableRow hover key={row.id || index}>
-                              {COLUMNS.map((column) => <TableCell key={column}>{renderCellValue(row[column])}</TableCell>)}
-                              <TableCell align="center">
-                                <Tooltip title="Edit" arrow><IconButton color="primary" size="small" onClick={() => handleEdit(row)} sx={{ mr: 1 }}><EditTwoToneIcon fontSize="small" /></IconButton></Tooltip>
-                                <Tooltip title="Delete" arrow><IconButton color="error" size="small" onClick={() => handleDelete(row)}><DeleteTwoToneIcon fontSize="small" /></IconButton></Tooltip>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                    <Box p={2}><TablePagination component="div" count={tableData.length} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} page={page} rowsPerPage={rowsPerPage} rowsPerPageOptions={[5, 10, 25, 50]} /></Box>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Container>
-      <Footer />
-      <Dialog open={showModal} onClose={() => setShowModal(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{modalMode === 'add' ? '➕ Add New Record' : '✏️ Edit Record'}</DialogTitle>
-        <DialogContent dividers>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          <Box component="form" onSubmit={handleSubmit}>
-            <Grid container spacing={2}>
-              {COLUMNS.map((column) => {
-                const currentValue = formData[column];
-                const isBoolean = typeof currentValue === 'boolean' || (currentRecord[column] !== undefined && typeof currentRecord[column] === 'boolean');
-                return (
-                  <Grid item xs={12} sm={6} key={column}>
-                    {isBoolean ? (
-                      <FormControl fullWidth>
-                        <InputLabel>{column.replace(/_/g, ' ').toUpperCase()}</InputLabel>
-                        <Select value={currentValue === true ? 'true' : currentValue === false ? 'false' : ''} onChange={(e) => handleInputChange(column, e.target.value === 'true')} label={column.replace(/_/g, ' ').toUpperCase()}>
-                          <MenuItem value="">Select...</MenuItem>
-                          <MenuItem value="true">Yes</MenuItem>
-                          <MenuItem value="false">No</MenuItem>
-                        </Select>
-                      </FormControl>
-                    ) : (
-                      <TextField fullWidth label={column.replace(/_/g, ' ').toUpperCase()} value={currentValue || ''} onChange={(e) => handleInputChange(column, e.target.value)} placeholder={`Enter ${column.replace(/_/g, ' ')}`} />
+    <div style={{ minHeight: '100vh', background: 'transparent', padding: '20px' }}>
+      {/* Header */}
+      <div style={{ background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+        <h1 style={{ margin: '0 0 8px 0', fontSize: '32px', color: '#1a1a2e' }}>💳 Payment & Invoice Tracking</h1>
+        <p style={{ margin: 0, color: '#666', fontSize: '16px' }}>Phase 6: Monitor your invoices and payments</p>
+      </div>
+
+      {/* Performance Scorecard */}
+      {performanceData && (
+        <div style={{ background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+          <h2 style={{ margin: '0 0 20px 0', fontSize: '24px', color: '#1a1a2e' }}>⭐ Performance Scorecard</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+            <div style={{ background: '#e3f2fd', padding: '16px', borderRadius: '8px' }}>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>On-Time Rate</p>
+              <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#2196f3' }}>
+                {performanceData.on_time_rate || 0}%
+              </p>
+            </div>
+            <div style={{ background: '#e8f5e9', padding: '16px', borderRadius: '8px' }}>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>Quality Pass Rate</p>
+              <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#4caf50' }}>
+                {performanceData.quality_score || 0}%
+              </p>
+            </div>
+            <div style={{ background: '#fff3e0', padding: '16px', borderRadius: '8px' }}>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>SLA Compliance</p>
+              <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#ff9800' }}>
+                {performanceData.compliance_score || 0}%
+              </p>
+            </div>
+            <div style={{ background: '#fce4ec', padding: '16px', borderRadius: '8px' }}>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>Overall Rating</p>
+              <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#e91e63' }}>
+                {performanceData.overall_rating || 0}/5
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoices List */}
+      <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+        <h2 style={{ margin: '0 0 20px 0', fontSize: '24px', color: '#1a1a2e' }}>📄 Invoices & Payments</h2>
+        
+        {loading ? (
+          <p style={{ textAlign: 'center', padding: '40px 0', color: '#666' }}>Loading invoices...</p>
+        ) : invoices.length === 0 ? (
+          <p style={{ textAlign: 'center', padding: '40px 0', color: '#666' }}>No invoices yet</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {invoices.map((invoice) => {
+              const daysUntilDue = getDaysUntilDue(invoice.due_date);
+              return (
+                <div
+                  key={invoice.invoice_number}
+                  style={{
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '12px'
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: '250px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                      <h3 style={{ margin: 0, fontSize: '18px', color: '#1a1a2e' }}>
+                        {invoice.invoice_number}
+                      </h3>
+                      <span style={{
+                        background: getStatusColor(invoice.payment_status),
+                        color: 'white',
+                        padding: '4px 12px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                      }}>
+                        {invoice.payment_status}
+                      </span>
+                    </div>
+                    <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#666' }}>
+                      <strong>Project:</strong> {invoice.project_code || 'N/A'}
+                    </p>
+                    <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#666' }}>
+                      <strong>Invoice Date:</strong> {new Date(invoice.invoice_date).toLocaleDateString()}
+                    </p>
+                    <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#666' }}>
+                      <strong>Due Date:</strong> {new Date(invoice.due_date).toLocaleDateString()}
+                      {daysUntilDue > 0 && invoice.payment_status !== 'Paid' && (
+                        <span style={{ color: daysUntilDue <= 7 ? '#f44336' : '#ff9800', marginLeft: '8px' }}>
+                          ({daysUntilDue} days remaining)
+                        </span>
+                      )}
+                    </p>
+                    <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#4caf50' }}>
+                      Net Amount: ₱{parseFloat(invoice.net_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </p>
+                    {invoice.penalty_amount > 0 && (
+                      <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#f44336' }}>
+                        Penalties Applied: -₱{parseFloat(invoice.penalty_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </p>
                     )}
-                  </Grid>
-                );
-              })}
-            </Grid>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowModal(false)} color="inherit">Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained" color="primary">{modalMode === 'add' ? 'Add Record' : 'Save Changes'}</Button>
-        </DialogActions>
-      </Dialog>
-      <Snackbar open={!!successMessage} autoHideDuration={3000} onClose={() => setSuccessMessage('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
-        <Alert severity="success" sx={{ width: '100%' }}>{successMessage}</Alert>
-      </Snackbar>
-    </>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <button
+                      onClick={() => { setSelectedInvoice(invoice); setShowInvoiceModal(true); }}
+                      style={{
+                        background: '#2196f3',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '14px'
+                      }}
+                    >
+                      View Details
+                    </button>
+                    <button
+                      onClick={() => downloadInvoice(invoice)}
+                      style={{
+                        background: '#667eea',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '14px'
+                      }}
+                    >
+                      📥 Download Invoice
+                    </button>
+                    {invoice.payment_status === 'Paid' && (
+                      <button
+                        onClick={() => downloadReceipt(invoice)}
+                        style={{
+                          background: '#4caf50',
+                          color: 'white',
+                          border: 'none',
+                          padding: '8px 16px',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '14px'
+                        }}
+                      >
+                        📄 Download Receipt
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Invoice Details Modal */}
+      {showInvoiceModal && selectedInvoice && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '24px',
+            maxWidth: '600px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflow: 'auto'
+          }}>
+            <h2 style={{ margin: '0 0 20px 0', color: '#1a1a2e' }}>Invoice Details</h2>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>
+                <strong>Invoice Number:</strong> {selectedInvoice.invoice_number}
+              </p>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>
+                <strong>Status:</strong> 
+                <span style={{
+                  marginLeft: '8px',
+                  background: getStatusColor(selectedInvoice.payment_status),
+                  color: 'white',
+                  padding: '2px 8px',
+                  borderRadius: '8px',
+                  fontSize: '12px'
+                }}>
+                  {selectedInvoice.payment_status}
+                </span>
+              </p>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>
+                <strong>Invoice Date:</strong> {new Date(selectedInvoice.invoice_date).toLocaleDateString()}
+              </p>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>
+                <strong>Due Date:</strong> {new Date(selectedInvoice.due_date).toLocaleDateString()}
+              </p>
+              {selectedInvoice.payment_date && (
+                <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>
+                  <strong>Payment Date:</strong> {new Date(selectedInvoice.payment_date).toLocaleDateString()}
+                </p>
+              )}
+              {selectedInvoice.payment_reference && (
+                <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>
+                  <strong>Payment Reference:</strong> {selectedInvoice.payment_reference}
+                </p>
+              )}
+            </div>
+
+            <div style={{ background: '#f5f5f5', padding: '16px', borderRadius: '8px', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <span style={{ fontSize: '16px', color: '#1a1a2e' }}>Invoice Amount:</span>
+                <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1a1a2e' }}>
+                  ₱{parseFloat(selectedInvoice.invoice_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              {selectedInvoice.penalty_amount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '16px', color: '#f44336' }}>Penalties:</span>
+                  <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#f44336' }}>
+                    -₱{parseFloat(selectedInvoice.penalty_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+              <div style={{ borderTop: '2px solid #ddd', paddingTop: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1a1a2e' }}>Net Amount:</span>
+                <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#4caf50' }}>
+                  ₱{parseFloat(selectedInvoice.net_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            {selectedInvoice.notes && (
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#1a1a2e' }}>Notes</h3>
+                <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>{selectedInvoice.notes}</p>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowInvoiceModal(false)}
+              style={{
+                width: '100%',
+                background: '#667eea',
+                color: 'white',
+                border: 'none',
+                padding: '12px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 'bold'
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error Notification */}
+      {error && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          background: '#f44336',
+          color: 'white',
+          padding: '16px 24px',
+          borderRadius: '8px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          zIndex: 2000
+        }}>
+          ❌ {error}
+        </div>
+      )}
+    </div>
   );
 }
-
-VendorBilling.getLayout = (page) => <SidebarLayout userRole="vendor">{page}</SidebarLayout>;
-export default VendorBilling;

@@ -154,6 +154,10 @@ router.register(r'calendar', CalendarDashboardViewSet, basename='calendar')
 # System Administrator Portal
 router.register(r'system-admin', SystemAdministratorViewSet, basename='system-admin')
 
+# Clerk document validation
+router.register(r'clerk-validation', ClerkDocumentValidationViewSet, basename='clerk-validation')
+
+
 # Vendor Daily Activities
 router.register(r'vendor-daily-activities', VendorDailyActivityViewSet, basename='vendor-daily-activity')
 router.register(r'vendor-activity-photos', VendorActivityPhotoViewSet, basename='vendor-activity-photo')

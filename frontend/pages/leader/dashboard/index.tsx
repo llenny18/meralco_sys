@@ -5,7 +5,7 @@ import PageTitleWrapper from '@/components/PageTitleWrapper';
 import { Grid, Container } from '@mui/material';
 import Footer from '@/components/Footer';
 
-import EngineeringAideDashboard from '@/old/engineeraide';
+import EngineeringAideDashboard from '@/leader';
 
 function ApplicationsTransactions() {
   return (

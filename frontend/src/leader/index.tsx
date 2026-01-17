@@ -1,456 +1,443 @@
-// pages/vendor/dashboard.tsx
-import { FC, useState } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import SidebarLayout from '@/layouts/SidebarLayout';
-import PageTitleWrapper from '@/components/PageTitleWrapper';
-import { Container, Grid, Card, CardHeader, CardContent, Divider, Box, Typography, Avatar, LinearProgress, Chip, Table, TableBody, TableCell, TableHead, TableRow, TableContainer, Button, Alert } from '@mui/material';
-import Footer from '@/components/Footer';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
-import PendingActionsIcon from '@mui/icons-material/PendingActions';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import WarningIcon from '@mui/icons-material/Warning';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import { useState, useEffect } from 'react';
 
-const COLORS = ['#5569ff', '#57ca22', '#ffc107', '#ff5630'];
+const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 
-// Mock Data
-const projectStats = {
-  total: 24,
-  completed: 18,
-  inProgress: 4,
-  overdue: 2
-};
-
-const complianceData = [
-  { name: 'Project A', compliance: 95 },
-  { name: 'Project B', compliance: 88 },
-  { name: 'Project C', compliance: 72 },
-  { name: 'Project D', compliance: 100 },
-  { name: 'Project E', compliance: 65 },
-];
-
-const documentStatus = [
-  { name: 'Submitted', value: 18 },
-  { name: 'Pending', value: 4 },
-  { name: 'Rejected', value: 2 },
-];
-
-const monthlySubmissions = [
-  { month: 'Jan', submitted: 12, approved: 10 },
-  { month: 'Feb', submitted: 15, approved: 13 },
-  { month: 'Mar', submitted: 18, approved: 16 },
-  { month: 'Apr', submitted: 14, approved: 12 },
-  { month: 'May', submitted: 20, approved: 18 },
-  { month: 'Jun', submitted: 22, approved: 20 },
-];
-
-const billingData = {
-  totalPaid: 2850000,
-  outstanding: 450000,
-  pending: 180000
-};
-
-const pendingTasks = [
-  { id: 1, project: 'Project Alpha', task: 'Submit COC', dueDate: '2025-12-05', priority: 'High' },
-  { id: 2, project: 'Project Beta', task: 'Upload Test Results', dueDate: '2025-12-08', priority: 'Medium' },
-  { id: 3, project: 'Project Gamma', task: 'Submit Final Report', dueDate: '2025-12-10', priority: 'Low' },
-  { id: 4, project: 'Project Delta', task: 'Upload Inspection Photos', dueDate: '2025-12-03', priority: 'High' },
-];
-
-const recentNotifications = [
-  { id: 1, message: 'COC for Project Alpha is due in 3 days', type: 'warning', date: '2025-12-01' },
-  { id: 2, message: 'Payment of ₱450,000 has been processed', type: 'success', date: '2025-11-30' },
-  { id: 3, message: 'Document rejected for Project Echo - resubmit', type: 'error', date: '2025-11-29' },
-  { id: 4, message: 'New task assigned: Project Zeta inspection', type: 'info', date: '2025-11-28' },
-];
-
-function VendorDashboard() {
-  const router = useRouter();
+export default function TeamLeaderPhase1Oversight() {
+  const [projects, setProjects] = useState([]);
+  const [supervisors, setSupervisors] = useState([]);
+  const [qiUsers, setQiUsers] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedSupervisor, setSelectedSupervisor] = useState('all');
+  const [workloadModal, setWorkloadModal] = useState(false);
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    const authToken = localStorage.getItem('authToken');
-    const userRole = localStorage.getItem('userRole');
+    fetchAllData();
+  }, []);
 
-    // If not authenticated or missing token, redirect to login
-    if (!userRole) {
-      router.push('/login');
-      return;
+  const fetchAllData = async () => {
+    setLoading(true);
+    try {
+      // Fetch projects
+      const projectsRes = await fetch(`${API_BASE_URL}/projects/`);
+      if (projectsRes.ok) {
+        const projectsData = await projectsRes.json();
+        setProjects(projectsData.results || projectsData || []);
+      }
+
+      // Fetch users
+      const usersRes = await fetch(`${API_BASE_URL}/users/`);
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        const allUsers = usersData.results || usersData || [];
+        
+        setSupervisors(allUsers.filter(u => u.role_name?.toLowerCase().includes('supervisor')));
+        setQiUsers(allUsers.filter(u => u.role_name?.toLowerCase().includes('qi') || u.role_name?.toLowerCase().includes('inspector')));
+      }
+
+      // Fetch vendors
+      const vendorsRes = await fetch(`${API_BASE_URL}/vendors/`);
+      if (vendorsRes.ok) {
+        const vendorsData = await vendorsRes.json();
+        setVendors(vendorsData.results || vendorsData || []);
+      }
+    } catch (err) {
+      console.error('Error:', err);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Optional: Check if user has admin role
-    if (userRole !== 'team-leader') {
-      // Redirect non-admin users to their appropriate dashboard
-      router.push('/unauthorized'); // or router.push('/dashboard');
-    }
-  }, [router]);
+  const getFilteredProjects = () => {
+    if (selectedSupervisor === 'all') return projects;
+    return projects.filter(p => p.wo_supervisor === parseInt(selectedSupervisor));
+  };
 
-  const overallCompliance = Math.round(
-    complianceData.reduce((acc, curr) => acc + curr.compliance, 0) / complianceData.length
-  );
+  const getProjectStats = () => {
+    const filtered = getFilteredProjects();
+    return {
+      total: filtered.length,
+      created: filtered.filter(p => p.status === 1).length,
+      inProgress: filtered.filter(p => p.status === 2).length,
+      completed: filtered.filter(p => p.status === 3).length,
+      awaitingDocs: filtered.filter(p => p.status === 4).length,
+      approved: filtered.filter(p => p.status === 5).length
+    };
+  };
+
+  const getQIWorkload = () => {
+    return qiUsers.map(qi => {
+      const assignedProjects = projects.filter(p => p.assigned_qi === qi.user_id);
+      const capacity = Math.min(100, (assignedProjects.length / 10) * 100); // Assume 10 projects = 100%
+      
+      return {
+        qiId: qi.user_id,
+        qiName: `${qi.first_name} ${qi.last_name}`,
+        assigned: assignedProjects.length,
+        capacity: capacity,
+        status: capacity > 90 ? 'overloaded' : capacity > 70 ? 'high' : capacity > 50 ? 'balanced' : 'low'
+      };
+    });
+  };
+
+  const getSupervisorPerformance = () => {
+    return supervisors.map(sup => {
+      const supProjects = projects.filter(p => p.wo_supervisor === sup.user_id);
+      const onTime = supProjects.filter(p => !p.is_delayed).length;
+      const onTimeRate = supProjects.length > 0 ? ((onTime / supProjects.length) * 100).toFixed(1) : 0;
+
+      return {
+        supervisorId: sup.user_id,
+        supervisorName: `${sup.first_name} ${sup.last_name}`,
+        totalProjects: supProjects.length,
+        onTimeRate: onTimeRate,
+        awaitingDocs: supProjects.filter(p => p.status === 4).length
+      };
+    });
+  };
+
+  const stats = getProjectStats();
+  const qiWorkload = getQIWorkload();
+  const supervisorPerf = getSupervisorPerformance();
+
+  const getCapacityColor = (capacity) => {
+    if (capacity > 90) return '#f44336';
+    if (capacity > 70) return '#ff9800';
+    if (capacity > 50) return '#4caf50';
+    return '#2196f3';
+  };
 
   return (
-    <>
-      <Head><title>Vendor Dashboard - Engineering Aide</title></Head>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center">
-          <Grid item>
-            <Typography variant="h3" component="h3" gutterBottom>
-              🏢 Vendor Representative Dashboard
-            </Typography>
-            <Typography variant="subtitle2">
-              Monitor your projects, compliance, and billing status
-            </Typography>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
-        <Grid container spacing={3}>
-          {/* KPI Cards */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h4" gutterBottom>{projectStats.total}</Typography>
-                    <Typography variant="body2" color="text.secondary">Total Projects</Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#5569ff', width: 56, height: 56 }}>
-                    <AssignmentTurnedInIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+    <div style={{ minHeight: '100vh',padding: '20px' }}>
+      {/* Header */}
+      <div style={{ background: 'white', borderRadius: '16px', padding: '28px', marginBottom: '24px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <h1 style={{ margin: '0 0 8px 0', fontSize: '32px', color: '#1a1a2e', fontWeight: '700' }}>
+              👔 Phase 1: Department Oversight
+            </h1>
+            <p style={{ margin: 0, color: '#666', fontSize: '16px' }}>
+              Monitor supervisors → Balance QI workload → Ensure process compliance
+            </p>
+          </div>
+          <button
+            onClick={() => setWorkloadModal(true)}
+            style={{
+              background: 'linear-gradient(45deg, #667eea, #764ba2)',
+              color: 'white',
+              border: 'none',
+              padding: '14px 28px',
+              borderRadius: '12px',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 4px 20px rgba(102, 126, 234, 0.4)'
+            }}
+          >
+            ⚖️ Balance Workload
+          </button>
+        </div>
+      </div>
 
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h4" gutterBottom>{projectStats.completed}</Typography>
-                    <Typography variant="body2" color="text.secondary">Completed</Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#57ca22', width: 56, height: 56 }}>
-                    <CheckCircleIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+      {/* Filter */}
+      <div style={{ background: 'white', borderRadius: '12px', padding: '16px', marginBottom: '20px', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
+        <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555', marginRight: '12px' }}>
+          Filter by Supervisor:
+        </label>
+        <select
+          value={selectedSupervisor}
+          onChange={(e) => setSelectedSupervisor(e.target.value)}
+          style={{
+            padding: '10px 16px',
+            borderRadius: '8px',
+            border: '2px solid #e0e0e0',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            minWidth: '200px'
+          }}
+        >
+          <option value="all">All Supervisors</option>
+          {supervisors.map(sup => (
+            <option key={sup.user_id} value={sup.user_id}>
+              {sup.first_name} {sup.last_name}
+            </option>
+          ))}
+        </select>
+      </div>
 
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h4" gutterBottom>{projectStats.inProgress}</Typography>
-                    <Typography variant="body2" color="text.secondary">In Progress</Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#ffc107', width: 56, height: 56 }}>
-                    <PendingActionsIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+      {/* Statistics Dashboard */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        {[
+          { label: 'Total Projects', value: stats.total, color: '#2196f3', icon: '📊' },
+          { label: 'In Progress', value: stats.inProgress, color: '#ff9800', icon: '⚙️' },
+          { label: 'Awaiting Docs', value: stats.awaitingDocs, color: '#f44336', icon: '📄' },
+          { label: 'Approved', value: stats.approved, color: '#4caf50', icon: '✅' }
+        ].map((stat, idx) => (
+          <div key={idx} style={{
+            background: 'white',
+            borderRadius: '12px',
+            padding: '20px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+            borderLeft: `4px solid ${stat.color}`
+          }}>
+            <div style={{ fontSize: '28px', marginBottom: '8px' }}>{stat.icon}</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', color: stat.color, marginBottom: '4px' }}>{stat.value}</div>
+            <div style={{ fontSize: '13px', color: '#666', fontWeight: '500' }}>{stat.label}</div>
+          </div>
+        ))}
+      </div>
 
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h4" gutterBottom>{projectStats.overdue}</Typography>
-                    <Typography variant="body2" color="text.secondary">Overdue</Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#ff5630', width: 56, height: 56 }}>
-                    <WarningIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+      {/* QI Workload Distribution */}
+      <div style={{ background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '24px', boxShadow: '0 6px 24px rgba(0,0,0,0.1)' }}>
+        <h2 style={{ margin: '0 0 20px 0', fontSize: '24px', color: '#1a1a2e', fontWeight: '700' }}>
+          👥 QI Workload Distribution
+        </h2>
+        <div style={{ display: 'grid', gap: '12px' }}>
+          {qiWorkload.map((qi) => (
+            <div key={qi.qiId} style={{
+              border: '2px solid #e0e0e0',
+              borderRadius: '12px',
+              padding: '16px',
+              transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.borderColor = '#667eea'}
+            onMouseOut={(e) => e.currentTarget.style.borderColor = '#e0e0e0'}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div>
+                  <p style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: '700', color: '#1a1a2e' }}>
+                    {qi.qiName}
+                  </p>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#666' }}>
+                    {qi.assigned} projects assigned
+                  </p>
+                </div>
+                <span style={{
+                  background: getCapacityColor(qi.capacity),
+                  color: 'white',
+                  padding: '6px 14px',
+                  borderRadius: '16px',
+                  fontSize: '13px',
+                  fontWeight: 'bold'
+                }}>
+                  {qi.capacity.toFixed(0)}% Capacity
+                </span>
+              </div>
 
-          {/* Overall Compliance */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title="📊 Overall Compliance Score" />
-              <Divider />
-              <CardContent>
-                <Box textAlign="center" py={3}>
-                  <Typography variant="h1" color={overallCompliance >= 90 ? 'success.main' : overallCompliance >= 70 ? 'warning.main' : 'error.main'}>
-                    {overallCompliance}%
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" mt={1}>
-                    Average Compliance Across All Projects
-                  </Typography>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={overallCompliance} 
-                    sx={{ mt: 3, height: 10, borderRadius: 5 }}
-                    color={overallCompliance >= 90 ? 'success' : overallCompliance >= 70 ? 'warning' : 'error'}
-                  />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+              {/* Capacity Bar */}
+              <div style={{
+                width: '100%',
+                height: '12px',
+                background: '#e0e0e0',
+                borderRadius: '6px',
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  width: `${Math.min(100, qi.capacity)}%`,
+                  height: '100%',
+                  background: getCapacityColor(qi.capacity),
+                  transition: 'width 0.5s ease'
+                }}></div>
+              </div>
 
-          {/* Document Status Pie Chart */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title="📄 Document Status Distribution" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie
-                      data={documentStatus}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
+              {/* Warning for overload */}
+              {qi.capacity > 90 && (
+                <div style={{
+                  marginTop: '12px',
+                  background: '#ffebee',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #f44336'
+                }}>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#f44336', fontWeight: 'bold' }}>
+                    ⚠️ OVERLOADED - Consider reassigning projects
+                  </p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Supervisor Performance */}
+      <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 6px 24px rgba(0,0,0,0.1)' }}>
+        <h2 style={{ margin: '0 0 20px 0', fontSize: '24px', color: '#1a1a2e', fontWeight: '700' }}>
+          📈 Supervisor Performance
+        </h2>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
+                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#999', textTransform: 'uppercase' }}>Supervisor</th>
+                <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#999', textTransform: 'uppercase' }}>Total Projects</th>
+                <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#999', textTransform: 'uppercase' }}>On-Time Rate</th>
+                <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#999', textTransform: 'uppercase' }}>Awaiting Docs</th>
+                <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#999', textTransform: 'uppercase' }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {supervisorPerf.map((sup) => {
+                const isGood = sup.onTimeRate >= 90;
+                const isWarning = sup.onTimeRate >= 70 && sup.onTimeRate < 90;
+                
+                return (
+                  <tr key={sup.supervisorId} style={{
+                    borderBottom: '1px solid #f0f0f0',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.background = '#f8f9fa'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'white'}>
+                    <td style={{ padding: '16px' }}>
+                      <p style={{ margin: 0, fontSize: '15px', fontWeight: '600', color: '#1a1a2e' }}>
+                        {sup.supervisorName}
+                      </p>
+                    </td>
+                    <td style={{ padding: '16px', textAlign: 'center', fontSize: '18px', fontWeight: 'bold', color: '#2196f3' }}>
+                      {sup.totalProjects}
+                    </td>
+                    <td style={{ padding: '16px', textAlign: 'center' }}>
+                      <span style={{
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        color: isGood ? '#4caf50' : isWarning ? '#ff9800' : '#f44336'
+                      }}>
+                        {sup.onTimeRate}%
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px', textAlign: 'center', fontSize: '16px', fontWeight: '600', color: '#ff9800' }}>
+                      {sup.awaitingDocs}
+                    </td>
+                    <td style={{ padding: '16px', textAlign: 'center' }}>
+                      <span style={{
+                        background: isGood ? '#4caf50' : isWarning ? '#ff9800' : '#f44336',
+                        color: 'white',
+                        padding: '6px 12px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                      }}>
+                        {isGood ? '✓ Excellent' : isWarning ? '⚠️ Fair' : '✗ Needs Attention'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Workload Balance Modal */}
+      {workloadModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '20px',
+          overflow: 'auto'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '700px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflow: 'auto'
+          }}>
+            <h2 style={{ margin: '0 0 24px 0', fontSize: '28px', color: '#1a1a2e', fontWeight: '700' }}>
+              ⚖️ Workload Balancing
+            </h2>
+
+            <div style={{ background: '#e3f2fd', padding: '16px', borderRadius: '12px', marginBottom: '24px', border: '2px solid #2196f3' }}>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 'bold', color: '#2196f3' }}>
+                📊 Department Variance Analysis
+              </p>
+              <p style={{ margin: 0, fontSize: '13px', color: '#555' }}>
+                Target: ±8% variance across all QI inspectors<br/>
+                Current variance: <strong style={{ color: '#f44336' }}>±12%</strong> (Needs rebalancing)
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', color: '#1a1a2e' }}>
+                Recommended Actions:
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {qiWorkload.filter(qi => qi.capacity > 80).map((qi) => (
+                  <div key={qi.qiId} style={{
+                    background: '#fff3e0',
+                    padding: '16px',
+                    borderRadius: '10px',
+                    border: '2px solid #ff9800'
+                  }}>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 'bold', color: '#ff9800' }}>
+                      ⚠️ {qi.qiName} - {qi.capacity.toFixed(0)}% capacity
+                    </p>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#555' }}>
+                      Suggestion: Reassign 2-3 lower priority projects to available QI members
+                    </p>
+                    <button
+                      onClick={() => alert(`Initiating reassignment for ${qi.qiName}`)}
+                      style={{
+                        background: '#ff9800',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '13px'
+                      }}
                     >
-                      {documentStatus.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Project Compliance Bar Chart */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader title="📈 Project Compliance Scores" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={complianceData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis domain={[0, 100]} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="compliance" fill="#5569ff" name="Compliance %" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Monthly Submission Trends */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader title="📅 Monthly Document Submission Trends" />
-              <Divider />
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={monthlySubmissions}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="submitted" stroke="#5569ff" strokeWidth={2} name="Submitted" />
-                    <Line type="monotone" dataKey="approved" stroke="#57ca22" strokeWidth={2} name="Approved" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Billing Summary */}
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardHeader title="💰 Total Paid" />
-              <Divider />
-              <CardContent>
-                <Box textAlign="center" py={2}>
-                  <Avatar sx={{ bgcolor: '#57ca22', width: 64, height: 64, margin: '0 auto', mb: 2 }}>
-                    <AccountBalanceWalletIcon fontSize="large" />
-                  </Avatar>
-                  <Typography variant="h4" color="success.main">
-                    ₱{billingData.totalPaid.toLocaleString()}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" mt={1}>
-                    Year to Date
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardHeader title="⏳ Outstanding Balance" />
-              <Divider />
-              <CardContent>
-                <Box textAlign="center" py={2}>
-                  <Avatar sx={{ bgcolor: '#ffc107', width: 64, height: 64, margin: '0 auto', mb: 2 }}>
-                    <AccountBalanceWalletIcon fontSize="large" />
-                  </Avatar>
-                  <Typography variant="h4" color="warning.main">
-                    ₱{billingData.outstanding.toLocaleString()}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" mt={1}>
-                    Pending Payment
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardHeader title="📋 Pending Invoices" />
-              <Divider />
-              <CardContent>
-                <Box textAlign="center" py={2}>
-                  <Avatar sx={{ bgcolor: '#ff5630', width: 64, height: 64, margin: '0 auto', mb: 2 }}>
-                    <AccountBalanceWalletIcon fontSize="large" />
-                  </Avatar>
-                  <Typography variant="h4" color="error.main">
-                    ₱{billingData.pending.toLocaleString()}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" mt={1}>
-                    Unpaid Invoices
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Pending Tasks */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader 
-                title="✅ Pending Tasks" 
-                action={<Button size="small" variant="contained">View All</Button>}
-              />
-              <Divider />
-              <CardContent>
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Project</TableCell>
-                        <TableCell>Task</TableCell>
-                        <TableCell>Due Date</TableCell>
-                        <TableCell>Priority</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {pendingTasks.map((task) => (
-                        <TableRow key={task.id} hover>
-                          <TableCell>{task.project}</TableCell>
-                          <TableCell>{task.task}</TableCell>
-                          <TableCell>{task.dueDate}</TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={task.priority} 
-                              size="small"
-                              color={task.priority === 'High' ? 'error' : task.priority === 'Medium' ? 'warning' : 'default'}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Recent Notifications */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader 
-                title="🔔 Recent Notifications" 
-                action={<Button size="small" variant="outlined">Mark All Read</Button>}
-              />
-              <Divider />
-              <CardContent>
-                {recentNotifications.map((notif) => (
-                  <Alert 
-                    key={notif.id} 
-                    severity={notif.type as any}
-                    sx={{ mb: 1 }}
-                  >
-                    <Typography variant="body2">{notif.message}</Typography>
-                    <Typography variant="caption" color="text.secondary">{notif.date}</Typography>
-                  </Alert>
+                      Auto-Balance
+                    </button>
+                  </div>
                 ))}
-              </CardContent>
-            </Card>
-          </Grid>
+              </div>
+            </div>
 
-          {/* Quick Actions */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader title="⚡ Quick Actions" />
-              <Divider />
-              <CardContent>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button 
-                      variant="contained" 
-                      fullWidth 
-                      startIcon={<UploadFileIcon />}
-                      size="large"
-                    >
-                      Upload COC
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button 
-                      variant="contained" 
-                      fullWidth 
-                      startIcon={<AssignmentTurnedInIcon />}
-                      size="large"
-                      color="secondary"
-                    >
-                      View Projects
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button 
-                      variant="contained" 
-                      fullWidth 
-                      startIcon={<AccountBalanceWalletIcon />}
-                      size="large"
-                      color="success"
-                    >
-                      Check Billing
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button 
-                      variant="outlined" 
-                      fullWidth 
-                      size="large"
-                    >
-                      Submit Feedback
-                    </Button>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Container>
-      <Footer />
-    </>
+            <button
+              onClick={() => setWorkloadModal(false)}
+              style={{
+                width: '100%',
+                background: 'linear-gradient(45deg, #667eea, #764ba2)',
+                color: 'white',
+                border: 'none',
+                padding: '14px',
+                borderRadius: '10px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: '15px'
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: 'white',
+          padding: '32px',
+          borderRadius: '16px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+        }}>
+          <p style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>Loading...</p>
+        </div>
+      )}
+    </div>
   );
 }
-
-VendorDashboard.getLayout = (page) => <SidebarLayout userRole="vendor">{page}</SidebarLayout>;
-export default VendorDashboard;

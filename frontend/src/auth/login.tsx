@@ -5,15 +5,8 @@ const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 
 const USER_TYPES = [
   { value: '', label: 'Select User Type' },
-  { value: 'admin', label: 'Administrator' },
-  { value: 'team-leader', label: 'Team Leader' },
-  { value: 'sector-manager', label: 'Sector Manager' },
-  { value: 'engineer', label: 'Engineer' },
-  { value: 'vendor', label: 'Vendor' },
-  { value: 'quality-inspector', label: 'Quality Inspector' },
-  { value: 'clerk', label: 'Clerk' },
-  { value: 'engineering-aide', label: 'Engineering Aide' },
-  { value: 'supervisor', label: 'Supervisor' }
+  { value: 'loading', label: 'Loading...' },
+
 ];
 
 export default function LoginPage() {

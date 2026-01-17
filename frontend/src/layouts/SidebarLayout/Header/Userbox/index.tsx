@@ -105,8 +105,9 @@ function HeaderUserbox() {
   useEffect(() => {
     const role = localStorage.getItem("userRole");
     const email = localStorage.getItem("email");
+    const userData = JSON.parse(localStorage.getItem("user") || '{}');
 
-    setStoredRole(role ? `Role: ${role.toUpperCase()}` : null);
+    setStoredRole(role ? `${userData.full_name}` : null);
     setStoredEmail(email);
   }, []);
   const user = {

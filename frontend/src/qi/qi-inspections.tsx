@@ -1,204 +1,575 @@
-// pages/qi/qi-inspections.tsx
-import { FC, useState, useEffect, ChangeEvent } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import SidebarLayout from '@/layouts/SidebarLayout';
-import PageTitleWrapper from '@/components/PageTitleWrapper';
-import { Container, Grid, Card, CardHeader, CardContent, Divider, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Alert, Snackbar, Typography, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, TableContainer, Tooltip, IconButton, Chip, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import Footer from '@/components/Footer';
-import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
-import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
-import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
+import { useState, useEffect } from 'react';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
-const ENDPOINT = 'qi-inspections';
-const COLUMNS = ['project', 'inspection_type', 'scheduled_date', 'inspection_date', 'inspection_result', 'is_completed'];
 
-function QiInspections() {
-  const router = useRouter();
+export default function QIWebDashboard() {
+  const [assignments, setAssignments] = useState([]);
+  const [stats, setStats] = useState({
+    pending: 0,
+    today: 0,
+    thisWeek: 0,
+    capacity: 0
+  });
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState('ALL');
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [userId, setUserId] = useState('');
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    const authToken = localStorage.getItem('authToken');
-    const userRole = localStorage.getItem('userRole');
-
-    // If not authenticated or missing token, redirect to login
-    if (!userRole) {
-      router.push('/login');
-      return;
+    const storedUser = localStorage?.getItem('user');
+    const userObj = storedUser ? JSON.parse(storedUser) : null;
+    setUserId(userObj?.user_id || '1');
+    
+    if (userObj?.user_id) {
+      fetchAssignments(userObj.user_id);
     }
+  }, [filter]);
 
-    // Optional: Check if user has admin role
-    if (userRole !== 'quality-inspector') {
-      // Redirect non-admin users to their appropriate dashboard
-      router.push('/unauthorized'); // or router.push('/dashboard');
-    }
-  }, [router]);
-
-  const [tableData, setTableData] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState<boolean>(false);
-  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
-  const [currentRecord, setCurrentRecord] = useState<any>({});
-  const [formData, setFormData] = useState<any>({});
-  const [successMessage, setSuccessMessage] = useState<string>('');
-  const [page, setPage] = useState<number>(0);
-  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
-
-  useEffect(() => { fetchTableData(); }, []);
-
-  const fetchTableData = async () => {
-    setLoading(true); setError(null);
+  const fetchAssignments = async (qiId) => {
+    setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/`);
-      if (!response.ok) throw new Error(`Failed to fetch data: ${response.statusText}`);
+      let url = `${API_BASE_URL}/qi-inspections/?assigned_qi=${qiId}&is_completed=false`;
+      if (filter !== 'ALL') {
+        url += `&urgency=${filter}`;
+      }
+      
+      const response = await fetch(url);
       const data = await response.json();
-      setTableData(Array.isArray(data) ? data : data.results || []);
-    } catch (err: any) { setError(err.message); setTableData([]); } finally { setLoading(false); }
+      const inspections = data.results || data || [];
+      
+      // Sort by urgency
+      const sorted = inspections.sort((a, b) => {
+        const urgencyA = getUrgencyLevel(a);
+        const urgencyB = getUrgencyLevel(b);
+        return urgencyB - urgencyA;
+      });
+      
+      setAssignments(sorted);
+      calculateStats(sorted);
+    } catch (err) {
+      console.error('Error fetching assignments:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const showSuccess = (message: string) => { setSuccessMessage(message); setTimeout(() => setSuccessMessage(''), 3000); };
-  const handleAdd = () => { setModalMode('add'); setFormData({}); setCurrentRecord({}); setShowModal(true); };
-  const handleEdit = (row: any) => { setModalMode('edit'); setCurrentRecord(row); setFormData({ ...row }); setShowModal(true); };
+  const calculateStats = (inspections) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    const weekEnd = new Date(today);
+    weekEnd.setDate(weekEnd.getDate() + 7);
 
-  const handleDelete = async (row: any) => {
-    if (!window.confirm('Are you sure you want to delete this record?')) return;
+    const stats = {
+      pending: inspections.length,
+      today: inspections.filter(i => {
+        const schedDate = new Date(i.scheduled_date);
+        return schedDate >= today && schedDate <= todayEnd;
+      }).length,
+      thisWeek: inspections.filter(i => {
+        const schedDate = new Date(i.scheduled_date);
+        return schedDate >= today && schedDate <= weekEnd;
+      }).length,
+      capacity: inspections.length > 0 ? Math.min(100, Math.round((inspections.length / 15) * 100)) : 0
+    };
+
+    setStats(stats);
+  };
+
+  const getUrgencyLevel = (inspection) => {
+    if (!inspection.scheduled_date) return 0;
+    const daysUntil = Math.floor((new Date(inspection.scheduled_date) - new Date()) / (1000 * 60 * 60 * 24));
+    if (daysUntil <= 0) return 3; // URGENT
+    if (daysUntil <= 7) return 2; // DUE THIS WEEK
+    return 1; // SCHEDULED
+  };
+
+  const getUrgencyBadge = (inspection) => {
+    const level = getUrgencyLevel(inspection);
+    if (level === 3) return { text: 'URGENT', color: '#f44336', icon: '🔴' };
+    if (level === 2) return { text: 'DUE THIS WEEK', color: '#ff9800', icon: '🟡' };
+    return { text: 'SCHEDULED', color: '#2196f3', icon: '🟢' };
+  };
+
+  const handleAcceptAssignment = async (inspectionId) => {
+    if (!confirm('Accept this inspection assignment?')) return;
+
+    setLoading(true);
     try {
-      const primaryKey = row.id || row.user_id;
-      if (!primaryKey) throw new Error('Cannot determine record ID');
-      const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/${primaryKey}/`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } });
-      if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(errorData.detail || `Failed to delete: ${response.statusText}`); }
-      showSuccess('Record deleted successfully!'); fetchTableData();
-    } catch (err: any) { setError('Error deleting record: ' + err.message); }
+      const response = await fetch(`${API_BASE_URL}/qi-inspections/${inspectionId}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          assignment_status: 'ACCEPTED',
+          accepted_at: new Date().toISOString()
+        })
+      });
+      
+      if (response.ok) {
+        alert('✅ Assignment accepted!');
+        fetchAssignments(userId);
+      }
+    } catch (err) {
+      console.error('Error accepting assignment:', err);
+      alert('❌ Error accepting assignment');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setError(null);
+  const handleRequestReassignment = async (inspectionId) => {
+    const reason = prompt('Enter reason for reassignment request:');
+    if (!reason) return;
+
+    setLoading(true);
     try {
-      const primaryKey = currentRecord.id || currentRecord.user_id;
-      const url = modalMode === 'add' ? `${API_BASE_URL}/${ENDPOINT}/` : `${API_BASE_URL}/${ENDPOINT}/${primaryKey}/`;
-      const method = modalMode === 'add' ? 'POST' : 'PUT';
-      const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
-      if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(JSON.stringify(errorData) || `Failed to save: ${response.statusText}`); }
-      showSuccess(`Record ${modalMode === 'add' ? 'added' : 'updated'} successfully!`); setShowModal(false); fetchTableData();
-    } catch (err: any) { setError('Error saving record: ' + err.message); }
+      const response = await fetch(`${API_BASE_URL}/qi-inspections/${inspectionId}/request_reassignment/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          reason,
+          requested_by: userId,
+          requested_at: new Date().toISOString()
+        })
+      });
+      
+      if (response.ok) {
+        alert('✅ Reassignment request submitted to Clerk');
+        fetchAssignments(userId);
+      }
+    } catch (err) {
+      console.error('Error requesting reassignment:', err);
+      alert('❌ Error submitting request');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleInputChange = (column: string, value: any) => { setFormData((prev: any) => ({ ...prev, [column]: value })); };
-  const handleChangePage = (_event: unknown, newPage: number) => setPage(newPage);
-  const handleChangeRowsPerPage = (event: ChangeEvent<HTMLInputElement>) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
-
-  const renderCellValue = (value: any) => {
-    if (value === null || value === undefined) return '-';
-    if (typeof value === 'boolean') return <Chip label={value ? 'Yes' : 'No'} color={value ? 'success' : 'default'} size="small" />;
-    if (typeof value === 'object') return JSON.stringify(value);
-    const strValue = String(value);
-    return strValue.length > 50 ? <Tooltip title={strValue} arrow><span>{strValue.substring(0, 50) + '...'}</span></Tooltip> : strValue;
+  const handleViewDetails = async (inspection) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/qi-inspections/${inspection.inspection_id}/`);
+      const data = await response.json();
+      setSelectedAssignment(data);
+      setShowDetailModal(true);
+    } catch (err) {
+      console.error('Error fetching details:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const paginatedData = tableData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const getCapacityColor = (capacity) => {
+    if (capacity >= 90) return '#f44336';
+    if (capacity >= 75) return '#ff9800';
+    return '#4caf50';
+  };
 
   return (
-    <>
-      <Head><title>My Inspections - Quality Inspector</title></Head>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center">
-          <Grid item>
-            <Typography variant="h3" component="h3" gutterBottom>🔍 My Inspections</Typography>
-            <Typography variant="subtitle2">Manage your quality inspections</Typography>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
-        <Grid container direction="row" justifyContent="center" alignItems="stretch" spacing={3}>
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="My Inspections Management" />
-              <Divider />
-              <CardContent>
-                {successMessage && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>{successMessage}</Alert>}
-                {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
-                {loading && <Box sx={{ textAlign: 'center', py: 8 }}><Typography variant="body1" color="text.secondary">Loading data...</Typography></Box>}
-                {!loading && !error && tableData.length === 0 && (
-                  <Box sx={{ textAlign: 'center', py: 8 }}>
-                    <Typography variant="h4" color="text.secondary" gutterBottom>📭</Typography>
-                    <Typography variant="h6" color="text.secondary">No data available</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Click "Add New" to create your first record</Typography>
-                  </Box>
-                )}
-                {!loading && !error && tableData.length > 0 && (
-                  <>
-                    <TableContainer>
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            {COLUMNS.map((column) => <TableCell key={column}><Typography variant="subtitle2" fontWeight="bold">{column.replace(/_/g, ' ').toUpperCase()}</Typography></TableCell>)}
-                            <TableCell align="center"><Typography variant="subtitle2" fontWeight="bold">ACTIONS</Typography></TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {paginatedData.map((row, index) => (
-                            <TableRow hover key={row.id || index}>
-                              {COLUMNS.map((column) => <TableCell key={column}>{renderCellValue(row[column])}</TableCell>)}
-                              <TableCell align="center">
-                                <Tooltip title="Edit" arrow><IconButton color="primary" size="small" onClick={() => handleEdit(row)} sx={{ mr: 1 }}><EditTwoToneIcon fontSize="small" /></IconButton></Tooltip>
-                                <Tooltip title="Delete" arrow><IconButton color="error" size="small" onClick={() => handleDelete(row)}><DeleteTwoToneIcon fontSize="small" /></IconButton></Tooltip>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                    <Box p={2}><TablePagination component="div" count={tableData.length} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} page={page} rowsPerPage={rowsPerPage} rowsPerPageOptions={[5, 10, 25, 50]} /></Box>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Container>
-      <Footer />
-      <Dialog open={showModal} onClose={() => setShowModal(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{modalMode === 'add' ? '➕ Add New Record' : '✏️ Edit Record'}</DialogTitle>
-        <DialogContent dividers>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          <Box component="form" onSubmit={handleSubmit}>
-            <Grid container spacing={2}>
-              {COLUMNS.map((column) => {
-                const currentValue = formData[column];
-                const isBoolean = typeof currentValue === 'boolean' || (currentRecord[column] !== undefined && typeof currentRecord[column] === 'boolean');
-                return (
-                  <Grid item xs={12} sm={6} key={column}>
-                    {isBoolean ? (
-                      <FormControl fullWidth>
-                        <InputLabel>{column.replace(/_/g, ' ').toUpperCase()}</InputLabel>
-                        <Select value={currentValue === true ? 'true' : currentValue === false ? 'false' : ''} onChange={(e) => handleInputChange(column, e.target.value === 'true')} label={column.replace(/_/g, ' ').toUpperCase()}>
-                          <MenuItem value="">Select...</MenuItem>
-                          <MenuItem value="true">Yes</MenuItem>
-                          <MenuItem value="false">No</MenuItem>
-                        </Select>
-                      </FormControl>
-                    ) : (
-                      <TextField fullWidth label={column.replace(/_/g, ' ').toUpperCase()} value={currentValue || ''} onChange={(e) => handleInputChange(column, e.target.value)} placeholder={`Enter ${column.replace(/_/g, ' ')}`} />
-                    )}
-                  </Grid>
-                );
-              })}
-            </Grid>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowModal(false)} color="inherit">Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained" color="primary">{modalMode === 'add' ? 'Add Record' : 'Save Changes'}</Button>
-        </DialogActions>
-      </Dialog>
-      <Snackbar open={!!successMessage} autoHideDuration={3000} onClose={() => setSuccessMessage('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
-        <Alert severity="success" sx={{ width: '100%' }}>{successMessage}</Alert>
-      </Snackbar>
-    </>
+    <div style={{ minHeight: '100vh', background: 'transparent', padding: '20px' }}>
+      {/* Header */}
+      <div style={{ background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <h1 style={{ margin: '0 0 8px 0', fontSize: '32px', color: '#1a1a2e' }}>🎯 QI Assignment Dashboard</h1>
+            <p style={{ margin: 0, color: '#666', fontSize: '16px' }}>Your inspection queue and schedule</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+        <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+          <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>PENDING ASSIGNMENTS</div>
+          <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#2196f3' }}>{stats.pending}</div>
+          <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Total inspections</div>
+        </div>
+
+        <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+          <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>DUE TODAY</div>
+          <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#f44336' }}>{stats.today}</div>
+          <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Urgent attention required</div>
+        </div>
+
+        <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+          <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>THIS WEEK</div>
+          <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#ff9800' }}>{stats.thisWeek}</div>
+          <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Next 7 days</div>
+        </div>
+
+        <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+          <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>MY CAPACITY</div>
+          <div style={{ fontSize: '40px', fontWeight: 'bold', color: getCapacityColor(stats.capacity) }}>
+            {stats.capacity}%
+          </div>
+          <div style={{ width: '100%', background: '#e0e0e0', height: '6px', borderRadius: '3px', marginTop: '8px', overflow: 'hidden' }}>
+            <div style={{
+              width: `${stats.capacity}%`,
+              height: '100%',
+              background: getCapacityColor(stats.capacity),
+              transition: 'width 0.3s'
+            }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div style={{ background: 'white', borderRadius: '12px', padding: '16px', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#666' }}>FILTER BY:</span>
+          {['ALL', 'URGENT', 'DUE_THIS_WEEK', 'SCHEDULED'].map(f => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              style={{
+                background: filter === f ? 'linear-gradient(45deg, #667eea, #764ba2)' : 'white',
+                color: filter === f ? 'white' : '#666',
+                border: filter === f ? 'none' : '1px solid #ddd',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: filter === f ? 'bold' : 'normal',
+                transition: 'all 0.2s'
+              }}>
+              {f.replace('_', ' ')}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Inspection Queue */}
+      <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+        <h2 style={{ margin: '0 0 20px 0', fontSize: '24px', color: '#1a1a2e' }}>📋 Inspection Queue</h2>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '60px', color: '#999' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
+            <p style={{ fontSize: '16px', margin: 0 }}>Loading assignments...</p>
+          </div>
+        ) : assignments.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px', color: '#999' }}>
+            <div style={{ fontSize: '64px', marginBottom: '16px' }}>✅</div>
+            <p style={{ fontSize: '18px', margin: 0 }}>No pending inspections</p>
+            <p style={{ fontSize: '14px', margin: '8px 0 0 0' }}>All caught up!</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {assignments.map(assignment => {
+              const urgency = getUrgencyBadge(assignment);
+              const daysUntil = Math.floor((new Date(assignment.scheduled_date) - new Date()) / (1000 * 60 * 60 * 24));
+              
+              return (
+                <div key={assignment.inspection_id} style={{
+                  border: `2px solid ${urgency.color}`,
+                  borderRadius: '12px',
+                  padding: '24px',
+                  background: urgency.level === 3 ? '#fff5f5' : '#fafafa',
+                  transition: 'all 0.2s',
+                  cursor: 'pointer'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,0,0,0.15)'}
+                onMouseOut={(e) => e.currentTarget.style.boxShadow = 'none'}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px', flexWrap: 'wrap', gap: '16px' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                        <h3 style={{ margin: 0, fontSize: '22px', color: '#1a1a2e' }}>
+                          Project #{assignment.project}
+                        </h3>
+                        <span style={{
+                          background: urgency.color,
+                          color: 'white',
+                          padding: '6px 16px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          {urgency.icon} {urgency.text}
+                        </span>
+                        {assignment.is_reinspection && (
+                          <span style={{
+                            background: '#9c27b0',
+                            color: 'white',
+                            padding: '6px 16px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                          }}>
+                            🔄 RE-INSPECTION
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>📅 SCHEDULED DATE</div>
+                          <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#1a1a2e' }}>
+                            {assignment.scheduled_date ? new Date(assignment.scheduled_date).toLocaleDateString('en-US', { 
+                              weekday: 'short', 
+                              month: 'short', 
+                              day: 'numeric',
+                              year: 'numeric'
+                            }) : 'Not scheduled'}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>⏰ TIME</div>
+                          <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#1a1a2e' }}>
+                            {assignment.scheduled_time || '09:00 AM'}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>⏳ DAYS UNTIL</div>
+                          <div style={{ fontSize: '15px', fontWeight: 'bold', color: daysUntil <= 0 ? '#f44336' : '#1a1a2e' }}>
+                            {daysUntil <= 0 ? 'OVERDUE' : daysUntil === 0 ? 'TODAY' : `${daysUntil} days`}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>📋 TYPE</div>
+                          <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#1a1a2e' }}>
+                            {assignment.inspection_type_name || 'General Inspection'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {assignment.project_location && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                          <span style={{ fontSize: '14px', color: '#666' }}>📍</span>
+                          <span style={{ fontSize: '14px', color: '#666' }}>{assignment.project_location}</span>
+                        </div>
+                      )}
+
+                      {assignment.assignment_status === 'PENDING' && (
+                        <div style={{
+                          marginTop: '12px',
+                          padding: '12px',
+                          background: '#fff9e6',
+                          border: '1px solid #ffc107',
+                          borderRadius: '8px',
+                          fontSize: '13px',
+                          color: '#1a1a2e'
+                        }}>
+                          ⚠️ <strong>Action Required:</strong> Please accept or request reassignment
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '180px' }}>
+                      <button
+                        onClick={() => handleViewDetails(assignment)}
+                        style={{
+                          background: '#2196f3',
+                          color: 'white',
+                          border: 'none',
+                          padding: '12px 20px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontWeight: 'bold',
+                          transition: 'transform 0.2s'
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                        onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+                        📄 View Details
+                      </button>
+
+                      {assignment.assignment_status === 'PENDING' && (
+                        <>
+                          <button
+                            onClick={() => handleAcceptAssignment(assignment.inspection_id)}
+                            style={{
+                              background: 'linear-gradient(45deg, #4caf50, #45a049)',
+                              color: 'white',
+                              border: 'none',
+                              padding: '12px 20px',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: 'bold',
+                              transition: 'transform 0.2s'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                            onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+                            ✅ Accept
+                          </button>
+
+                          <button
+                            onClick={() => handleRequestReassignment(assignment.inspection_id)}
+                            style={{
+                              background: '#fff',
+                              color: '#666',
+                              border: '1px solid #ddd',
+                              padding: '12px 20px',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.borderColor = '#ff9800';
+                              e.currentTarget.style.color = '#ff9800';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.borderColor = '#ddd';
+                              e.currentTarget.style.color = '#666';
+                            }}>
+                            🔄 Request Reassignment
+                          </button>
+                        </>
+                      )}
+
+                      {assignment.assignment_status === 'ACCEPTED' && (
+                        <button
+                          onClick={() => window.location.href = `/qi/inspection?id=${assignment.inspection_id}`}
+                          style={{
+                            background: 'linear-gradient(45deg, #667eea, #764ba2)',
+                            color: 'white',
+                            border: 'none',
+                            padding: '12px 20px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: 'bold',
+                            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+                            transition: 'transform 0.2s'
+                          }}
+                          onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                          onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+                          🚀 Start Inspection
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Detail Modal */}
+      {showDetailModal && selectedAssignment && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '20px',
+          overflow: 'auto'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '800px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflow: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '24px' }}>
+              <div>
+                <h2 style={{ margin: '0 0 8px 0', fontSize: '28px', color: '#1a1a2e' }}>
+                  Inspection Details
+                </h2>
+                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+                  Project #{selectedAssignment.project}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDetailModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '32px',
+                  cursor: 'pointer',
+                  color: '#999',
+                  padding: 0,
+                  lineHeight: 1
+                }}>
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+              <div style={{ background: '#f5f5f5', borderRadius: '8px', padding: '16px' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>SCHEDULED DATE</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1a1a2e' }}>
+                  {new Date(selectedAssignment.scheduled_date).toLocaleDateString()}
+                </div>
+              </div>
+              <div style={{ background: '#f5f5f5', borderRadius: '8px', padding: '16px' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>TIME</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1a1a2e' }}>
+                  {selectedAssignment.scheduled_time || '09:00 AM'}
+                </div>
+              </div>
+            </div>
+
+            {selectedAssignment.project_description && (
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '18px', color: '#1a1a2e' }}>Project Description</h3>
+                <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px', fontSize: '14px', lineHeight: '1.6', color: '#1a1a2e' }}>
+                  {selectedAssignment.project_description}
+                </div>
+              </div>
+            )}
+
+            {selectedAssignment.focus_items && selectedAssignment.focus_items.length > 0 && (
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '18px', color: '#1a1a2e' }}>
+                  Focus Items (Re-inspection)
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {selectedAssignment.focus_items.map((item, idx) => (
+                    <div key={idx} style={{
+                      padding: '12px',
+                      background: '#fff9f0',
+                      borderLeft: '4px solid #ff9800',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      color: '#1a1a2e'
+                    }}>
+                      • {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
+              <button
+                onClick={() => setShowDetailModal(false)}
+                style={{
+                  background: '#fff',
+                  color: '#666',
+                  border: '1px solid #ddd',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px'
+                }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
-
-QiInspections.getLayout = (page) => <SidebarLayout userRole="qi">{page}</SidebarLayout>;
-export default QiInspections;

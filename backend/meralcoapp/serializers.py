@@ -152,6 +152,7 @@ class RolePermissionSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+from django.contrib.auth.hashers import make_password
 class UserSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='role.role_name', read_only=True)
     full_name = serializers.SerializerMethodField()
@@ -159,14 +160,41 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['user_id', 'username', 'email', 'first_name', 'last_name', 'full_name',
-                  'role', 'role_name', 'phone_number', 'is_active', 'last_login',
+                  'role', 'role_name', 'phone_number','password', 'is_active', 'last_login',
                   'created_at', 'updated_at']
         extra_kwargs = {
-            'password': {'write_only': True}
+            'password': {'write_only': True},
+            'last_login': {'read_only': True},
+            'created_at': {'read_only': True},
+            'updated_at': {'read_only': True},
         }
     
     def get_full_name(self, obj):
         return obj.get_full_name()
+    
+    def create(self, validated_data):
+        validated_data['password'] = make_password(validated_data['password'])
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        # Hash password if it's being updated
+        if 'password' in validated_data:
+            validated_data['password'] = make_password(validated_data['password'])
+        
+        # Remove ALL datetime fields to prevent timezone issues
+        validated_data.pop('last_login', None)
+        validated_data.pop('created_at', None)
+        validated_data.pop('updated_at', None)
+        validated_data.pop('date_joined', None)
+        
+        # Update only the allowed fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        # Don't let Django try to save datetime fields - keep originals
+        instance.save(update_fields=list(validated_data.keys()))
+        
+        return instance
 
 
 class UserSessionSerializer(serializers.ModelSerializer):
@@ -1007,10 +1035,96 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
             # Timestamps
             'created_at',
             'updated_at',
+            'vendor_id',
         ]
 
     
+class DocumentTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DocumentType
+        fields = '__all__'
 
+
+class ProjectDocumentListSerializer(serializers.ModelSerializer):
+    """Serializer for listing documents with validation info"""
+    doc_type_name = serializers.CharField(source='doc_type.doc_type_name', read_only=True)
+    uploaded_by_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ProjectDocument
+        fields = [
+            'document_id', 'document_name', 'doc_type', 'doc_type_name',
+            'file_size', 'file_type', 'upload_date', 'approval_status',
+            'approval_date', 'rejection_reason', 'uploaded_by_name',
+            'document_path', 'notes'
+        ]
+    
+    def get_uploaded_by_name(self, obj):
+        if obj.uploaded_by:
+            return obj.uploaded_by.get_full_name()
+        return None
+
+
+class ProjectDocumentValidationSerializer(serializers.ModelSerializer):
+    """Serializer for validating/updating documents"""
+    
+    class Meta:
+        model = ProjectDocument
+        fields = ['approval_status', 'approval_date', 'rejection_reason', 'approved_by']
+        read_only_fields = ['approved_by']
+    
+    def update(self, instance, validated_data):
+        # Set approved_by to current user
+        if 'approval_status' in validated_data:
+            request = self.context.get('request')
+            if request and request.user:
+                validated_data['approved_by'] = request.user
+        
+        return super().update(instance, validated_data)
+
+
+class VendorBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vendor
+        fields = ['vendor_id', 'vendor_code', 'vendor_name', 'email', 'phone_number']
+
+
+class ProjectValidationListSerializer(serializers.ModelSerializer):
+    """Serializer for projects awaiting document validation"""
+    vendor_info = VendorBasicSerializer(source='vendor', read_only=True)
+    document_count = serializers.SerializerMethodField()
+    pending_documents = serializers.SerializerMethodField()
+    approved_documents = serializers.SerializerMethodField()
+    rejected_documents = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Project
+        fields = [
+            'project_id', 'project_code', 'project_name', 'project_location',
+            'completion_date', 'vendor_info', 'document_count',
+            'pending_documents', 'approved_documents', 'rejected_documents',
+            'status'
+        ]
+    
+    def get_document_count(self, obj):
+        return obj.documents.count()
+    
+    def get_pending_documents(self, obj):
+        return obj.documents.filter(approval_status='Pending').count()
+    
+    def get_approved_documents(self, obj):
+        return obj.documents.filter(approval_status='Approved').count()
+    
+    def get_rejected_documents(self, obj):
+        return obj.documents.filter(approval_status='Rejected').count()
+
+
+class DocumentValidationStatsSerializer(serializers.Serializer):
+    """Serializer for validation statistics"""
+    pending_validation = serializers.IntegerField()
+    validated_today = serializers.IntegerField()
+    issues_found = serializers.IntegerField()
+    total_documents = serializers.IntegerField()
 
 
 class WorkOrderSerializer(serializers.ModelSerializer):
@@ -1020,7 +1134,7 @@ class WorkOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkOrder
         fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at', 
+        read_only_fields = ['vendor_id','id', 'created_at', 'updated_at', 
                            'days_wmtrl_to_fcomp', 'days_sched_to_fcomp', 
                            'days_comp', 'computed_index_wmtrl_to_fcomp', 
                            'computed_index_comp']
@@ -1286,7 +1400,7 @@ class AgeingSummarySerializer(serializers.Serializer):
     """Summary statistics for ageing analysis"""
     age_bracket = serializers.CharField()
     count = serializers.IntegerField()
-    total_manhours = serializers.DecimalField(max_digits=15, decimal_places=2)
+    exclusion_duration = serializers.DecimalField(max_digits=15, decimal_places=2)
     
 # ============================================
 # BACKJOB MONITORING SERIALIZERS
@@ -1420,9 +1534,9 @@ class COCChecklistSerializer(serializers.ModelSerializer):
             'wo_id', 'wo_no', 'description', 'location', 'municipality',
             'vendor', 'vendor_name', 'vendor_code', 'assigned_crew',
             'supervisor', 'supervisor_name', 'status',
-            'date_energized', 'date_coc_received', 'date_for_audit',
+            'date_received_by_vc', 'date_sched', 'date_received_jacket_ps',
             'days_since_energized', 'days_since_coc', 'needs_attention',
-            'vendor_remarks', 'clerk_remarks', 'total_estimated_cost',
+            'vendor_remarks', 'clerk_remarks', 'ntc_amount',
             'created_at', 'updated_at'
         ]
     
@@ -1432,27 +1546,27 @@ class COCChecklistSerializer(serializers.ModelSerializer):
         return None
     
     def get_days_since_energized(self, obj):
-        if obj.date_energized:
+        if obj.date_received_by_vc:
             from django.utils import timezone
-            delta = timezone.now().date() - obj.date_energized
+            delta = timezone.now().date() - obj.date_received_by_vc
             return delta.days
         return None
     
     def get_days_since_coc(self, obj):
-        if obj.date_coc_received:
+        if obj.date_sched:
             from django.utils import timezone
-            delta = timezone.now().date() - obj.date_coc_received
+            delta = timezone.now().date() - obj.date_sched
             return delta.days
         return None
     
     def get_needs_attention(self, obj):
         """Determine if work order needs immediate attention"""
-        if obj.date_energized and not obj.date_coc_received:
+        if obj.date_received_by_vc and not obj.date_sched:
             from django.utils import timezone
-            days = (timezone.now().date() - obj.date_energized).days
+            days = (timezone.now().date() - obj.date_received_by_vc).days
             return days > 7  # Alert if no COC after 7 days
-        if obj.date_coc_received and not obj.date_for_audit:
+        if obj.date_sched and not obj.date_received_jacket_ps:
             from django.utils import timezone
-            days = (timezone.now().date() - obj.date_coc_received).days
+            days = (timezone.now().date() - obj.date_sched).days
             return days > 3  # Alert if not sent for audit after 3 days
         return False

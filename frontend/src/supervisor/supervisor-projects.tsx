@@ -1,204 +1,618 @@
-// pages/supervisor/supervisor-projects.tsx
-import { FC, useState, useEffect, ChangeEvent } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import SidebarLayout from '@/layouts/SidebarLayout';
-import PageTitleWrapper from '@/components/PageTitleWrapper';
-import { Container, Grid, Card, CardHeader, CardContent, Divider, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Alert, Snackbar, Typography, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, TableContainer, Tooltip, IconButton, Chip, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import Footer from '@/components/Footer';
-import AddTwoToneIcon from '@mui/icons-material/AddTwoTone';
-import EditTwoToneIcon from '@mui/icons-material/EditTwoTone';
-import DeleteTwoToneIcon from '@mui/icons-material/DeleteTwoTone';
+import { useState, useEffect } from 'react';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
-const ENDPOINT = 'projects';
-const COLUMNS = ['project_code', 'project_name', 'vendor', 'sector', 'status', 'assigned_engineer', 'assigned_qi', 'priority', 'risk_score', 'is_delayed', 'delay_days'];
 
-function SupervisorProjects() {
-  const router = useRouter();
+export default function SupervisorProjectCreation() {
+  const [projects, setProjects] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [qiUsers, setQiUsers] = useState([]);
+  const [sectors, setSectors] = useState([]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [userId, setUserId] = useState('');
+
+  const [formData, setFormData] = useState({
+    project_code: '',
+    project_name: '',
+    vendor: '',
+    sector: '',
+    assigned_qi: '',
+    project_type: '',
+    project_description: '',
+    contract_value: '',
+    project_location: '',
+    start_date: '',
+    expected_billing_date: '',
+    priority: 'Medium',
+    sla_deadline_days: 7
+  });
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    const authToken = localStorage.getItem('authToken');
-    const userRole = localStorage.getItem('userRole');
+    const storedUserId = JSON.parse(localStorage?.getItem('user') || '{}')?.user_id || '1';
+    setUserId(storedUserId);
+    fetchProjects();
+    fetchVendors();
+    fetchQIUsers();
+    fetchSectors();
+  }, []);
 
-    // If not authenticated or missing token, redirect to login
-    if (!userRole) {
-      router.push('/login');
-      return;
-    }
-
-    // Optional: Check if user has admin role
-    if (userRole !== 'supervisor') {
-      // Redirect non-admin users to their appropriate dashboard
-      router.push('/unauthorized'); // or router.push('/dashboard');
-    }
-  }, [router]);
-
-  const [tableData, setTableData] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState<boolean>(false);
-  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
-  const [currentRecord, setCurrentRecord] = useState<any>({});
-  const [formData, setFormData] = useState<any>({});
-  const [successMessage, setSuccessMessage] = useState<string>('');
-  const [page, setPage] = useState<number>(0);
-  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
-
-  useEffect(() => { fetchTableData(); }, []);
-
-  const fetchTableData = async () => {
-    setLoading(true); setError(null);
+  const fetchProjects = async () => {
+    setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/`);
-      if (!response.ok) throw new Error(`Failed to fetch data: ${response.statusText}`);
+      const response = await fetch(`${API_BASE_URL}/projects/`);
+      if (!response.ok) throw new Error('Failed to fetch projects');
       const data = await response.json();
-      setTableData(Array.isArray(data) ? data : data.results || []);
-    } catch (err: any) { setError(err.message); setTableData([]); } finally { setLoading(false); }
+      setProjects(data.results || data || []);
+    } catch (err) {
+      console.error('Error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const showSuccess = (message: string) => { setSuccessMessage(message); setTimeout(() => setSuccessMessage(''), 3000); };
-  const handleAdd = () => { setModalMode('add'); setFormData({}); setCurrentRecord({}); setShowModal(true); };
-  const handleEdit = (row: any) => { setModalMode('edit'); setCurrentRecord(row); setFormData({ ...row }); setShowModal(true); };
-
-  const handleDelete = async (row: any) => {
-    if (!window.confirm('Are you sure you want to delete this record?')) return;
+  const fetchVendors = async () => {
     try {
-      const primaryKey = row.id || row.user_id;
-      if (!primaryKey) throw new Error('Cannot determine record ID');
-      const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/${primaryKey}/`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } });
-      if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(errorData.detail || `Failed to delete: ${response.statusText}`); }
-      showSuccess('Record deleted successfully!'); fetchTableData();
-    } catch (err: any) { setError('Error deleting record: ' + err.message); }
+      const response = await fetch(`${API_BASE_URL}/vendors/?is_active=true`);
+      if (!response.ok) throw new Error('Failed to fetch vendors');
+      const data = await response.json();
+      setVendors(data.results || data || []);
+    } catch (err) {
+      console.error('Error:', err);
+    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setError(null);
+  const fetchQIUsers = async () => {
     try {
-      const primaryKey = currentRecord.id || currentRecord.user_id;
-      const url = modalMode === 'add' ? `${API_BASE_URL}/${ENDPOINT}/` : `${API_BASE_URL}/${ENDPOINT}/${primaryKey}/`;
-      const method = modalMode === 'add' ? 'POST' : 'PUT';
-      const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
-      if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(JSON.stringify(errorData) || `Failed to save: ${response.statusText}`); }
-      showSuccess(`Record ${modalMode === 'add' ? 'added' : 'updated'} successfully!`); setShowModal(false); fetchTableData();
-    } catch (err: any) { setError('Error saving record: ' + err.message); }
+      const response = await fetch(`${API_BASE_URL}/users/`);
+      if (!response.ok) throw new Error('Failed to fetch users');
+      const data = await response.json();
+      const allUsers = data.results || data || [];
+      const qis = allUsers.filter(u => u.role_name?.toLowerCase().includes('qi') || u.role_name?.toLowerCase().includes('inspector'));
+      setQiUsers(qis);
+    } catch (err) {
+      console.error('Error:', err);
+    }
   };
 
-  const handleInputChange = (column: string, value: any) => { setFormData((prev: any) => ({ ...prev, [column]: value })); };
-  const handleChangePage = (_event: unknown, newPage: number) => setPage(newPage);
-  const handleChangeRowsPerPage = (event: ChangeEvent<HTMLInputElement>) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
-
-  const renderCellValue = (value: any) => {
-    if (value === null || value === undefined) return '-';
-    if (typeof value === 'boolean') return <Chip label={value ? 'Yes' : 'No'} color={value ? 'success' : 'default'} size="small" />;
-    if (typeof value === 'object') return JSON.stringify(value);
-    const strValue = String(value);
-    return strValue.length > 50 ? <Tooltip title={strValue} arrow><span>{strValue.substring(0, 50) + '...'}</span></Tooltip> : strValue;
+  const fetchSectors = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/sectors/?is_active=true`);
+      if (!response.ok) throw new Error('Failed to fetch sectors');
+      const data = await response.json();
+      setSectors(data.results || data || []);
+    } catch (err) {
+      console.error('Error:', err);
+    }
   };
 
-  const paginatedData = tableData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const handleCreateProject = async () => {
+    try {
+      const payload = {
+        ...formData,
+        wo_supervisor: userId,
+        status: 1, // Created status
+        created_at: new Date().toISOString()
+      };
+
+      const response = await fetch(`${API_BASE_URL}/projects/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(JSON.stringify(errorData));
+      }
+
+      alert('✅ Project created successfully! Vendor will be notified.');
+      setShowCreateModal(false);
+      fetchProjects();
+      
+      // Reset form
+      setFormData({
+        project_code: '',
+        project_name: '',
+        vendor: '',
+        sector: '',
+        assigned_qi: '',
+        project_type: '',
+        project_description: '',
+        contract_value: '',
+        project_location: '',
+        start_date: '',
+        expected_billing_date: '',
+        priority: 'Medium',
+        sla_deadline_days: 7
+      });
+    } catch (err) {
+      alert('❌ Error creating project: ' + err.message);
+    }
+  };
+
+  const handleApproveDocuments = async (projectId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          status: 5 // Approved status
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to approve');
+      
+      alert('✅ Documents approved! Project moved to next phase.');
+      fetchProjects();
+    } catch (err) {
+      alert('❌ Error: ' + err.message);
+    }
+  };
+
+  const getStatusBadge = (statusId) => {
+    const statuses = {
+      1: { label: 'Created', color: '#2196f3', icon: '📝' },
+      2: { label: 'In Progress', color: '#ff9800', icon: '⚙️' },
+      3: { label: 'Completed', color: '#9c27b0', icon: '✓' },
+      4: { label: 'Awaiting Documents', color: '#f44336', icon: '📄' },
+      5: { label: 'Documents Approved', color: '#4caf50', icon: '✅' }
+    };
+    const status = statuses[statusId] || { label: 'Unknown', color: '#999', icon: '?' };
+    return (
+      <span style={{ 
+        background: status.color, 
+        color: 'white', 
+        padding: '6px 14px', 
+        borderRadius: '16px', 
+        fontSize: '13px', 
+        fontWeight: 'bold',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px'
+      }}>
+        {status.icon} {status.label}
+      </span>
+    );
+  };
+
+  const getPriorityBadge = (priority) => {
+    const colors = {
+      'Critical': '#d32f2f',
+      'High': '#f57c00',
+      'Medium': '#fbc02d',
+      'Low': '#388e3c'
+    };
+    return (
+      <span style={{
+        background: colors[priority] || '#999',
+        color: 'white',
+        padding: '4px 10px',
+        borderRadius: '12px',
+        fontSize: '11px',
+        fontWeight: 'bold'
+      }}>
+        {priority}
+      </span>
+    );
+  };
 
   return (
-    <>
-      <Head><title>All Projects - WO Supervisor</title></Head>
-      <PageTitleWrapper>
-        <Grid container justifyContent="space-between" alignItems="center">
-          <Grid item>
-            <Typography variant="h3" component="h3" gutterBottom>🏗️ All Projects</Typography>
-            <Typography variant="subtitle2">Supervise all projects</Typography>
-          </Grid>
-        </Grid>
-      </PageTitleWrapper>
-      <Container maxWidth="lg">
-        <Grid container direction="row" justifyContent="center" alignItems="stretch" spacing={3}>
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader action={<Button variant="contained" startIcon={<AddTwoToneIcon />} onClick={handleAdd}>Add New</Button>} title="All Projects Management" />
-              <Divider />
-              <CardContent>
-                {successMessage && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>{successMessage}</Alert>}
-                {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
-                {loading && <Box sx={{ textAlign: 'center', py: 8 }}><Typography variant="body1" color="text.secondary">Loading data...</Typography></Box>}
-                {!loading && !error && tableData.length === 0 && (
-                  <Box sx={{ textAlign: 'center', py: 8 }}>
-                    <Typography variant="h4" color="text.secondary" gutterBottom>📭</Typography>
-                    <Typography variant="h6" color="text.secondary">No data available</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Click "Add New" to create your first record</Typography>
-                  </Box>
-                )}
-                {!loading && !error && tableData.length > 0 && (
-                  <>
-                    <TableContainer>
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            {COLUMNS.map((column) => <TableCell key={column}><Typography variant="subtitle2" fontWeight="bold">{column.replace(/_/g, ' ').toUpperCase()}</Typography></TableCell>)}
-                            <TableCell align="center"><Typography variant="subtitle2" fontWeight="bold">ACTIONS</Typography></TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {paginatedData.map((row, index) => (
-                            <TableRow hover key={row.id || index}>
-                              {COLUMNS.map((column) => <TableCell key={column}>{renderCellValue(row[column])}</TableCell>)}
-                              <TableCell align="center">
-                                <Tooltip title="Edit" arrow><IconButton color="primary" size="small" onClick={() => handleEdit(row)} sx={{ mr: 1 }}><EditTwoToneIcon fontSize="small" /></IconButton></Tooltip>
-                                <Tooltip title="Delete" arrow><IconButton color="error" size="small" onClick={() => handleDelete(row)}><DeleteTwoToneIcon fontSize="small" /></IconButton></Tooltip>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                    <Box p={2}><TablePagination component="div" count={tableData.length} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} page={page} rowsPerPage={rowsPerPage} rowsPerPageOptions={[5, 10, 25, 50]} /></Box>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Container>
-      <Footer />
-      <Dialog open={showModal} onClose={() => setShowModal(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{modalMode === 'add' ? '➕ Add New Record' : '✏️ Edit Record'}</DialogTitle>
-        <DialogContent dividers>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          <Box component="form" onSubmit={handleSubmit}>
-            <Grid container spacing={2}>
-              {COLUMNS.map((column) => {
-                const currentValue = formData[column];
-                const isBoolean = typeof currentValue === 'boolean' || (currentRecord[column] !== undefined && typeof currentRecord[column] === 'boolean');
-                return (
-                  <Grid item xs={12} sm={6} key={column}>
-                    {isBoolean ? (
-                      <FormControl fullWidth>
-                        <InputLabel>{column.replace(/_/g, ' ').toUpperCase()}</InputLabel>
-                        <Select value={currentValue === true ? 'true' : currentValue === false ? 'false' : ''} onChange={(e) => handleInputChange(column, e.target.value === 'true')} label={column.replace(/_/g, ' ').toUpperCase()}>
-                          <MenuItem value="">Select...</MenuItem>
-                          <MenuItem value="true">Yes</MenuItem>
-                          <MenuItem value="false">No</MenuItem>
-                        </Select>
-                      </FormControl>
-                    ) : (
-                      <TextField fullWidth label={column.replace(/_/g, ' ').toUpperCase()} value={currentValue || ''} onChange={(e) => handleInputChange(column, e.target.value)} placeholder={`Enter ${column.replace(/_/g, ' ')}`} />
-                    )}
-                  </Grid>
-                );
-              })}
-            </Grid>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowModal(false)} color="inherit">Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained" color="primary">{modalMode === 'add' ? 'Add Record' : 'Save Changes'}</Button>
-        </DialogActions>
-      </Dialog>
-      <Snackbar open={!!successMessage} autoHideDuration={3000} onClose={() => setSuccessMessage('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
-        <Alert severity="success" sx={{ width: '100%' }}>{successMessage}</Alert>
-      </Snackbar>
-    </>
+    <div style={{ minHeight: '100vh', padding: '20px' }}>
+      {/* Header */}
+      <div style={{ background: 'white', borderRadius: '16px', padding: '28px', marginBottom: '24px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <h1 style={{ margin: '0 0 8px 0', fontSize: '32px', color: '#1a1a2e', fontWeight: '700' }}>
+              Project Creation & Assignment
+            </h1>
+            <p style={{ margin: 0, color: '#666', fontSize: '16px' }}>
+              Create projects → Assign to vendors → Set SLA deadlines → Review submissions
+            </p>
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              background: 'linear-gradient(45deg, #667eea, #764ba2)',
+              color: 'white',
+              border: 'none',
+              padding: '14px 28px',
+              borderRadius: '12px',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 4px 20px rgba(102, 126, 234, 0.4)',
+              transition: 'transform 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            ➕ Create New Project
+          </button>
+        </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        {[
+          { label: 'Total Projects', value: projects.length, color: '#2196f3', icon: '📊' },
+          { label: 'In Progress', value: projects.filter(p => p.status === 2).length, color: '#ff9800', icon: '⚙️' },
+          { label: 'Awaiting Docs', value: projects.filter(p => p.status === 4).length, color: '#f44336', icon: '📄' },
+          { label: 'Approved', value: projects.filter(p => p.status === 5).length, color: '#4caf50', icon: '✅' }
+        ].map((stat, idx) => (
+          <div key={idx} style={{
+            background: 'white',
+            borderRadius: '12px',
+            padding: '20px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+            borderLeft: `4px solid ${stat.color}`
+          }}>
+            <div style={{ fontSize: '28px', marginBottom: '8px' }}>{stat.icon}</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', color: stat.color, marginBottom: '4px' }}>{stat.value}</div>
+            <div style={{ fontSize: '13px', color: '#666', fontWeight: '500' }}>{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Projects Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '20px' }}>
+        {projects.map((project) => (
+          <div key={project.project_id} style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '24px',
+            boxShadow: '0 6px 24px rgba(0,0,0,0.1)',
+            transition: 'transform 0.2s, box-shadow 0.2s',
+            cursor: 'pointer'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 12px 32px rgba(0,0,0,0.15)';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,0,0,0.1)';
+          }}>
+            {/* Header */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
+                <h3 style={{ margin: 0, fontSize: '20px', color: '#1a1a2e', fontWeight: '700' }}>
+                  {project.project_code}
+                </h3>
+                {getPriorityBadge(project.priority)}
+              </div>
+              <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#666', lineHeight: '1.5' }}>
+                {project.project_name}
+              </p>
+              {getStatusBadge(project.status)}
+            </div>
+
+            {/* Project Details */}
+            <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '12px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
+                <div>
+                  <p style={{ margin: '0 0 4px 0', color: '#999', fontSize: '11px', fontWeight: '600' }}>VENDOR</p>
+                  <p style={{ margin: 0, color: '#1a1a2e', fontWeight: '600' }}>
+                    {vendors.find(v => v.vendor_id === project.vendor)?.vendor_code || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px 0', color: '#999', fontSize: '11px', fontWeight: '600' }}>QI ASSIGNED</p>
+                  <p style={{ margin: 0, color: '#1a1a2e', fontWeight: '600' }}>
+                    {qiUsers.find(q => q.user_id === project.assigned_qi)?.first_name || 'Not Assigned'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px 0', color: '#999', fontSize: '11px', fontWeight: '600' }}>CONTRACT VALUE</p>
+                  <p style={{ margin: 0, color: '#1a1a2e', fontWeight: '600' }}>
+                    ₱{project.contract_value?.toLocaleString() || '0'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px 0', color: '#999', fontSize: '11px', fontWeight: '600' }}>START DATE</p>
+                  <p style={{ margin: 0, color: '#1a1a2e', fontWeight: '600' }}>
+                    {project.start_date ? new Date(project.start_date).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Location */}
+            {project.project_location && (
+              <div style={{ marginBottom: '16px' }}>
+                <p style={{ margin: '0 0 4px 0', color: '#999', fontSize: '11px', fontWeight: '600' }}>📍 LOCATION</p>
+                <p style={{ margin: 0, color: '#1a1a2e', fontSize: '13px' }}>{project.project_location}</p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            {project.status === 4 && (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    alert('📄 Viewing documents for ' + project.project_code);
+                  }}
+                  style={{
+                    flex: 1,
+                    background: '#fff',
+                    color: '#2196f3',
+                    border: '2px solid #2196f3',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '13px'
+                  }}
+                >
+                  📄 View Documents
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleApproveDocuments(project.project_id);
+                  }}
+                  style={{
+                    flex: 1,
+                    background: '#4caf50',
+                    color: 'white',
+                    border: 'none',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '13px'
+                  }}
+                >
+                  ✅ Approve
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Create Project Modal */}
+      {showCreateModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '20px',
+          overflow: 'auto'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '700px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflow: 'auto'
+          }}>
+            <h2 style={{ margin: '0 0 24px 0', fontSize: '28px', color: '#1a1a2e', fontWeight: '700' }}>
+              ➕ Create New Project
+            </h2>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                  Project Code *
+                </label>
+                <input
+                  type="text"
+                  value={formData.project_code}
+                  onChange={(e) => setFormData({...formData, project_code: e.target.value})}
+                  placeholder="e.g., PROJ-2025-001"
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                  Priority
+                </label>
+                <select
+                  value={formData.priority}
+                  onChange={(e) => setFormData({...formData, priority: e.target.value})}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px' }}
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </div>
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                  Project Name *
+                </label>
+                <input
+                  type="text"
+                  value={formData.project_name}
+                  onChange={(e) => setFormData({...formData, project_name: e.target.value})}
+                  placeholder="Project Name"
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                  Vendor *
+                </label>
+                <select
+                  value={formData.vendor}
+                  onChange={(e) => setFormData({...formData, vendor: e.target.value})}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px' }}
+                >
+                  <option value="">Select Vendor</option>
+                  {vendors.map((vendor) => (
+                    <option key={vendor.vendor_id} value={vendor.vendor_id}>
+                      {vendor.vendor_code} - {vendor.vendor_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                  Sector
+                </label>
+                <select
+                  value={formData.sector}
+                  onChange={(e) => setFormData({...formData, sector: e.target.value})}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px' }}
+                >
+                  <option value="">Select Sector</option>
+                  {sectors.map((sector) => (
+                    <option key={sector.sector_id} value={sector.sector_id}>
+                      {sector.sector_code} - {sector.sector_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                  Assigned QI
+                </label>
+                <select
+                  value={formData.assigned_qi}
+                  onChange={(e) => setFormData({...formData, assigned_qi: e.target.value})}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px' }}
+                >
+                  <option value="">Select QI</option>
+                  {qiUsers.map((qi) => (
+                    <option key={qi.user_id} value={qi.user_id}>
+                      {qi.first_name} {qi.last_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                  SLA Deadline (Days)
+                </label>
+                <input
+                  type="number"
+                  value={formData.sla_deadline_days}
+                  onChange={(e) => setFormData({...formData, sla_deadline_days: e.target.value})}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                  Contract Value (₱)
+                </label>
+                <input
+                  type="number"
+                  value={formData.contract_value}
+                  onChange={(e) => setFormData({...formData, contract_value: e.target.value})}
+                  placeholder="0.00"
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) => setFormData({...formData, start_date: e.target.value})}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px' }}
+                />
+              </div>
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                  Location
+                </label>
+                <input
+                  type="text"
+                  value={formData.project_location}
+                  onChange={(e) => setFormData({...formData, project_location: e.target.value})}
+                  placeholder="Project Location"
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px' }}
+                />
+              </div>
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                  Description
+                </label>
+                <textarea
+                  value={formData.project_description}
+                  onChange={(e) => setFormData({...formData, project_description: e.target.value})}
+                  placeholder="Project Description"
+                  rows="4"
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px', resize: 'vertical' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                style={{
+                  flex: 1,
+                  background: '#fff',
+                  color: '#666',
+                  border: '2px solid #e0e0e0',
+                  padding: '14px',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '15px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateProject}
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(45deg, #667eea, #764ba2)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '14px',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '15px'
+                }}
+              >
+                Create Project
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: 'white',
+          padding: '32px',
+          borderRadius: '16px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+        }}>
+          <p style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>Loading...</p>
+        </div>
+      )}
+    </div>
   );
 }
-
-SupervisorProjects.getLayout = (page) => <SidebarLayout userRole="supervisor">{page}</SidebarLayout>;
-export default SupervisorProjects;

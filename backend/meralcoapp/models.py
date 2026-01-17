@@ -36,16 +36,17 @@ class User(AbstractUser):
     user_id = models.AutoField(primary_key=True)
     role = models.ForeignKey(UserRole, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
     email = models.EmailField(blank=True, null=True)
+    password = models.CharField(max_length=250, blank=True)
     first_name = models.CharField(max_length=20, blank=True, null=True)
     last_name = models.CharField(max_length=255, blank=True, null=True)
     phone_number = models.CharField(max_length=255, blank=True, null=True)
     is_active = models.BooleanField(default=True)
-    last_login = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    last_login = models.DateTimeField(default=timezone.now, null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
+    updated_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
     is_super_user = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
-    date_joined = models.DateTimeField(auto_now_add=True)
+    date_joined = models.DateTimeField(default=timezone.now, null=True, blank=True)
 
     class Meta:
         db_table = 'users'
@@ -1191,6 +1192,7 @@ class WorkOrder(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    vendor_id = models.IntegerField(null=True, blank=True)
 
     class Meta:
         db_table = "work_order"

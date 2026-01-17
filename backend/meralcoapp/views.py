@@ -696,7 +696,7 @@ class AuthViewSet(viewsets.ViewSet):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def logout(self, request):
         """
         User logout endpoint
@@ -732,7 +732,7 @@ class AuthViewSet(viewsets.ViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
     
     
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def change_password(self, request):
         """
         Change user password endpoint
@@ -778,7 +778,7 @@ class AuthViewSet(viewsets.ViewSet):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def me(self, request):
         """
         Get current authenticated user details
@@ -1714,6 +1714,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     # Filtering options
     filterset_fields = {
         'status': ['exact', 'in'],
+        'vendor_id': ['exact'],
         'vip': ['exact'],
         'municipality': ['exact', 'in'],
         'assigned': ['exact', 'in'],
@@ -1727,6 +1728,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     
     # Search functionality
     search_fields = [
+        'vendor_id', 
         'wo_no', 
         'description', 
         'location', 
@@ -2627,13 +2629,13 @@ class PCASummaryViewSet(viewsets.ModelViewSet):
         
         # Get work orders for the month
         monthly_wos = WorkOrder.objects.filter(
-            date_energized__gte=month_date,
-            date_energized__lt=next_month
+            date_received_by_vc__gte=month_date,
+            date_received_by_vc__lt=next_month
         )
         
         ytd_energized = WorkOrder.objects.filter(
-            date_energized__year=month_date.year,
-            date_energized__lte=month_date
+            date_received_by_vc__year=month_date.year,
+            date_received_by_vc__lte=month_date
         ).count()
         
         completed_count = monthly_wos.filter(status='AUDITED').count()
@@ -2739,7 +2741,7 @@ class AgeingAnalysisViewSet(viewsets.ModelViewSet):
             analysis_date=date_filter
         ).values('age_bracket').annotate(
             count=Count('id'),
-            total_manhours=Sum('work_order__total_manhours')
+            exclusion_duration=Sum('work_order__exclusion_duration')
         ).order_by('age_bracket')
         
         return Response(summary)
@@ -2757,8 +2759,8 @@ class AgeingAnalysisViewSet(viewsets.ModelViewSet):
         created_count = 0
         
         for wo in open_wos:
-            if wo.date_energized:
-                age_days = (analysis_date - wo.date_energized).days
+            if wo.date_received_by_vc:
+                age_days = (analysis_date - wo.date_received_by_vc).days
                 age_months = age_days // 30
                 
                 # Determine age bracket
@@ -3274,7 +3276,7 @@ from datetime import date
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def send_my_daily_email(request):
     """Send daily action email to the authenticated user"""
     
@@ -3302,7 +3304,7 @@ def send_daily_emails_to_all(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def send_daily_email_to_user(request, user_id):
     """Send daily action email to a specific user (admin only)"""
     
@@ -3329,7 +3331,7 @@ def send_daily_email_to_user(request, user_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def check_my_actions(request):
     """Get today's pending actions for the authenticated user (without sending email)"""
     
@@ -3454,7 +3456,7 @@ from datetime import date, timedelta
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def user_dashboard(request):
     """
     Get role-specific dashboard data
@@ -3764,7 +3766,7 @@ class VendorPortalViewSet(viewsets.ViewSet):
     """
     Vendor Representative Portal - specific endpoints for vendors
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     @action(detail=False, methods=['get'])
     def my_projects(self, request):
@@ -3863,7 +3865,7 @@ class QIMobileViewSet(viewsets.ViewSet):
     """
     Quality Inspector Mobile-Friendly Endpoints
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     @action(detail=False, methods=['get'])
     def today_schedule(self, request):
@@ -4162,12 +4164,12 @@ class ClerkViewSet(viewsets.ViewSet):
         ).filter(
             status__in=['NEW', 'FOR AUDIT']
         ).filter(
-            models.Q(date_energized__isnull=False) &
+            models.Q(date_received_by_vc__isnull=False) &
             (
-                models.Q(date_coc_received__isnull=True) |
-                models.Q(date_for_audit__isnull=True)
+                models.Q(date_sched__isnull=True) |
+                models.Q(date_received_jacket_ps__isnull=True)
             )
-        ).order_by('-date_energized')
+        ).order_by('-date_received_by_vc')
         
         # Apply filters
         status = request.query_params.get('status')
@@ -4188,8 +4190,8 @@ class ClerkViewSet(viewsets.ViewSet):
             three_days_ago = timezone.now().date() - timezone.timedelta(days=3)
             
             queryset = queryset.filter(
-                models.Q(date_energized__lte=seven_days_ago, date_coc_received__isnull=True) |
-                models.Q(date_coc_received__lte=three_days_ago, date_for_audit__isnull=True)
+                models.Q(date_received_by_vc__lte=seven_days_ago, date_sched__isnull=True) |
+                models.Q(date_sched__lte=three_days_ago, date_received_jacket_ps__isnull=True)
             )
         
         serializer = COCChecklistSerializer(queryset, many=True)
@@ -4197,10 +4199,10 @@ class ClerkViewSet(viewsets.ViewSet):
         # Calculate statistics
         stats = {
             'total': queryset.count(),
-            'awaiting_coc': queryset.filter(date_coc_received__isnull=True).count(),
+            'awaiting_coc': queryset.filter(date_sched__isnull=True).count(),
             'awaiting_audit': queryset.filter(
-                date_coc_received__isnull=False,
-                date_for_audit__isnull=True
+                date_sched__isnull=False,
+                date_received_jacket_ps__isnull=True
             ).count(),
             'needs_attention': sum(1 for item in serializer.data if item['needs_attention']),
         }
@@ -4216,15 +4218,15 @@ class ClerkViewSet(viewsets.ViewSet):
         try:
             work_order = WorkOrder.objects.get(id=pk)
             
-            date_received = request.data.get('date_coc_received')
+            date_received = request.data.get('date_sched')
             remarks = request.data.get('clerk_remarks', '')
             
             if date_received:
                 from datetime import datetime
-                work_order.date_coc_received = datetime.strptime(date_received, '%Y-%m-%d').date()
+                work_order.date_sched = datetime.strptime(date_received, '%Y-%m-%d').date()
             else:
                 from django.utils import timezone
-                work_order.date_coc_received = timezone.now().date()
+                work_order.date_sched = timezone.now().date()
             
             if remarks:
                 work_order.clerk_remarks = remarks
@@ -4253,21 +4255,21 @@ class ClerkViewSet(viewsets.ViewSet):
         try:
             work_order = WorkOrder.objects.get(id=pk)
             
-            if not work_order.date_coc_received:
+            if not work_order.date_sched:
                 return Response(
                     {'error': 'Cannot send for audit without COC received date'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            date_for_audit = request.data.get('date_for_audit')
+            date_received_jacket_ps = request.data.get('date_received_jacket_ps')
             remarks = request.data.get('clerk_remarks', '')
             
-            if date_for_audit:
+            if date_received_jacket_ps:
                 from datetime import datetime
-                work_order.date_for_audit = datetime.strptime(date_for_audit, '%Y-%m-%d').date()
+                work_order.date_received_jacket_ps = datetime.strptime(date_received_jacket_ps, '%Y-%m-%d').date()
             else:
                 from django.utils import timezone
-                work_order.date_for_audit = timezone.now().date()
+                work_order.date_received_jacket_ps = timezone.now().date()
             
             work_order.status = 'FOR AUDIT'
             
@@ -4299,7 +4301,7 @@ class ClerkViewSet(viewsets.ViewSet):
     def bulk_mark_coc(self, request):
         """Bulk mark COC received for multiple work orders"""
         ids = request.data.get('ids', [])
-        date_received = request.data.get('date_coc_received')
+        date_received = request.data.get('date_sched')
         
         if not ids:
             return Response(
@@ -4318,7 +4320,7 @@ class ClerkViewSet(viewsets.ViewSet):
             
             updated = WorkOrder.objects.filter(
                 id__in=ids
-            ).update(date_coc_received=coc_date)
+            ).update(date_sched=coc_date)
             
             return Response({
                 'message': f'Successfully marked COC received for {updated} work orders',
@@ -4336,7 +4338,7 @@ class EngineeringAideViewSet(viewsets.ViewSet):
     """
     Engineering Aide Portal - Workflow coordination and monitoring
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     @action(detail=False, methods=['get'])
     def workflow_overview(self, request):
@@ -4553,7 +4555,7 @@ class EngineerViewSet(viewsets.ViewSet):
     """
     Engineer/Design Engineer Portal - Technical review and approvals
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     @action(detail=False, methods=['get'])
     def my_projects(self, request):
@@ -4809,7 +4811,7 @@ class WOSupervisorViewSet(viewsets.ViewSet):
     """
     Work Order Supervisor Portal - Full operational oversight
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     @action(detail=False, methods=['get'])
     def full_dashboard(self, request):
@@ -5096,7 +5098,7 @@ class TeamLeaderViewSet(viewsets.ViewSet):
     """
     Team Leader Portal - Strategic management and approvals
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     @action(detail=False, methods=['get'])
     def organization_overview(self, request):
@@ -5570,7 +5572,7 @@ class SectorManagerViewSet(viewsets.ViewSet):
     """
     Sector Manager Portal - Executive KPI dashboard and strategic oversight
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     @action(detail=False, methods=['get'])
     def executive_dashboard(self, request):
@@ -5899,7 +5901,7 @@ class SystemAdministratorViewSet(viewsets.ViewSet):
     """
     System Administrator Portal - Full system management
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     @action(detail=False, methods=['get'])
     def system_health(self, request):
@@ -6583,3 +6585,169 @@ class VendorActivityPhotoViewSet(viewsets.ModelViewSet):
         return queryset
 
 
+
+
+class ClerkDocumentValidationViewSet(viewsets.ViewSet):
+    """ViewSet for clerk document validation workflow"""
+    permission_classes = [AllowAny]
+    
+    @action(detail=False, methods=['get'])
+    def pending_projects(self, request):
+        """Get projects with status 3 (Completed, awaiting docs)"""
+        # Status 3 = Completed, awaiting document validation
+        projects = Project.objects.filter(
+            status_id=3
+        ).select_related('vendor', 'status').prefetch_related('documents')
+        
+        serializer = ProjectValidationListSerializer(projects, many=True)
+        return Response({
+            'results': serializer.data,
+            'count': projects.count()
+        })
+    
+    @action(detail=True, methods=['get'])
+    def project_documents(self, request, pk=None):
+        """Get all documents for a specific project"""
+        try:
+            project = Project.objects.get(project_id=pk)
+        except Project.DoesNotExist:
+            return Response(
+                {'error': 'Project not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        documents = ProjectDocument.objects.filter(
+            project=project
+        ).select_related('doc_type', 'uploaded_by', 'approved_by')
+        
+        serializer = ProjectDocumentListSerializer(documents, many=True)
+        return Response({
+            'results': serializer.data,
+            'count': documents.count()
+        })
+    
+    @action(detail=True, methods=['patch'])
+    def validate_document(self, request, pk=None):
+        """Validate a single document (approve/reject)"""
+        try:
+            document = ProjectDocument.objects.get(document_id=pk)
+        except ProjectDocument.DoesNotExist:
+            return Response(
+                {'error': 'Document not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = ProjectDocumentValidationSerializer(
+            document, 
+            data=request.data, 
+            partial=True,
+            context={'request': request}
+        )
+        
+        if serializer.is_valid():
+            serializer.save()
+            
+            # Return updated document
+            response_serializer = ProjectDocumentListSerializer(document)
+            return Response(response_serializer.data)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def generate_confirmation(self, request, pk=None):
+        """Generate confirmation number and update project status"""
+        try:
+            project = Project.objects.get(project_id=pk)
+        except Project.DoesNotExist:
+            return Response(
+                {'error': 'Project not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if all documents are approved
+        pending_docs = project.documents.filter(
+            Q(approval_status='Pending') | Q(approval_status='Rejected')
+        ).count()
+        
+        if pending_docs > 0:
+            return Response(
+                {'error': 'All documents must be approved before generating confirmation'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Generate confirmation number
+        timestamp = int(timezone.now().timestamp())
+        confirmation_number = f"CONF-{timestamp:X}-{project.project_id}"
+        
+        # Update project status to 4 (Awaiting Documents Review)
+        project.status_id = 4
+        project.save()
+        
+        # Create notification for vendor
+        if project.vendor and project.vendor.user:
+            Notification.objects.create(
+                recipient_user=project.vendor.user,
+                notification_type='Email',
+                subject='Document Validation Complete',
+                message=f'Your documents for project {project.project_code} have been validated. Confirmation Number: {confirmation_number}',
+                related_project=project,
+                status='Pending'
+            )
+        
+        return Response({
+            'confirmation_number': confirmation_number,
+            'project_id': project.project_id,
+            'project_code': project.project_code,
+            'status': 'success'
+        })
+    
+    @action(detail=False, methods=['get'])
+    def validation_stats(self, request):
+        """Get validation statistics"""
+        today = timezone.now().date()
+        
+        # Projects pending validation
+        pending = Project.objects.filter(status_id=3).count()
+        
+        # Documents validated today
+        validated_today = ProjectDocument.objects.filter(
+            approval_date__date=today
+        ).count()
+        
+        # Documents with quality issues (rejected or large file size)
+        issues = ProjectDocument.objects.filter(
+            Q(approval_status='Rejected') |
+            Q(file_size__gt=10485760)  # > 10MB
+        ).filter(
+            upload_date__date=today
+        ).count()
+        
+        # Total documents pending
+        total_pending = ProjectDocument.objects.filter(
+            approval_status='Pending'
+        ).count()
+        
+        stats = {
+            'pending_validation': pending,
+            'validated_today': validated_today,
+            'issues_found': issues,
+            'total_documents': total_pending
+        }
+        
+        serializer = DocumentValidationStatsSerializer(stats)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def quality_check(self, request):
+        """Get documents with quality issues"""
+        # Find documents with quality issues
+        documents = ProjectDocument.objects.filter(
+            Q(file_size__gt=10485760) |  # > 10MB
+            Q(approval_status='Rejected')
+        ).select_related('project', 'doc_type')[:50]
+        
+        serializer = ProjectDocumentListSerializer(documents, many=True)
+        return Response({
+            'results': serializer.data,
+            'count': documents.count()
+        })
