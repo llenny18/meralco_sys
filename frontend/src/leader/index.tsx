@@ -114,7 +114,7 @@ export default function TeamLeaderPhase1Oversight() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h1 style={{ margin: '0 0 8px 0', fontSize: '32px', color: '#1a1a2e', fontWeight: '700' }}>
-              👔 Phase 1: Department Oversight
+              👔 Department Oversight
             </h1>
             <p style={{ margin: 0, color: '#666', fontSize: '16px' }}>
               Monitor supervisors → Balance QI workload → Ensure process compliance

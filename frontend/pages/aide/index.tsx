@@ -10,6 +10,9 @@ import AideDashboard from '@/aide';
 function ApplicationsTransactions() {
   return (
     <>
+       <Head>
+              <title>Dashboard - Engineering Aide</title>
+            </Head>
     
       <Container maxWidth="lg">
         <Grid

@@ -8,7 +8,7 @@ function SupervisorProjectTeamPage() {
   return (
     <>
       <Head>
-        <title>Project Team - WO Supervisor</title>
+        <title>Project Penalties - WO Supervisor</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

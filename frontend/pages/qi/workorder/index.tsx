@@ -7,8 +7,8 @@ import WorkOrders from '@/qi/workorder1';
 function ApplicationsTransactions() {
   return (
     <>
-      <Head>
-        <title>Transactions - Applications</title>
+       <Head>
+        <title>Work Orders - Quality Inspector</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

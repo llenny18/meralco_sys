@@ -7,8 +7,8 @@ import WorkOrders from '@/aide/workorder1';
 function ApplicationsTransactions() {
   return (
     <>
-      <Head>
-        <title>Transactions - Applications</title>
+    <Head>
+        <title>Work Orders - Engineering Aide</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

@@ -8,7 +8,7 @@ function SupervisorAuditLogsPage() {
   return (
     <>
       <Head>
-        <title>Audit Logs - WO Supervisor</title>
+        <title>QI Management - WO Supervisor</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

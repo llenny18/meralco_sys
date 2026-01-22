@@ -7,8 +7,8 @@ import AideChangeLogs from '@/aide/validations';
 function AideChangeLogsPage() {
   return (
     <>
-      <Head>
-        <title>Change History - Engineering Aide</title>
+       <Head>
+        <title>Validations - Engineering Aide</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

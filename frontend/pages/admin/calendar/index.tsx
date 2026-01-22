@@ -8,7 +8,7 @@ function ApplicationsTransactions() {
   return (
     <>
       <Head>
-        <title>Administrator - Calendar</title>
+        <title>Calendar - Administrator Portal</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

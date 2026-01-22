@@ -313,6 +313,12 @@ export default function SupervisorProjectCreation() {
                     {project.start_date ? new Date(project.start_date).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
+                <div>
+                  <p style={{ margin: '0 0 4px 0', color: '#999', fontSize: '11px', fontWeight: '600' }}>EXPECTED BILLING DATE</p>
+                  <p style={{ margin: 0, color: '#1a1a2e', fontWeight: '600' }}>
+                    {project.expected_billing_date ? new Date(project.expected_billing_date).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -530,6 +536,17 @@ export default function SupervisorProjectCreation() {
                   type="date"
                   value={formData.start_date}
                   onChange={(e) => setFormData({...formData, start_date: e.target.value})}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                  Expected Billing Date
+                </label>
+                <input
+                  type="date"
+                  value={formData.expected_billing_date}
+                  onChange={(e) => setFormData({...formData, expected_billing_date: e.target.value})}
                   style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px solid #e0e0e0', fontSize: '14px' }}
                 />
               </div>

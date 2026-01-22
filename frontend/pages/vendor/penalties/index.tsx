@@ -8,7 +8,7 @@ function VendorBillingPage() {
   return (
     <>
       <Head>
-        <title>Billing Summary - Vendor Portal</title>
+        <title>Penalties - Vendor Portal</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

@@ -8,7 +8,7 @@ function SupervisorQiPerformancePage() {
   return (
     <>
       <Head>
-        <title>QI Performance - WO Supervisor</title>
+        <title>QI Monitoring - WO Supervisor</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

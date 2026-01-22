@@ -8,7 +8,7 @@ function QiInspectionsPage() {
   return (
     <>
       <Head>
-        <title>My Inspections - Quality Inspector</title>
+        <title>Inspections Checklist - Quality Inspector</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

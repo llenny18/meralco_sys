@@ -8,7 +8,7 @@ function VendorFeedbackPage() {
   return (
     <>
       <Head>
-        <title>Feedback - Vendor Portal</title>
+        <title>Invoices - Vendor Portal</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

@@ -11,7 +11,7 @@ function ApplicationsTransactions() {
   return (
     <>
       <Head>
-        <title>Transactions - Applications</title>
+        <title>Project Penalties - Team Leader</title>
       </Head>
       <PageTitleWrapper>
         <PageHeader />

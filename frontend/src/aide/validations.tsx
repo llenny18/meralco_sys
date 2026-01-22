@@ -9,22 +9,60 @@ export default function EngineeringAideValidation() {
   const [loading, setLoading] = useState(false);
   const [validationModal, setValidationModal] = useState(false);
   const [technicalNotes, setTechnicalNotes] = useState('');
+  const [stats, setStats] = useState({
+    pendingReview: 0,
+    validatedToday: 0,
+    issuesFound: 0
+  });
 
   useEffect(() => {
     fetchPendingProjects();
+    fetchStats();
   }, []);
 
   const fetchPendingProjects = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/?status=1,4`); // Created or Awaiting validation
+      const response = await fetch(`${API_BASE_URL}/projects/?status=4`);
       if (!response.ok) throw new Error('Failed to fetch projects');
       const data = await response.json();
-      setProjects(data.results || data || []);
+      const projectList = data.results || data || [];
+      setProjects(projectList);
+      
+      // Update pending review count
+      setStats(prev => ({ ...prev, pendingReview: projectList.length }));
     } catch (err) {
       console.error('Error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      // Fetch projects validated today
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(`${API_BASE_URL}/projects/?updated_at__gte=${today}`);
+      if (response.ok) {
+        const data = await response.json();
+        const validated = (data.results || data || []).filter(p => 
+          p.status !== 1 && p.status !== 4
+        );
+        setStats(prev => ({ ...prev, validatedToday: validated.length }));
+      }
+
+      // Count projects with validation issues
+      const allProjects = await fetch(`${API_BASE_URL}/projects/?status=4`);
+      if (allProjects.ok) {
+        const data = await allProjects.json();
+        const projectsWithIssues = (data.results || data || []).filter(project => {
+          const validations = validateTechnicalParameters(project);
+          return validations.some(v => v.type === 'error');
+        });
+        setStats(prev => ({ ...prev, issuesFound: projectsWithIssues.length }));
+      }
+    } catch (err) {
+      console.error('Error fetching stats:', err);
     }
   };
 
@@ -42,17 +80,14 @@ export default function EngineeringAideValidation() {
   const validateTechnicalParameters = (project) => {
     const validations = [];
     
-    // Check contract value
     if (!project.contract_value || project.contract_value <= 0) {
       validations.push({ type: 'error', message: 'Contract value is missing or invalid' });
     }
     
-    // Check location
     if (!project.project_location || project.project_location.length < 10) {
       validations.push({ type: 'warning', message: 'Project location may be incomplete' });
     }
     
-    // Check dates
     if (!project.start_date) {
       validations.push({ type: 'error', message: 'Start date is required' });
     }
@@ -61,7 +96,6 @@ export default function EngineeringAideValidation() {
       validations.push({ type: 'warning', message: 'Expected billing date not set' });
     }
     
-    // Check project type
     if (!project.project_type) {
       validations.push({ type: 'warning', message: 'Project type/classification not specified' });
     }
@@ -75,7 +109,6 @@ export default function EngineeringAideValidation() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // Add technical validation flag or status
           project_description: technicalNotes ? `${technicalNotes}\n\n[Technical Validation: ${isApproved ? 'Approved' : 'Requires Revision'}]` : undefined
         })
       });
@@ -86,6 +119,7 @@ export default function EngineeringAideValidation() {
       setValidationModal(false);
       setTechnicalNotes('');
       fetchPendingProjects();
+      fetchStats();
     } catch (err) {
       alert('❌ Error: ' + err.message);
     }
@@ -115,11 +149,11 @@ export default function EngineeringAideValidation() {
   };
 
   return (
-    <div style={{ minHeight: '100vh',  padding: '20px' }}>
+    <div style={{ minHeight: '100vh', padding: '20px' }}>
       {/* Header */}
       <div style={{ background: 'white', borderRadius: '16px', padding: '28px', marginBottom: '24px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
         <h1 style={{ margin: '0 0 8px 0', fontSize: '32px', color: '#1a1a2e', fontWeight: '700' }}>
-          🔧 Phase 1: Technical Parameter Validation
+          🔧 Technical Parameter Validation
         </h1>
         <p style={{ margin: 0, color: '#666', fontSize: '16px' }}>
           Validate project parameters → Review technical specifications → Coordinate with clerk
@@ -129,9 +163,9 @@ export default function EngineeringAideValidation() {
       {/* Statistics */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         {[
-          { label: 'Pending Review', value: projects.length, color: '#ff9800', icon: '⏳' },
-          { label: 'Validated Today', value: Math.floor(Math.random() * 5), color: '#4caf50', icon: '✓' },
-          { label: 'Issues Found', value: Math.floor(Math.random() * 3), color: '#f44336', icon: '⚠️' }
+          { label: 'Pending Review', value: stats.pendingReview, color: '#ff9800', icon: '⏳' },
+          { label: 'Validated Today', value: stats.validatedToday, color: '#4caf50', icon: '✓' },
+          { label: 'Issues Found', value: stats.issuesFound, color: '#f44336', icon: '⚠️' }
         ].map((stat, idx) => (
           <div key={idx} style={{
             background: 'white',
@@ -260,7 +294,7 @@ export default function EngineeringAideValidation() {
                 }}
                 style={{
                   width: '100%',
-                  background: 'linear-gradient(45deg, #fa709a, #fee140)',
+                  background: 'linear-gradient(45deg, #667eea, #764ba2)',
                   color: 'white',
                   border: 'none',
                   padding: '12px',

@@ -23,6 +23,35 @@ import NextLink from 'next/link';
 import { SidebarContext } from 'src/contexts/SidebarContext';
 
 // Icons Import
+
+
+import DvrIcon from '@mui/icons-material/Dvr';
+import AutoGraphIcon from '@mui/icons-material/AutoGraph';
+import PersonSearchIcon from '@mui/icons-material/PersonSearch';
+import PageviewIcon from '@mui/icons-material/Pageview';
+import ManageSearchIcon from '@mui/icons-material/ManageSearch';
+import GradingIcon from '@mui/icons-material/Grading';
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
+import DescriptionIcon from '@mui/icons-material/Description';
+import FolderSpecialIcon from '@mui/icons-material/FolderSpecial';
+import BalanceIcon from '@mui/icons-material/Balance';
+import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
+import InsightsIcon from '@mui/icons-material/Insights';
+import UpdateIcon from '@mui/icons-material/Update';
+import ListAltIcon from '@mui/icons-material/ListAlt';
+import ReplayCircleFilledIcon from '@mui/icons-material/ReplayCircleFilled';
+import SupervisedUserCircleIcon from '@mui/icons-material/SupervisedUserCircle';
+import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
+import FormatListNumberedRtlIcon from '@mui/icons-material/FormatListNumberedRtl';
+import ErrorIcon from '@mui/icons-material/Error';
+import LegendToggleIcon from '@mui/icons-material/LegendToggle';
+import TopicIcon from '@mui/icons-material/Topic';
+import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
+import ReceiptIcon from '@mui/icons-material/Receipt';
+import RequestQuoteIcon from '@mui/icons-material/RequestQuote';
+import AssignmentLateIcon from '@mui/icons-material/AssignmentLate';
+import ReportIcon from '@mui/icons-material/Report';
+import InputIcon from '@mui/icons-material/Input';
 import PlaylistAddCheckTwoToneIcon from '@mui/icons-material/PlaylistAddCheckTwoTone';
 import LayersTwoToneIcon from '@mui/icons-material/LayersTwoTone';
 import LocalAtmTwoToneIcon from '@mui/icons-material/LocalAtmTwoTone';
@@ -103,6 +132,8 @@ import StoreTwoToneIcon from '@mui/icons-material/StoreTwoTone';
 
 // Add this import at the top with other MUI imports
 import { CircularProgress, Skeleton } from '@mui/material';
+import { DocumentScannerTwoTone } from '@mui/icons-material';
+import { AlertCircle, User2Icon } from 'lucide-react';
 
 // Add this styled component with other styled components (after SubMenuWrapper)
 const LoaderWrapper = styled(Box)(
@@ -365,7 +396,7 @@ export function VendorSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<DescriptionTwoToneIcon />}
                 >
                   Work Orders
                 </Button>
@@ -378,7 +409,7 @@ export function VendorSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<DashboardTwoToneIcon />}
+                  startIcon={<InputIcon />}
                 >
                   Vendor Daily Login
                 </Button>
@@ -404,7 +435,7 @@ export function VendorSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<ReceiptLongTwoToneIcon />}
+                  startIcon={<ReportIcon />}
                 >
                   Penalties
                 </Button>
@@ -417,7 +448,7 @@ export function VendorSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<ReceiptLongTwoToneIcon />}
+                  startIcon={<AssignmentLateIcon />}
                 >
                   Defect Reports
                 </Button>
@@ -430,7 +461,7 @@ export function VendorSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<ReceiptLongTwoToneIcon />}
+                  startIcon={<RequestQuoteIcon />}
                 >
                   Billing
                 </Button>
@@ -443,7 +474,7 @@ export function VendorSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<ReceiptLongTwoToneIcon />}
+                  startIcon={<ReceiptIcon />}
                 >
                   Invoices
                 </Button>
@@ -581,7 +612,7 @@ export function ClerkSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<DescriptionTwoToneIcon />}
+                  startIcon={<AssignmentIndIcon />}
                 >
                   Document Support
                 </Button>
@@ -595,7 +626,7 @@ export function ClerkSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<DescriptionTwoToneIcon />}
                 >
                   Work Orders
                 </Button>
@@ -609,7 +640,7 @@ export function ClerkSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<SupervisedUserCircleIcon />}
                 >
                   QI Coordination
                 </Button>
@@ -622,7 +653,7 @@ export function ClerkSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<ListAltIcon />}
                 >
                   Checklist
                 </Button>
@@ -635,7 +666,7 @@ export function ClerkSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HistoryTwoToneIcon />}
+                  startIcon={<ReplayCircleFilledIcon />}
                 >
                   Re-Inspection Scheduling
                 </Button>
@@ -648,7 +679,7 @@ export function ClerkSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HistoryTwoToneIcon />}
+                  startIcon={<UpdateIcon />}
                 >
                   Change Logs
                 </Button>
@@ -661,7 +692,7 @@ export function ClerkSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HistoryTwoToneIcon />}
+                  startIcon={<ReceiptIcon />}
                 >
                   Pre-Billing Validation
                 </Button>
@@ -760,7 +791,7 @@ export function EngineeringAideSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<CalendarTodayTwoToneIcon />}
                 >
                   Calendar
                 </Button>
@@ -773,7 +804,7 @@ export function EngineeringAideSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<DescriptionTwoToneIcon />}
                 >
                   Work Orders
                 </Button>
@@ -786,7 +817,7 @@ export function EngineeringAideSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<GradingIcon />}
                 >
                   Technical Parameter Validation
                 </Button>
@@ -902,11 +933,11 @@ export function QualityInspectorSidebarMenu() {
             <ListItem component="div">
               <NextLink href="/qi" passHref>
                 <Button
-                  className={currentRoute === '/qi' ? 'active' : ''}
+                  className={currentRoute === '/qi/dashboard' ? 'active' : ''}
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<DashboardTwoToneIcon />}
+                  startIcon={<CalendarTodayTwoToneIcon />}
                 >
                   QI Dashboard
                 </Button>
@@ -921,7 +952,7 @@ export function QualityInspectorSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<DescriptionTwoToneIcon />}
                 >
                   Work Orders
                 </Button>
@@ -941,20 +972,7 @@ export function QualityInspectorSidebarMenu() {
               </NextLink>
             </ListItem>
 
-            
-            <ListItem component="div">
-              <NextLink href="/qi/document-types" passHref>
-                <Button
-                  className={currentRoute === '/qi/document-types' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<DescriptionTwoToneIcon />}
-                >
-                  Document Types
-                </Button>
-              </NextLink>
-            </ListItem>
+         
             <ListItem component="div">
               <NextLink href="/qi/inspections" passHref>
                 <Button
@@ -975,7 +993,7 @@ export function QualityInspectorSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<SearchTwoToneIcon />}
+                  startIcon={<PersonSearchIcon />}
                 >
                   My Inspections
                 </Button>
@@ -988,7 +1006,7 @@ export function QualityInspectorSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<SearchTwoToneIcon />}
+                  startIcon={<ManageSearchIcon />}
                 >
                   Inspections Checklist
                 </Button>
@@ -1120,7 +1138,7 @@ export function EngineerSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<DescriptionTwoToneIcon />}
                 >
                   Work Orders
                 </Button>
@@ -1635,7 +1653,7 @@ export function WOSupervisorSidebarMenu() {
                 className={currentRoute.includes('/supervisor/vendor') ? 'active' : ''}
                 disableRipple
                 onClick={() => toggleSection('vendors')}
-                startIcon={<BusinessTwoToneIcon />}
+                startIcon={<PeopleAltIcon />}
                 endIcon={openSections.vendors ? <ExpandLessTwoToneIcon /> : <ExpandMoreTwoToneIcon />}
               >
                 Vendors
@@ -1650,6 +1668,7 @@ export function WOSupervisorSidebarMenu() {
                       disableRipple
                       component="a"
                       onClick={closeSidebar}
+                startIcon={<PersonSearchIcon />}
                     >
                       All Vendors
                     </Button>
@@ -1680,7 +1699,7 @@ export function WOSupervisorSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<DescriptionTwoToneIcon />}
                 >
                   Work Orders
                 </Button>
@@ -1707,6 +1726,7 @@ export function WOSupervisorSidebarMenu() {
                       disableRipple
                       component="a"
                       onClick={closeSidebar}
+                      startIcon={<AssignmentTwoToneIcon />}
                     >
                       All Projects
                     </Button>
@@ -1719,7 +1739,7 @@ export function WOSupervisorSidebarMenu() {
                       disableRipple
                       component="a"
                       onClick={closeSidebar}
-                      startIcon={<FlagTwoToneIcon />}
+                      startIcon={<ErrorIcon />}
                     >
                       Project Penalties
                     </Button>
@@ -1732,7 +1752,7 @@ export function WOSupervisorSidebarMenu() {
                       disableRipple
                       component="a"
                       onClick={closeSidebar}
-                      startIcon={<FlagTwoToneIcon />}
+                      startIcon={<ReceiptIcon />}
                     >
                       Billing
                     </Button>
@@ -1745,25 +1765,13 @@ export function WOSupervisorSidebarMenu() {
                       disableRipple
                       component="a"
                       onClick={closeSidebar}
-                      startIcon={<FlagTwoToneIcon />}
+                      startIcon={<FormatListNumberedRtlIcon />}
                     >
                       Milestones
                     </Button>
                   </NextLink>
                 </ListItem>
-                <ListItem component="div" sx={{ pl: 4 }}>
-                  <NextLink href="/supervisor/milestone-templates" passHref>
-                    <Button
-                      className={currentRoute === '/supervisor/milestone-templates' ? 'active' : ''}
-                      disableRipple
-                      component="a"
-                      onClick={closeSidebar}
-                      startIcon={<ViewModuleTwoToneIcon />}
-                    >
-                      Milestone Templates
-                    </Button>
-                  </NextLink>
-                </ListItem>
+               
                 <ListItem component="div" sx={{ pl: 4 }}>
                   <NextLink href="/supervisor/project-schedules" passHref>
                     <Button
@@ -1840,7 +1848,8 @@ export function WOSupervisorSidebarMenu() {
                       className={currentRoute === '/supervisor/qis' ? 'active' : ''}
                       disableRipple
                       component="a"
-                      onClick={closeSidebar}
+                      onClick={closeSidebar}PeopleAltIcon
+                      startIcon={<PeopleAltIcon />}
                     >
                       QIs
                     </Button>
@@ -1853,7 +1862,7 @@ export function WOSupervisorSidebarMenu() {
                       disableRipple
                       component="a"
                       onClick={closeSidebar}
-                      startIcon={<SpeedTwoToneIcon />}
+                      startIcon={<LegendToggleIcon />}
                     >
                       QI Monitoring
                     </Button>
@@ -2176,7 +2185,7 @@ export function TeamLeaderSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<DashboardTwoToneIcon />}
+                  startIcon={<InsightsIcon />}
                 >
                   KPI Analytics
                 </Button>
@@ -2189,7 +2198,7 @@ export function TeamLeaderSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<DashboardTwoToneIcon />}
+                  startIcon={<ErrorIcon />}
                 >
                   Project Penalties
                 </Button>
@@ -2203,7 +2212,7 @@ export function TeamLeaderSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<DescriptionTwoToneIcon />}
                 >
                   Work Orders
                 </Button>
@@ -2217,7 +2226,7 @@ export function TeamLeaderSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<AssessmentTwoToneIcon />}
+                  startIcon={<CurrencyExchangeIcon />}
                 >
                   Financial Oversight
                 </Button>
@@ -2230,7 +2239,7 @@ export function TeamLeaderSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<AssessmentTwoToneIcon />}
+                  startIcon={<BalanceIcon />}
                 >
                   Workload Balancing
                 </Button>
@@ -2243,7 +2252,7 @@ export function TeamLeaderSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<AssessmentTwoToneIcon />}
+                  startIcon={<InputIcon />}
                 >
                   Audit Logs
                 </Button>
@@ -2573,7 +2582,7 @@ export function SectorManagerSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<DashboardTwoToneIcon />}
+                  startIcon={<InsightsIcon />}
                 >
                   KPI Analytics
                 </Button>
@@ -2587,7 +2596,7 @@ export function SectorManagerSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<DescriptionTwoToneIcon />}
                 >
                   Work Orders
                 </Button>
@@ -2602,7 +2611,7 @@ export function SectorManagerSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<DescriptionIcon />}
                 >
                   Compliance Oversight
                 </Button>
@@ -2616,7 +2625,7 @@ export function SectorManagerSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<PieChartTwoToneIcon />}
+                  startIcon={<AlertCircle />}
                 >
                   Penalties
                 </Button>
@@ -2629,7 +2638,7 @@ export function SectorManagerSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<TimelineTwoToneIcon />}
+                  startIcon={<FolderTwoToneIcon />}
                 >
                   Projects
                 </Button>
@@ -2642,7 +2651,7 @@ export function SectorManagerSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<BusinessCenterTwoToneIcon />}
+                  startIcon={<FormatListBulletedIcon />}
                 >
                   Sector Overview
                 </Button>
@@ -2670,7 +2679,7 @@ export function SectorManagerSidebarMenu() {
                   onClick={closeSidebar}
                   startIcon={<SpeedTwoToneIcon />}
                 >
-                  Vendor Dashboard
+                  Vendor Performance
                 </Button>
               </NextLink>
             </ListItem>
@@ -2755,7 +2764,7 @@ export function SystemAdminSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<DashboardTwoToneIcon />}
+                  startIcon={<AutoGraphIcon />}
                 >
                   KPI Analytics
                 </Button>
@@ -2768,9 +2777,23 @@ export function SystemAdminSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<DashboardTwoToneIcon />}
+                  startIcon={<CalendarTodayTwoToneIcon />}
                 >
                   Calendar
+                </Button>
+              </NextLink>
+            </ListItem>
+            
+            <ListItem component="div">
+              <NextLink href="/admin/user-management" passHref>
+                <Button
+                  className={currentRoute === '/admin/user-management' ? 'active' : ''}
+                  disableRipple
+                  component="a"
+                  onClick={closeSidebar}
+                  startIcon={<PeopleTwoToneIcon />}
+                >
+                  User Management
                 </Button>
               </NextLink>
             </ListItem>
@@ -2782,7 +2805,7 @@ export function SystemAdminSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<DashboardTwoToneIcon />}
+                  startIcon={<DvrIcon />}
                 >
                   Daily Crew Monitoring
                 </Button>
@@ -2796,7 +2819,7 @@ export function SystemAdminSidebarMenu() {
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
-                  startIcon={<HomeTwoToneIcon />}
+                  startIcon={<DescriptionTwoToneIcon />}
                 >
                   Work Orders
                 </Button>
@@ -3169,19 +3192,6 @@ export function SystemAdminSidebarMenu() {
               </NextLink>
             </ListItem>
 
-            <ListItem component="div">
-              <NextLink href="/admin/user-management" passHref>
-                <Button
-                  className={currentRoute === '/admin/user-management' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<PeopleTwoToneIcon />}
-                >
-                  User Management
-                </Button>
-              </NextLink>
-            </ListItem>
 
             <ListItem component="div">
               <Button

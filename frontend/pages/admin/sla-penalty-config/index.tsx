@@ -8,7 +8,7 @@ function ApplicationsTransactions() {
   return (
     <>
       <Head>
-        <title>Transactions - Applications</title>
+        <title>SLA Penalty - Administrator Portal</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

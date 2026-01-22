@@ -208,8 +208,16 @@ urlpatterns = [
     path('check-daily-email-logs/', check_daily_email_logs, name='check-daily-email-logs'),
     
     # Calendar endpoints
+    path('send_notifsss/', send_notifsss, name='send_notifsss'),
     path('a-calendar/events/', get_calendar_events, name='calendar-events'),
     path('a-calendar/stats/', get_calendar_stats, name='calendar-stats'),
+    path('api/check-overdue-documents/', check_overdue_documents, name='check-overdue-documents'),
+    path(
+        'notify/work-order/<int:wo_id>/',
+        notify_new_work_order_view,
+        name='notify-new-work-order'
+    ),
+
     
 ]
 

@@ -8,7 +8,7 @@ function ApplicationsTransactions() {
   return (
     <>
       <Head>
-        <title>Transactions - Applications</title>
+        <title>Penalties - Administrator Portal</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

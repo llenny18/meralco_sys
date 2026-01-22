@@ -537,14 +537,14 @@ class DailyActionEmailService:
                     status='Open'
                 ).count(),
                 'overdue_wos': WorkOrder.objects.filter(
-                    is_delayed=True,
+                    with_backjob=True,
                     status__in=['NEW', 'FOR AUDIT']
                 ).count(),
                 'overdue_wo_list': list(WorkOrder.objects.filter(
-                    is_delayed=True,
+                    with_backjob=True,
                     status__in=['NEW', 'FOR AUDIT']
-                ).order_by('-delay_days').values(
-                    'wo_no', 'description', 'delay_days', 'vendor__vendor_name'
+                ).order_by('-exclusion_duration').values(
+                    'wo_no', 'description', 'exclusion_duration'
                 )[:5]),
                 'pending_sla_waivers': SLATracking.objects.filter(
                     is_breached=True,
@@ -553,7 +553,7 @@ class DailyActionEmailService:
             },
             'SECTOR_MGR': {
                 'sector_delayed_wos': WorkOrder.objects.filter(
-                    is_delayed=True
+                    with_backjob=True
                 ).count(),
                 'pending_inspections': QIInspection.objects.filter(
                     is_completed=False,
@@ -790,7 +790,7 @@ class DailyActionEmailService:
                         <td style="padding: 8px;">{wo['wo_no']}</td>
                         <td style="padding: 8px;">{wo['description'][:40]}...</td>
                         <td style="padding: 8px; text-align: center; color: #d32f2f; font-weight: bold;">
-                            {wo['delay_days']} days
+                            {wo['exclusion_duration']} days
                         </td>
                     </tr>
                     """)

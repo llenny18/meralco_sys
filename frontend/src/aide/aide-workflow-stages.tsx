@@ -28,11 +28,7 @@ function AideWorkflowStages() {
       return;
     }
 
-    // Optional: Check if user has admin role
-    if (userRole !== 'engineer-aide') {
-      // Redirect non-admin users to their appropriate dashboard
-      router.push('/unauthorized'); // or router.push('/dashboard');
-    }
+ 
   }, [router]);
 
   const [tableData, setTableData] = useState<any[]>([]);

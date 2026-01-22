@@ -163,11 +163,13 @@ function WorkOrders() {
       if (vipFilter) params.append('vip', vipFilter);
       if (searchQuery) params.append('search', searchQuery);
 
-      const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/?${params.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
-        }
-      });
+      const storedVendorId = JSON.parse(localStorage?.getItem('user'))?.user_id || '0';
+      const vendorResponse = await fetch(`${API_BASE_URL}/vendors/?user_id=${storedVendorId}`);
+      const vendorData = await vendorResponse.json();
+
+      const vendorId = vendorData.results[0].vendor_id;
+      const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/?${params.toString()}&vendor_id=${vendorId}`);
+
       
       if (!response.ok) throw new Error(`Failed to fetch data: ${response.statusText}`);
       

@@ -19,7 +19,7 @@ export default function VendorPenaltyView() {
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user') || '{}');
-    const vId = userData.vendor_id || '1';
+    const vId = userData.user_id || '1';
     setVendorId(vId);
     fetchPenalties(vId);
   }, []);
@@ -27,7 +27,11 @@ export default function VendorPenaltyView() {
   const fetchPenalties = async (vId) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/penalties/?vendor=${vId}`);
+      const vendorResponse = await fetch(`${API_BASE_URL}/vendors/?user_id=${vId}`);
+      const vendorData = await vendorResponse.json();
+
+      const vendorId = vendorData.results[0].vendor_id;
+      const response = await fetch(`${API_BASE_URL}/penalties/?vendor=${vendorId}`);
       if (!response.ok) throw new Error('Failed to fetch penalties');
       const data = await response.json();
       setPenalties(data.results || data || []);

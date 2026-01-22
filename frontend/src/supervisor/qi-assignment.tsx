@@ -126,7 +126,7 @@ export default function QIAssignmentNotification() {
       {/* Header */}
       <div style={{ background: 'white', borderRadius: '16px', padding: '28px', marginBottom: '24px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
         <h1 style={{ margin: '0 0 8px 0', fontSize: '32px', color: '#1a1a2e', fontWeight: '700' }}>
-          🔔 Phase 1: Assignment Notifications
+          Assignment Notifications
         </h1>
         <p style={{ margin: 0, color: '#666', fontSize: '16px' }}>
           Receive assignments → Review project details → Accept or request reassignment

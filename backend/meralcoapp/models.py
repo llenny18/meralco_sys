@@ -233,6 +233,13 @@ class ProjectStatus(models.Model):
         return self.status_name
 
 
+import random
+from django.db import models
+
+def generate_project_id():
+    return random.randint(100000, 999999)  # 6-digit random number
+
+
 class Project(models.Model):
     PRIORITY_CHOICES = [
         ('Low', 'Low'),
@@ -247,7 +254,7 @@ class Project(models.Model):
         ('High', 'High'),
     ]
 
-    project_id = models.IntegerField(primary_key=True,  editable=False)
+    project_id = models.IntegerField(primary_key=True, default=generate_project_id, editable=False)
     project_code = models.CharField(max_length=100, unique=True)
     project_name = models.CharField(max_length=255)
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects')

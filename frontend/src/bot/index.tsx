@@ -185,9 +185,10 @@ const ChatBot: React.FC<ChatBotProps> = ({ apiBaseUrl = 'http://localhost:8000' 
         >
           {/* Header */}
           <div style={{
-            background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+            background: 'linear-gradient(135deg, #050c27 0%, #1d4ed8 100%)',
             color: 'white',
             padding: '16px',
+            border: '3px solid white',
             borderTopLeftRadius: '16px',
             borderTopRightRadius: '16px',
             display: 'flex',
@@ -460,8 +461,9 @@ const ChatBot: React.FC<ChatBotProps> = ({ apiBaseUrl = 'http://localhost:8000' 
                     style={{
                       flex: 1,
                       padding: '10px 16px',
-                      backgroundColor: '#f9fafb',
+                      background: 'linear-gradient(135deg, #050c27 0%, #1d4ed8 100%)',
                       border: '1px solid #e5e7eb',
+                      color: 'white',
                       borderRadius: '12px',
                       fontSize: '14px',
                       outline: 'none',

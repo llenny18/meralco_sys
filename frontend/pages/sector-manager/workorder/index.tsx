@@ -8,7 +8,7 @@ function ApplicationsTransactions() {
   return (
     <>
       <Head>
-        <title>Transactions - Applications</title>
+        <title>Work Orders - Sector Manager</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

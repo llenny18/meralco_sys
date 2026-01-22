@@ -10,7 +10,9 @@ import VendorDashboard from '@/vendor/defect-report';
 function ApplicationsTransactions() {
   return (
     <>
-    
+    <Head>
+        <title>Defect Report - Vendor Portal</title>
+      </Head>
       <Container maxWidth="lg">
         <Grid
           container

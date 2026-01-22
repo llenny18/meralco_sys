@@ -26,7 +26,7 @@ export default function AdminDocumentArchiving() {
   const fetchCompletedProjects = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/?status=Billing Approved`);
+      const response = await fetch(`${API_BASE_URL}/projects/?status=8`);
       if (!response.ok) throw new Error('Failed to fetch projects');
       const data = await response.json();
       setProjects(data.results || data || []);
@@ -41,7 +41,7 @@ export default function AdminDocumentArchiving() {
     try {
       const [docsRes, projectsRes] = await Promise.all([
         fetch(`${API_BASE_URL}/project-documents/`),
-        fetch(`${API_BASE_URL}/projects/?status=Completed`)
+        fetch(`${API_BASE_URL}/projects/?status=3`)
       ]);
 
       const docsData = await docsRes.json();

@@ -109,6 +109,8 @@ function WorkOrders() {
   const [vipFilter, setVipFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  
+
   // File upload
   const [importFile, setImportFile] = useState<File | null>(null);
 
@@ -137,7 +139,30 @@ function WorkOrders() {
 
   useEffect(() => {
     fetchTableData();
+    
   }, [page, rowsPerPage, statusFilter, municipalityFilter, assignedFilter, vipFilter]);
+
+  const [supervisorName, setSupervisorName] = useState<string>('');
+
+useEffect(() => {
+  const storedUser = localStorage?.getItem('user');
+  const supervisorUserId = storedUser ? JSON.parse(storedUser).user_id : null;
+
+  if (!supervisorUserId) return;
+
+  const fetchSupervisorName = async () => {
+    const response = await fetch(
+      `${API_BASE_URL}/users/?user_id=${supervisorUserId}`
+    );
+    const data = await response.json();
+
+    const fullName = data?.results?.[0]?.full_name || '';
+    setSupervisorName(fullName);
+  };
+
+  fetchSupervisorName();
+}, []);
+
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -156,18 +181,36 @@ function WorkOrders() {
       const params = new URLSearchParams();
       params.append('page', (page + 1).toString());
       params.append('page_size', rowsPerPage.toString());
-      
-      if (statusFilter) params.append('status', statusFilter);
-      if (municipalityFilter) params.append('municipality', municipalityFilter);
-      if (assignedFilter) params.append('assigned', assignedFilter);
-      if (vipFilter) params.append('vip', vipFilter);
-      if (searchQuery) params.append('search', searchQuery);
+    if (statusFilter) params.append('status', statusFilter);
+if (municipalityFilter) params.append('municipality', municipalityFilter);
+if (assignedFilter) params.append('assigned', assignedFilter);
+if (vipFilter) params.append('vip', vipFilter);
+if (searchQuery) params.append('search', searchQuery);
 
-      const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/?${params.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
-        }
-      });
+// Get logged-in supervisor ID from localStorage
+const storedUser = localStorage?.getItem('user');
+const supervisorUserId = storedUser ? JSON.parse(storedUser).user_id : null;
+
+// Fetch supervisor details
+const supervisorResponse = await fetch(
+  `${API_BASE_URL}/users/?user_id=${supervisorUserId}`
+);
+const supervisorData = await supervisorResponse.json();
+
+// Extract supervisor full name
+const supervisorFullName = supervisorData?.results?.[0]?.full_name;
+
+// Append supervisor filter (auto-encoded by URLSearchParams)
+if (supervisorFullName) {
+  params.append('supervisor_full_name', supervisorFullName);
+}
+
+// Final API request
+const url = `${API_BASE_URL}/${ENDPOINT}/?${params.toString()}`;
+console.log('Final API URL:', url);
+
+const response = await fetch(url);
+
       
       if (!response.ok) throw new Error(`Failed to fetch data: ${response.statusText}`);
       
@@ -851,9 +894,10 @@ const handleDownloadTemplate = async () => {
                 <TextField
                   fullWidth
                   label="Supervisor Full Name"
-                  value={formData.supervisor_full_name || ''}
+                  value={supervisorName || ''}
                   onChange={(e) => handleInputChange('supervisor_full_name', e.target.value)}
                   placeholder="Enter supervisor name"
+                  aria-readonly={true}
                 />
               </Grid>
 

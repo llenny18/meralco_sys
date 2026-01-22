@@ -8,7 +8,7 @@ function SectorManagerFinancialPage() {
   return (
     <>
       <Head>
-        <title>Financial Overview - Sector Manager</title>
+        <title>Compliance Overview - Sector Manager</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

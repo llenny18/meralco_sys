@@ -10,7 +10,9 @@ import QIDashboard from '@/qi';
 function ApplicationsTransactions() {
   return (
     <>
- 
+  <Head>
+        <title>Dashboard - Quality Inspector</title>
+      </Head>
       <Container maxWidth="lg">
         <Grid
           container

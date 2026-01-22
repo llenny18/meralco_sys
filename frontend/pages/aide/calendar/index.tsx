@@ -8,7 +8,7 @@ function AideProjectsPage() {
   return (
     <>
       <Head>
-        <title>Projects - Engineering Aide</title>
+        <title>Calendar - Engineering Aide</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

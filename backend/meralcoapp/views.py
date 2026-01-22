@@ -26,6 +26,10 @@ from .serializers import (
     RegisterUserSerializer
 )
 
+
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+
 from rest_framework.parsers import MultiPartParser, FormParser
 from pathlib import Path
 from django.http import FileResponse
@@ -889,7 +893,7 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['role', 'is_active']
+    filterset_fields = ['role', 'is_active', 'user_id']
     search_fields = ['username', 'email', 'first_name', 'last_name']
     ordering_fields = ['username', 'created_at', 'last_login']
 
@@ -925,7 +929,7 @@ class VendorViewSet(viewsets.ModelViewSet):
     queryset = Vendor.objects.prefetch_related('contacts').all()
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active', 'is_blacklisted', 'city', 'region']
+    filterset_fields = ['is_active', 'is_blacklisted', 'city', 'region', 'user_id']
     search_fields = ['vendor_code', 'vendor_name', 'company_name', 'email']
     ordering_fields = ['vendor_name', 'compliance_score', 'created_at']
 
@@ -1148,6 +1152,8 @@ class ProjectDocumentViewSet(viewsets.ModelViewSet):
         document.approved_by = request.user
         document.approval_date = timezone.now()
         document.save()
+        
+        # Email sent automatically via signal
         return Response({'status': 'document approved'})
 
     @action(detail=True, methods=['post'])
@@ -1157,6 +1163,8 @@ class ProjectDocumentViewSet(viewsets.ModelViewSet):
         document.approval_status = 'Rejected'
         document.rejection_reason = request.data.get('reason', '')
         document.save()
+    
+        # Email sent automatically via signal
         return Response({'status': 'document rejected'})
 
     @action(detail=False, methods=['get'])
@@ -1336,7 +1344,12 @@ class PenaltyViewSet(viewsets.ModelViewSet):
         penalty.approval_date = timezone.now()
         penalty.issue_date = date.today()
         penalty.save()
+        
+        # Email sent automatically via signal
         return Response({'status': 'penalty approved'})
+
+
+   
 
     @action(detail=True, methods=['post'])
     def waive(self, request, pk=None):
@@ -1371,6 +1384,40 @@ class PenaltyViewSet(viewsets.ModelViewSet):
             disputed=Count('id', filter=Q(penalty_status='Disputed'))
         )
         return Response(summary)
+
+
+ # Add scheduled task endpoint for checking overdue documents
+@api_view(['POST'])
+def check_overdue_documents(request):
+    """Check and notify vendors about overdue documents (run daily via cron)"""
+    
+    from datetime import date
+    from .models import DocumentCompliance, Vendor
+    from collections import defaultdict
+    
+    # Get all overdue, unsubmitted documents
+    overdue_docs = DocumentCompliance.objects.filter(
+        is_overdue=True,
+        is_submitted=False
+    ).select_related('project', 'project__vendor')
+    
+    # Group by vendor
+    vendor_overdue = defaultdict(int)
+    for doc in overdue_docs:
+        if doc.project.vendor:
+            vendor_overdue[doc.project.vendor] += 1
+    
+    # Send notifications
+    notifications_sent = 0
+    for vendor, count in vendor_overdue.items():
+        email_service.notify_vendor_document_overdue(vendor, count)
+        notifications_sent += 1
+    
+    return Response({
+    'status': 'success',
+    'notifications_sent': notifications_sent,
+    'vendors_notified': [vendor.vendor_name for vendor in vendor_overdue.keys()]
+})
 
 
 # ============================================
@@ -1715,6 +1762,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     filterset_fields = {
         'status': ['exact', 'in'],
         'vendor_id': ['exact'],
+        'supervisor_full_name': ['exact', 'in'],
         'vip': ['exact'],
         'municipality': ['exact', 'in'],
         'assigned': ['exact', 'in'],
@@ -3271,6 +3319,7 @@ from rest_framework.response import Response
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from .daily_action_email_service import DailyActionEmailService
+from .email_notification_service import EmailNotificationService
 from .models import User, EmailNotificationLog
 from datetime import date
 
@@ -3289,6 +3338,29 @@ def send_my_daily_email(request):
     else:
         return Response(result, status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['GET'])
+def notify_new_work_order_view(request, wo_id):
+    work_order = get_object_or_404(WorkOrder, pk=wo_id)
+
+    EmailNotificationService.notify_new_work_order(work_order)
+
+    return Response({
+        "success": True,
+        "message": f"Email notifications sent for WO {work_order.wo_no}"
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])  # Protect this in production
+def send_notifsss(request):
+    """
+    Send daily action emails to all active users
+    Should be called by cron job or scheduler
+    """
+    
+    results = EmailNotificationService()
+    
+    return Response(results, status=status.HTTP_200_OK)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])  # Protect this in production
@@ -4159,10 +4231,9 @@ class ClerkViewSet(viewsets.ViewSet):
         """Get work orders needing COC review/processing"""
         
         # Filter work orders that are energized but need COC processing
-        queryset = WorkOrder.objects.select_related(
-            'vendor', 'supervisor'
+        queryset = WorkOrder.objects.all(
         ).filter(
-            status__in=['NEW', 'FOR AUDIT']
+            status__in=['INPRG', 'SCHED']
         ).filter(
             models.Q(date_received_by_vc__isnull=False) &
             (
@@ -6751,3 +6822,135 @@ class ClerkDocumentValidationViewSet(viewsets.ViewSet):
             'results': serializer.data,
             'count': documents.count()
         })
+        
+# Add these imports at the top
+from django.db.models.signals import post_save, pre_save
+from django.dispatch import receiver
+from .email_notification_service import email_service
+
+# ==================== SIGNAL HANDLERS FOR EMAIL NOTIFICATIONS ====================
+
+# Store previous state for comparison
+_work_order_cache = {}
+_project_cache = {}
+
+@receiver(pre_save, sender=WorkOrder)
+def work_order_pre_save(sender, instance, **kwargs):
+    """Cache old state before save"""
+    if instance.pk:
+        try:
+            old = WorkOrder.objects.get(pk=instance.pk)
+            _work_order_cache[instance.pk] = {
+                'status': old.status,
+            }
+        except WorkOrder.DoesNotExist:
+            pass
+
+@receiver(post_save, sender=WorkOrder)
+def work_order_post_save(sender, instance, created, **kwargs):
+    """Send email notifications for work order changes"""
+    
+    if created:
+        # New work order created
+        email_service.notify_new_work_order(instance)
+    else:
+        # Work order updated - check for status change
+        old_data = _work_order_cache.get(instance.pk)
+        if old_data and old_data['status'] != instance.status:
+            email_service.notify_work_order_status_change(
+                instance, 
+                old_data['status'], 
+                instance.status
+            )
+        
+        # Clean up cache
+        if instance.pk in _work_order_cache:
+            del _work_order_cache[instance.pk]
+
+
+
+
+
+@receiver(pre_save, sender=Project)
+def project_pre_save(sender, instance, **kwargs):
+    """Cache old project state"""
+    if instance.pk:
+        try:
+            old = Project.objects.get(pk=instance.pk)
+            _project_cache[instance.pk] = {
+                'status': old.status_id,
+            }
+        except Project.DoesNotExist:
+            pass
+
+@receiver(post_save, sender=Project)
+def project_post_save(sender, instance, created, **kwargs):
+    """Send email notifications for project changes"""
+    
+    if created:
+        # New project created
+        email_service.notify_new_project(instance)
+    else:
+        old_data = _project_cache.get(instance.pk)
+        
+        if old_data:
+            # Check if project became delayed
+            if not old_data['with_backjob'] and instance.is_delayed:
+                email_service.notify_project_delay(instance)
+            
+            # Check if project marked as completed
+            current_status = instance.status_id if instance.status_id else None
+            if old_data['status_id'] != 3 and current_status == 3:
+                email_service.notify_project_completion(instance)
+        
+        # Clean up cache
+        if instance.pk in _project_cache:
+            del _project_cache[instance.pk]
+
+
+@receiver(post_save, sender=ProjectDocument)
+def document_post_save(sender, instance, created, **kwargs):
+    """Send email notifications for document changes"""
+    
+    if created:
+        # New document uploaded
+        email_service.notify_document_uploaded(instance)
+    else:
+        # Document updated - check approval status
+        old_doc = ProjectDocument.objects.filter(pk=instance.pk).first()
+        
+        if instance.approval_status == 'Approved':
+            email_service.notify_document_approved(instance)
+        elif instance.approval_status == 'Rejected':
+            email_service.notify_document_rejected(instance)
+
+
+@receiver(post_save, sender=QIInspection)
+def inspection_post_save(sender, instance, created, **kwargs):
+    """Send email notifications for inspection changes"""
+    
+    if created:
+        # New inspection scheduled
+        email_service.notify_inspection_scheduled(instance)
+    else:
+        # Check if inspection completed
+        if instance.is_completed:
+            email_service.notify_inspection_completed(instance)
+
+
+@receiver(post_save, sender=Penalty)
+def penalty_post_save(sender, instance, created, **kwargs):
+    """Send email notification when penalty issued"""
+    
+    # Only notify when penalty is officially issued
+    if instance.penalty_status == 'Issued':
+        email_service.notify_penalty_issued(instance)
+
+
+@receiver(post_save, sender=SLATracking)
+def sla_post_save(sender, instance, created, **kwargs):
+    """Send email notification for SLA breach"""
+    
+    # Notify when SLA is breached
+    if instance.is_breached and instance.status == 'Breached':
+        email_service.notify_sla_breach(instance)

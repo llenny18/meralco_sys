@@ -11,13 +11,41 @@ export default function VendorCorrectionsInterface() {
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [vendorId, setVendorId] = useState('');
 
-  useEffect(() => {
-    const storedUser = localStorage?.getItem('user');
-    const userObj = storedUser ? JSON.parse(storedUser) : null;
-    setVendorId(userObj?.vendor_id || '1');
-    
-    fetchDefectReports();
-  }, []);
+useEffect(() => {
+  const fetchVendorData = async () => {
+    try {
+      const storedUser = localStorage.getItem('user');
+      if (!storedUser) return;
+
+      const userObj = JSON.parse(storedUser);
+      if (!userObj?.user_id) return;
+
+      // Fetch vendor by user_id
+      const vendorResponse = await fetch(
+        `${API_BASE_URL}/vendors/?user_id=${userObj.user_id}`
+      );
+      const vendorData = await vendorResponse.json();
+
+      if (!vendorData?.results?.length) return;
+
+      const vendorId = vendorData.results[0].vendor_id;
+      setVendorId(vendorId);
+      
+
+      // Fetch vendor performance
+      await fetch(
+        `${API_BASE_URL}/vendor-performance/?vendor=${vendorId}`
+      );
+
+      fetchDefectReports();
+    } catch (error) {
+      console.error('Failed to load vendor data:', error);
+    }
+  };
+
+  fetchVendorData();
+}, []);
+
 
   const fetchDefectReports = async () => {
     setLoading(true);

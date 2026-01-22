@@ -8,7 +8,7 @@ function VendorActivityDashboardPage() {
   return (
     <>
       <Head>
-        <title>Billing Summary - Vendor Portal</title>
+        <title>Daily Login - Vendor Portal</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

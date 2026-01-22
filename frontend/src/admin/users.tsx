@@ -250,7 +250,7 @@ export default function AdminUserAccess() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', padding: '20px', background: '#f5f7fa' }}>
+    <div style={{ minHeight: '100vh', padding: '20px'}}>
       {/* Header */}
       <div style={{ background: 'white', borderRadius: '16px', padding: '28px', marginBottom: '24px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>

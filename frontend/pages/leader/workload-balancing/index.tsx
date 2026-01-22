@@ -8,7 +8,7 @@ function LeaderAuditLogsPage() {
   return (
     <>
       <Head>
-        <title>Audit Logs - Team Leader</title>
+        <title>Workload Balancing - Team Leader</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

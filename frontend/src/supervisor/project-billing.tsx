@@ -25,7 +25,7 @@ export default function SupervisorBillingApproval() {
   const fetchReadyForBilling = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/?status=Ready for Billing`);
+      const response = await fetch(`${API_BASE_URL}/projects/?status=7`);
       if (!response.ok) throw new Error('Failed to fetch projects');
       const data = await response.json();
       setProjects(data.results || data || []);

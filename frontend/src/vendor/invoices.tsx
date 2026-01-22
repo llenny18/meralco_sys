@@ -29,7 +29,19 @@ export default function VendorInvoiceTracking() {
   const fetchVendorInvoices = async (vId) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/invoices/?vendor=${vId}`);
+      // First, get the vendor_id from the user_id
+      const vendorResponse = await fetch(`${API_BASE_URL}/vendors/?user_id=${vId}`);
+      const vendorData = await vendorResponse.json();
+
+      const vendorId = vendorData.results[0].vendor_id;
+    
+      // Now fetch invoices using the vendor_id
+      const response = await fetch(`${API_BASE_URL}/invoices/?vendor=${vendorId}`);
+
+
+
+  
+
       if (!response.ok) throw new Error('Failed to fetch invoices');
       const data = await response.json();
       let invoiceList = data.results || data || [];

@@ -8,7 +8,7 @@ function ApplicationsTransactions() {
   return (
     <>
       <Head>
-        <title>Transactions - Applications</title>
+        <title>KPI Dashboard- Team Leader</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

@@ -507,13 +507,13 @@ export default function QIWebDashboard() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-              <div style={{ background: '#f5f5f5', borderRadius: '8px', padding: '16px' }}>
+              <div style={{ borderRadius: '8px', padding: '16px' }}>
                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>SCHEDULED DATE</div>
                 <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1a1a2e' }}>
                   {new Date(selectedAssignment.scheduled_date).toLocaleDateString()}
                 </div>
               </div>
-              <div style={{ background: '#f5f5f5', borderRadius: '8px', padding: '16px' }}>
+              <div style={{ borderRadius: '8px', padding: '16px' }}>
                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>TIME</div>
                 <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1a1a2e' }}>
                   {selectedAssignment.scheduled_time || '09:00 AM'}
@@ -524,7 +524,7 @@ export default function QIWebDashboard() {
             {selectedAssignment.project_description && (
               <div style={{ marginBottom: '20px' }}>
                 <h3 style={{ margin: '0 0 12px 0', fontSize: '18px', color: '#1a1a2e' }}>Project Description</h3>
-                <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px', fontSize: '14px', lineHeight: '1.6', color: '#1a1a2e' }}>
+                <div style={{ padding: '16px', borderRadius: '8px', fontSize: '14px', lineHeight: '1.6', color: '#1a1a2e' }}>
                   {selectedAssignment.project_description}
                 </div>
               </div>

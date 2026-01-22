@@ -11,7 +11,7 @@ function ApplicationsTransactions() {
   return (
     <>
       <Head>
-        <title>Transactions - Applications</title>
+        <title>Dashboard - Administrator Portal</title>
       </Head>
       <PageTitleWrapper>
         <PageHeader />

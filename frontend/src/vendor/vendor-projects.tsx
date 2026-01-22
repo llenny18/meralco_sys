@@ -18,7 +18,7 @@ export default function VendorProjectInitiation() {
   });
 
   useEffect(() => {
-    const storedVendorId = localStorage?.getItem('user')?.user_id || '1';
+    const storedVendorId = JSON.parse(localStorage.getItem('user') || '{}')?.user_id || '0';
     setVendorId(storedVendorId);
     fetchVendorProjects(storedVendorId);
   }, []);
@@ -26,7 +26,11 @@ export default function VendorProjectInitiation() {
   const fetchVendorProjects = async (vId) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/?vendor=${vId}`);
+      const vendorResponse = await fetch(`${API_BASE_URL}/vendors/?user_id=${vId}`);
+      const vendorData = await vendorResponse.json();
+
+      const vendorId = vendorData.results[0].vendor_id;
+      const response = await fetch(`${API_BASE_URL}/projects/?vendor=${vendorId}`);
       if (!response.ok) throw new Error('Failed to fetch projects');
       const data = await response.json();
       setProjects(data.results || data || []);

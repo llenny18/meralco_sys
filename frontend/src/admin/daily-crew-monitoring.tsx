@@ -121,6 +121,7 @@ function DailyCrewMonitoring() {
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
     const authToken = localStorage.getItem('authToken');
+    const userRole = localStorage.getItem('userRole');
     
     if (!userRole) {
       router.push('/login');

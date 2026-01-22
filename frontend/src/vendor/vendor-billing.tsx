@@ -18,7 +18,7 @@ export default function VendorPaymentTracking() {
       return;
     }
     
-    const storedVendorId = JSON.parse(localStorage?.getItem('user'))?.vendor_id || '1';
+    const storedVendorId = JSON.parse(localStorage?.getItem('user'))?.user_id || '0';
     setVendorId(storedVendorId);
     fetchInvoices(storedVendorId);
     fetchPerformance(storedVendorId);
@@ -27,7 +27,14 @@ export default function VendorPaymentTracking() {
   const fetchInvoices = async (vId) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/invoices/?vendor=${vId}`);
+      const vendorResponse = await fetch(`${API_BASE_URL}/vendors/?user_id=${vId}`);
+      const vendorData = await vendorResponse.json();
+
+      const vendorId = vendorData.results[0].vendor_id;
+    
+      // Now fetch invoices using the vendor_id
+      const response = await fetch(`${API_BASE_URL}/invoices/?vendor=${vendorId}`);
+
       if (!response.ok) throw new Error('Failed to fetch invoices');
       const data = await response.json();
       setInvoices(data.results || data || []);
@@ -40,7 +47,11 @@ export default function VendorPaymentTracking() {
 
   const fetchPerformance = async (vId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/vendor-performance/?vendor=${vId}`);
+      const vendorResponse = await fetch(`${API_BASE_URL}/vendors/?user_id=${vId}`);
+      const vendorData = await vendorResponse.json();
+
+      const vendorId = vendorData.results[0].vendor_id;
+      const response = await fetch(`${API_BASE_URL}/vendor-performance/?vendor=${vendorId}`);
       if (!response.ok) throw new Error('Failed to fetch performance');
       const data = await response.json();
       const records = data.results || data || [];

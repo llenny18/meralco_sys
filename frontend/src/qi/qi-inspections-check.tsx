@@ -292,7 +292,7 @@ export default function QIInspectionInterface() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f5f5f5', padding: '20px', paddingBottom: '100px' }}>
+    <div style={{ minHeight: '100vh', padding: '20px', paddingBottom: '100px' }}>
       {/* Header */}
       <div style={{ background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
@@ -320,7 +320,7 @@ export default function QIInspectionInterface() {
                 📡 OFFLINE MODE
               </span>
             )}
-            <div style={{ textAlign: 'center', padding: '12px 20px', background: '#f5f5f5', borderRadius: '12px' }}>
+            <div style={{ textAlign: 'center', padding: '12px 20px', borderRadius: '12px' }}>
               <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#667eea' }}>{getChecklistProgress()}%</div>
               <div style={{ fontSize: '11px', color: '#666' }}>COMPLETE</div>
             </div>
@@ -427,7 +427,7 @@ export default function QIInspectionInterface() {
                     </label>
 
                     {item.photos && item.photos.length > 0 && (
-                      <span style={{ padding: '8px 12px', background: '#f5f5f5', borderRadius: '6px', fontSize: '13px', color: '#666' }}>
+                      <span style={{ padding: '8px 12px', borderRadius: '6px', fontSize: '13px', color: '#666' }}>
                         {item.photos.length} photo(s) attached
                       </span>
                     )}
@@ -546,7 +546,7 @@ export default function QIInspectionInterface() {
 
       {/* Submit Section - Fixed Bottom */}
       <div style={{
-        position: 'fixed',
+      
         bottom: 0,
         left: 0,
         right: 0,
