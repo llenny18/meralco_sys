@@ -722,7 +722,8 @@ const ProjectCalendarDashboard: React.FC = () => {
                 gridTemplateColumns: 'repeat(7, 1fr)',
                 border: '1px solid #d1d5db',
                 borderRadius: '8px',
-                overflow: 'hidden',
+                overflow: 'scroll',
+                width: '100%',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
             }}>
                 {weekDays.map(day => (

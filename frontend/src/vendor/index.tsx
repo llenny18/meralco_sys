@@ -81,14 +81,9 @@ const ProjectCalendarDashboard: React.FC = () => {
                 days: '90'
             });
 
+            console.log(`http://localhost:8000/api/v1/calendar/upcoming-deadlines/?${params}`);
             const response = await fetch(
-                `http://localhost:8000/api/v1/calendar/upcoming-deadlines/?${params}`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
+                `http://localhost:8000/api/v1/calendar/upcoming-deadlines/?${params}`
             );
 
             if (!response.ok) {
@@ -112,13 +107,7 @@ const ProjectCalendarDashboard: React.FC = () => {
             if (!token) return;
 
             const response = await fetch(
-                'http://localhost:8000/a-calendar/stats/',
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
+                'http://localhost:8000/a-calendar/stats/'
             );
 
             if (response.ok) {
@@ -298,7 +287,8 @@ const ProjectCalendarDashboard: React.FC = () => {
                 gridTemplateColumns: 'repeat(7, 1fr)',
                 border: '1px solid #d1d5db',
                 borderRadius: '8px',
-                overflow: 'hidden',
+                overflow: 'scroll',
+                width: '100%',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
             }}>
                 {weekDays.map(day => (

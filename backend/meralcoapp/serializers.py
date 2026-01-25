@@ -1191,12 +1191,9 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         
         return data
 
-
 class WorkOrderDocumentSerializer(serializers.ModelSerializer):
-    uploaded_by_username = serializers.CharField(
-        source='uploaded_by.username',
-        read_only=True
-    )
+    uploaded_by_username = serializers.SerializerMethodField()
+    approved_by_username = serializers.SerializerMethodField()
     file_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -1205,23 +1202,54 @@ class WorkOrderDocumentSerializer(serializers.ModelSerializer):
             'id',
             'work_order',
             'document_type',
+            'document_name',
+            'document_path',
             'file',
             'file_url',
-            'title',
-            'description',
-            'uploaded_by',
+            'uploaded_by_id',
             'uploaded_by_username',
-            'uploaded_at',
+            'upload_date',
+            'is_approved',
+            'approved_by_id',
+            'approved_by_username',
+            'approval_date',
+            'notes',
+            'created_at',
         ]
         read_only_fields = [
-            'uploaded_by',
-            'uploaded_at',
+            'upload_date',
+            'created_at',
+            'document_name',
+            'document_path',
         ]
 
     def get_file_url(self, obj):
+        """Get the full URL for the uploaded file"""
         request = self.context.get('request')
         if obj.file and request:
             return request.build_absolute_uri(obj.file.url)
+        elif obj.file:
+            return obj.file.url
+        return None
+
+    def get_uploaded_by_username(self, obj):
+        """Get the username of the uploader"""
+        if obj.uploaded_by_id:
+            try:
+                user = User.objects.get(user_id=obj.uploaded_by_id)
+                return user.username
+            except User.DoesNotExist:
+                return "Unknown User"
+        return "System"
+    
+    def get_approved_by_username(self, obj):
+        """Get the username of the approver"""
+        if obj.approved_by_id:
+            try:
+                user = User.objects.get(user_id=obj.approved_by_id)
+                return user.username
+            except User.DoesNotExist:
+                return "Unknown User"
         return None
 
 

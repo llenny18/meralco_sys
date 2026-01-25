@@ -1761,6 +1761,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     # Filtering options
     filterset_fields = {
         'status': ['exact', 'in'],
+        'project_id': ['exact'],
         'vendor_id': ['exact'],
         'supervisor_full_name': ['exact', 'in'],
         'vip': ['exact'],
@@ -1776,6 +1777,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     
     # Search functionality
     search_fields = [
+        'project_id', 
         'vendor_id', 
         'wo_no', 
         'description', 
@@ -2413,31 +2415,87 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
                 status=500
             )
 
-
-
 class WorkOrderDocumentViewSet(viewsets.ModelViewSet):
-    queryset = WorkOrderDocument.objects.select_related(
-        'work_order', 'uploaded_by'
-    )
+    queryset = WorkOrderDocument.objects.all()
     serializer_class = WorkOrderDocumentSerializer
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
 
-    def perform_create(self, serializer):
-        serializer.save(uploaded_by=self.request.user)
+    def create(self, request, *args, **kwargs):
+        """Handle document upload with proper user assignment"""
+        try:
+            data = request.data.copy()
+            
+            # Get the uploaded_by value from request
+            uploaded_by_id = data.get('uploaded_by')
+            
+            # Validate and convert to integer
+            if uploaded_by_id:
+                try:
+                    uploaded_by_id = int(uploaded_by_id)
+                    # Verify user exists
+                    User.objects.get(user_id=uploaded_by_id)
+                    data['uploaded_by_id'] = uploaded_by_id
+                except (User.DoesNotExist, ValueError, TypeError):
+                    return Response(
+                        {'error': f'Invalid user ID: {uploaded_by_id}'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                # Remove the old field name
+                data.pop('uploaded_by', None)
+            
+            # Validate work_order exists
+            work_order_id = data.get('work_order')
+            if work_order_id:
+                try:
+                    WorkOrder.objects.get(id=work_order_id)
+                except WorkOrder.DoesNotExist:
+                    return Response(
+                        {'error': f'Work order with ID {work_order_id} not found'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Create serializer with modified data
+            serializer = self.get_serializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            
+            # Save the document
+            self.perform_create(serializer)
+            
+            headers = self.get_success_headers(serializer.data)
+            return Response(
+                serializer.data, 
+                status=status.HTTP_201_CREATED, 
+                headers=headers
+            )
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def get_queryset(self):
+        """Filter queryset based on query parameters"""
         queryset = super().get_queryset()
 
         # Optional filters
         work_order_id = self.request.query_params.get('work_order')
         document_type = self.request.query_params.get('document_type')
+        uploaded_by_id = self.request.query_params.get('uploaded_by_id')
+        is_approved = self.request.query_params.get('is_approved')
 
         if work_order_id:
             queryset = queryset.filter(work_order_id=work_order_id)
 
         if document_type:
             queryset = queryset.filter(document_type=document_type)
+        
+        if uploaded_by_id:
+            queryset = queryset.filter(uploaded_by_id=uploaded_by_id)
+        
+        if is_approved is not None:
+            queryset = queryset.filter(is_approved=is_approved.lower() == 'true')
 
         return queryset
 
@@ -6895,12 +6953,12 @@ def project_post_save(sender, instance, created, **kwargs):
         
         if old_data:
             # Check if project became delayed
-            if not old_data['with_backjob'] and instance.is_delayed:
+            if not instance.is_delayed:
                 email_service.notify_project_delay(instance)
             
             # Check if project marked as completed
-            current_status = instance.status_id if instance.status_id else None
-            if old_data['status_id'] != 3 and current_status == 3:
+            current_status = instance.status if instance.status else None
+            if old_data['status'] != 3 and current_status == 3:
                 email_service.notify_project_completion(instance)
         
         # Clean up cache

@@ -1076,6 +1076,7 @@ class SystemSetting(models.Model):
 class WorkOrder(models.Model):
     id = models.AutoField(primary_key=True)
 
+    project_id = models.IntegerField(null=True, blank=True)
     # Basic Info
     date_received_jacket_ps = models.DateField(null=True, blank=True)
     date_received_awarding_wo = models.DateField(null=True, blank=True)
@@ -1209,8 +1210,6 @@ class WorkOrder(models.Model):
         return self.wo_no
 
 
-
-
 class WorkOrderDocument(models.Model):
     """Model for storing documents related to work orders"""
     
@@ -1224,30 +1223,62 @@ class WorkOrderDocument(models.Model):
         ('OTHER', 'Other'),
     ]
     
+    # Change this line - add to_field to specify the work order's integer ID
     work_order = models.ForeignKey(
         WorkOrder, 
         on_delete=models.CASCADE, 
-        related_name='documents'
+        related_name='documents',
+        to_field='id',  # Add this - explicitly use the integer id field
+        db_column='work_order_id'  # Add this - specify the database column
     )
+    
     document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPES)
+    document_name = models.CharField(max_length=255, blank=True)
+    document_path = models.CharField(max_length=500, blank=True)
     file = models.FileField(upload_to='work_order_documents/%Y/%m/')
-    title = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
-    uploaded_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='uploaded_workorder_documents'
-    )
-    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by_id = models.IntegerField(null=True, blank=True)
+    upload_date = models.DateTimeField(auto_now_add=True)
+    is_approved = models.BooleanField(default=False)
+    approved_by_id = models.IntegerField(null=True, blank=True)
+    approval_date = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
         db_table = 'work_order_documents'
-        ordering = ['-uploaded_at']
+        ordering = ['-upload_date']
     
     def __str__(self):
-        return f"{self.work_order.wo_no} - {self.title}"
+        return f"{self.work_order.wo_no} - {self.document_type}"
+    
+    @property
+    def uploaded_by(self):
+        """Property to get the User object from uploaded_by_id"""
+        if self.uploaded_by_id:
+            try:
+                return User.objects.get(user_id=self.uploaded_by_id)
+            except User.DoesNotExist:
+                return None
+        return None
+    
+    @property
+    def approved_by(self):
+        """Property to get the User object from approved_by_id"""
+        if self.approved_by_id:
+            try:
+                return User.objects.get(user_id=self.approved_by_id)
+            except User.DoesNotExist:
+                return None
+        return None
+    
+    def save(self, *args, **kwargs):
+        # Auto-populate document_name and document_path if file exists
+        if self.file:
+            if not self.document_name:
+                self.document_name = self.file.name
+            if not self.document_path:
+                self.document_path = self.file.path if hasattr(self.file, 'path') else str(self.file)
+        super().save(*args, **kwargs)
 
 
 # ============================================

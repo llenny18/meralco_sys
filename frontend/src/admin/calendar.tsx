@@ -722,7 +722,8 @@ const ProjectCalendarDashboard: React.FC = () => {
                 gridTemplateColumns: 'repeat(7, 1fr)',
                 border: '1px solid #d1d5db',
                 borderRadius: '8px',
-                overflow: 'hidden',
+                overflow: 'scroll',
+                width: '100%',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
             }}>
                 {weekDays.map(day => (
@@ -731,10 +732,10 @@ const ProjectCalendarDashboard: React.FC = () => {
                         style={{
                             backgroundColor: '#1f2937',
                             color: '#ffffff',
-                            padding: '12px',
+                            padding: '10px',
                             textAlign: 'center',
                             fontWeight: 'bold',
-                            fontSize: '14px'
+                            fontSize: '12px'
                         }}
                     >
                         {day}
@@ -819,7 +820,7 @@ const ProjectCalendarDashboard: React.FC = () => {
     }
 
     return (
-        <div style={{ minHeight: '100vh', padding: '24px', backgroundColor: '#f3f4f6' }}>
+        <div style={{ minHeight: '100vh', padding: '24px'}}>
             <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
             
             <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
@@ -926,7 +927,7 @@ const ProjectCalendarDashboard: React.FC = () => {
                     </div>
                 </div>
 
-                <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px' }}>
+                <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', width: '100%' }}>
                     {view === 'calendar' ? renderCalendarView() : renderListView()}
                 </div>
             </div>
