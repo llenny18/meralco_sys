@@ -928,7 +928,7 @@ const SLAComplianceCalendar: React.FC = () => {
 
     if (loading) {
         return (
-            <div style={{ minHeight: '100vh', padding: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f4f6' }}>
+            <div style={{ minHeight: '100vh', padding: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
                 <div style={{ textAlign: 'center' }}>
                     <Loader2 size={48} color="#2563eb" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
                     <p style={{ color: '#6b7280', fontSize: '16px' }}>Loading SLA compliance data...</p>
@@ -938,7 +938,7 @@ const SLAComplianceCalendar: React.FC = () => {
     }
 
     return (
-        <div style={{ minHeight: '100vh', padding: '24px', backgroundColor: '#f3f4f6' }}>
+        <div style={{ minHeight: '100vh', padding: '24px'}}>
             <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
             
             <div style={{ maxWidth: '1400px', margin: '0 auto' }}>

@@ -8,7 +8,7 @@ function ClerkProjectsPage() {
   return (
     <>
       <Head>
-        <title>Projects - Clerk Portal</title>
+        <title>QI Coordination - Clerk Portal</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

@@ -933,7 +933,7 @@ export function QualityInspectorSidebarMenu() {
             <ListItem component="div">
               <NextLink href="/qi" passHref>
                 <Button
-                  className={currentRoute === '/qi/dashboard' ? 'active' : ''}
+                  className={currentRoute === '/qi' ? 'active' : ''}
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
@@ -987,15 +987,15 @@ export function QualityInspectorSidebarMenu() {
               </NextLink>
             </ListItem>
             <ListItem component="div">
-              <NextLink href="/qi/my-inspections" passHref>
+              <NextLink href="/qi/defects" passHref>
                 <Button
-                  className={currentRoute === '/qi/my-inspections' ? 'active' : ''}
+                  className={currentRoute === '/qi/defects' ? 'active' : ''}
                   disableRipple
                   component="a"
                   onClick={closeSidebar}
                   startIcon={<PersonSearchIcon />}
                 >
-                  My Inspections
+                  Defect Report
                 </Button>
               </NextLink>
             </ListItem>
@@ -1410,7 +1410,7 @@ export function EngineerSidebarMenu() {
                 startIcon={<TrendingUpTwoToneIcon />}
                 endIcon={openSections.qi ? <ExpandLessTwoToneIcon /> : <ExpandMoreTwoToneIcon />}
               >
-                Quality Indicators
+                Quality Inspectors
               </Button>
             </ListItem>
             <Collapse in={openSections.qi}>
@@ -1980,18 +1980,7 @@ export function WOSupervisorSidebarMenu() {
             </ListItem>
             <Collapse in={openSections.financial}>
               <List component="div" disablePadding>
-                <ListItem component="div" sx={{ pl: 4 }}>
-                  <NextLink href="/supervisor/payments" passHref>
-                    <Button
-                      className={currentRoute === '/supervisor/payments' ? 'active' : ''}
-                      disableRipple
-                      component="a"
-                      onClick={closeSidebar}
-                    >
-                      Payments
-                    </Button>
-                  </NextLink>
-                </ListItem>
+                 
                 <ListItem component="div" sx={{ pl: 4 }}>
                   <NextLink href="/supervisor/invoices" passHref>
                     <Button

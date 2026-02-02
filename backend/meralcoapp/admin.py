@@ -14,6 +14,12 @@ class UserRoleAdmin(admin.ModelAdmin):
     ordering = ['role_name']
 
 
+@admin.register(QIInspectionCorrectionPhoto)
+class QIInspectionCorrectionPhotoAdmin(admin.ModelAdmin):
+    list_display = ['photo_id', 'inspection', 'uploaded_by', 'uploaded_at']
+    list_filter = ['uploaded_at']
+    search_fields = ['inspection__inspection_id']
+                     
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     list_display = ['username', 'email', 'first_name', 'last_name', 'role', 'is_active', 'last_login']

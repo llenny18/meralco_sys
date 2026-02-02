@@ -125,24 +125,25 @@ const VendorManagementDashboard: React.FC = () => {
         
         try {
             const token = getAuthToken();
-            if (!token) return;
+            
 
             const projectsResponse = await fetch(
-                `http://localhost:8000/api/v1/projects/?vendor=1`
+                `http://localhost:8000/api/v1/projects/?vendor=${vendorId}`
             );
+            console.log("Projects Response:", projectsResponse);
 
             if (projectsResponse.ok) {
                 const projectsData = await projectsResponse.json();
-                setVendorProjects(projectsData);
+                setVendorProjects(projectsData.results);
             }
 
             const woResponse = await fetch(
-                `http://localhost:8000/api/v1/work-orders/?vendor=1`
+                `http://localhost:8000/api/v1/work-orders/?vendor=${vendorId}`
             );
 
             if (woResponse.ok) {
                 const woData = await woResponse.json();
-                setVendorWorkOrders(woData);
+                setVendorWorkOrders(woData.results);
             }
         } catch (err) {
             console.error('Error loading vendor details:', err);
@@ -152,7 +153,6 @@ const VendorManagementDashboard: React.FC = () => {
     };
 
        const filterAndSortVendors = () => {
-        console.log(vendors)
         // Ensure vendors is a valid array before filtering
         if (!Array.isArray(vendors.results) || vendors.results.length === 0) {
             setFilteredVendors([]);

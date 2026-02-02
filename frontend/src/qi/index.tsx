@@ -57,21 +57,37 @@ const QIMobileInspection = () => {
     // Load current QI user
     useEffect(() => {
         loadCurrentUser();
-        loadWorkOrders();
-        loadStats();
     }, []);
+
+    // Load work orders when user is loaded
+    useEffect(() => {
+        if (currentUser?.user_id) {
+            loadWorkOrders();
+            loadStats();
+        }
+    }, [currentUser]);
 
     const loadCurrentUser = async () => {
         try {
-
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             const userID = user.user_id;
 
+            if (!userID) {
+                // Fallback for demo
+                setCurrentUser({
+                    user_id: 1,
+                    username: 'juan.cruz',
+                    first_name: 'Juan',
+                    last_name: 'Cruz',
+                    role: { role_name: 'QI Inspector' }
+                });
+                return;
+            }
 
-            // Assuming you have an endpoint to get current logged-in user
+            // Fetch user details from API
             const response = await fetch(`${API_BASE}/users/${userID}/`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}` // Adjust based on your auth
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }
             });
 
@@ -81,7 +97,7 @@ const QIMobileInspection = () => {
             } else {
                 // Fallback for demo
                 setCurrentUser({
-                    user_id: 1,
+                    user_id: userID,
                     username: 'juan.cruz',
                     first_name: 'Juan',
                     last_name: 'Cruz',
@@ -104,23 +120,71 @@ const QIMobileInspection = () => {
     const loadWorkOrders = async () => {
         setLoading(true);
         try {
-            // Fetch work orders that need QI inspection
-            const response = await fetch(`${API_BASE}/work-orders/?status=Awaiting QI Assignment&assigned_qi=${currentUser?.user_id || ''}`, {
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
+            // Step 1: Get projects assigned to this QI inspector
+            const projectsResponse = await fetch(`${API_BASE}/projects/?assigned_qi=${currentUser.user_id}`);
+            console.log('Fetching projects assigned to QI:', `${API_BASE}/projects/?assigned_qi=${currentUser.user_id}`);
 
-            if (response.ok) {
-                const data = await response.json();
-                // Handle both paginated and non-paginated responses
-                const orders = data.results || data;
-                setWorkOrders(orders);
-            } else {
-                console.error('Failed to load work orders');
+            if (!projectsResponse.ok) {
+                console.error('Failed to load projects');
+                setWorkOrders([]);
+                setLoading(false);
+                return;
             }
+
+            const projectsData = await projectsResponse.json();
+            const projects = projectsData.results || projectsData;
+            
+            console.log('Projects assigned to QI:', projects);
+
+            if (!projects || projects.length === 0) {
+                console.log('No projects assigned to this QI');
+                setWorkOrders([]);
+                setLoading(false);
+                return;
+            }
+
+            // Step 2: Get all work orders for these projects
+            const allWorkOrders = [];
+
+            for (const project of projects) {
+                try {
+                    // Fetch work orders for this project
+                    const woResponse = await fetch(`${API_BASE}/work-orders/?project_id=${project.project_id}`);
+                    console.log(`Fetching work orders for project ${project.project_id}`);
+
+                    if (woResponse.ok) {
+                        const woData = await woResponse.json();
+                        const projectWorkOrders = woData.results || woData;
+                        console.log(`Work orders for project ${project.project_id}:`, projectWorkOrders);
+
+                        // Filter work orders that need QI inspection
+                        const inspectionReadyWOs = projectWorkOrders;
+
+                        // Add project information to each work order
+                        const enrichedWOs = inspectionReadyWOs.map(wo => ({
+                            ...wo,
+                            project_info: {
+                                project_id: project.project_id,
+                                project_code: project.project_code,
+                                project_name: project.project_name,
+                                sector: project.sector,
+                                vendor: project.vendor
+                            }
+                        }));
+
+                        allWorkOrders.push(...enrichedWOs);
+                    }
+                } catch (error) {
+                    console.error(`Error loading work orders for project ${project.project_id}:`, error);
+                }
+            }
+
+            console.log('All work orders for inspection:', allWorkOrders);
+            setWorkOrders(allWorkOrders);
+
         } catch (error) {
             console.error('Error loading work orders:', error);
+            setWorkOrders([]);
         }
         setLoading(false);
     };
@@ -129,12 +193,15 @@ const QIMobileInspection = () => {
         try {
             const today = new Date().toISOString().split('T')[0];
 
-            // Get today's inspections
-            const response = await fetch(`${API_BASE}/qi-inspections/?inspection_date=${today}`, {
-                headers: {
-                    'Content-Type': 'application/json'
+            // Get today's inspections for this QI
+            const response = await fetch(
+                `${API_BASE}/qi-inspections/?assigned_qi=${currentUser?.user_id}&inspection_date=${today}`,
+                {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
                 }
-            });
+            );
 
             if (response.ok) {
                 const data = await response.json();
@@ -148,6 +215,8 @@ const QIMobileInspection = () => {
             }
         } catch (error) {
             console.error('Error loading stats:', error);
+            // Set default stats
+            setStats({ total: 0, completed: 0, pending: 0 });
         }
     };
 
@@ -155,9 +224,9 @@ const QIMobileInspection = () => {
         // Determine inspection type from work order description
         const desc = workOrder.description?.toLowerCase() || '';
 
-        if (desc.includes('electrical') || desc.includes('electric')) return 'Electrical';
+        if (desc.includes('electrical') || desc.includes('electric') || desc.includes('meter')) return 'Electrical';
         if (desc.includes('hvac') || desc.includes('mechanical')) return 'Mechanical';
-        if (desc.includes('civil') || desc.includes('structural')) return 'Civil';
+        if (desc.includes('civil') || desc.includes('structural') || desc.includes('pole')) return 'Civil';
         if (desc.includes('safety')) return 'Safety';
 
         return 'General';
@@ -169,6 +238,9 @@ const QIMobileInspection = () => {
         const status = workOrder.status?.toLowerCase() || '';
         if (status.includes('urgent') || status.includes('critical')) return 'High';
         if (status.includes('normal')) return 'Medium';
+
+        // Check ageing
+        if (workOrder.ageing_days && workOrder.ageing_days > 30) return 'High';
 
         return 'Medium';
     };
@@ -210,6 +282,7 @@ const QIMobileInspection = () => {
 
         setInspectionData({
             work_order_id: workOrder.id,
+            project_id: workOrder.project_info?.project_id || workOrder.project_id,
             wo_no: workOrder.wo_no,
             startTime: new Date().toISOString(),
             location: gpsLocation,
@@ -291,9 +364,28 @@ const QIMobileInspection = () => {
         const allPass = Object.values(inspectionData.items).every(i => i.status === 'PASS');
         const hasFails = Object.values(inspectionData.items).some(i => i.status === 'FAIL');
 
+        // First, get or create inspection type ID
+        let inspectionTypeId = null;
+        try {
+            const inspectionType = getInspectionType(selectedWorkOrder);
+            const typesResponse = await fetch(`${API_BASE}/inspection-types/`);
+            if (typesResponse.ok) {
+                const typesData = await typesResponse.json();
+                const types = typesData.results || typesData;
+                const matchingType = types.find(t =>
+                    t.inspection_name?.toLowerCase().includes(inspectionType.toLowerCase())
+                );
+                if (matchingType) {
+                    inspectionTypeId = matchingType.inspection_type_id;
+                }
+            }
+        } catch (error) {
+            console.error('Error getting inspection type:', error);
+        }
+
         const inspectionReport = {
-            project: null, // You can link to project if needed
-            inspection_type: null, // Link to inspection type ID
+            project: inspectionData.project_id,
+            inspection_type: inspectionTypeId,
             assigned_qi: currentUser?.user_id,
             inspection_date: new Date().toISOString().split('T')[0],
             scheduled_date: new Date().toISOString().split('T')[0],
@@ -306,6 +398,7 @@ const QIMobileInspection = () => {
         };
 
         try {
+            // Create QI Inspection record
             const response = await fetch(`${API_BASE}/qi-inspections/`, {
                 method: 'POST',
                 headers: {
@@ -315,10 +408,9 @@ const QIMobileInspection = () => {
             });
 
             if (response.ok) {
-                // Update work order status
-                await updateWorkOrderStatus(selectedWorkOrder.id, allPass);
+                const inspectionResult = await response.json();
 
-                // Update work order with audit info
+                // Update work order with audit information
                 await fetch(`${API_BASE}/work-orders/${selectedWorkOrder.id}/`, {
                     method: 'PATCH',
                     headers: {
@@ -331,6 +423,11 @@ const QIMobileInspection = () => {
                     })
                 });
 
+                // If there are failed items, create defect reports
+                if (hasFails) {
+                    await createDefectReports(inspectionResult.inspection_id);
+                }
+
                 alert('Inspection submitted successfully!');
                 setCurrentView('dashboard');
                 setSelectedWorkOrder(null);
@@ -339,6 +436,7 @@ const QIMobileInspection = () => {
                 loadStats();
             } else {
                 const error = await response.json();
+                console.error('API Error:', error);
                 alert(`Failed to submit: ${JSON.stringify(error)}`);
             }
         } catch (error) {
@@ -349,20 +447,37 @@ const QIMobileInspection = () => {
         setLoading(false);
     };
 
-    const updateWorkOrderStatus = async (woId, passed) => {
-        try {
-            await fetch(`${API_BASE}/work-orders/${woId}/`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    status: passed ? 'QI Inspection Complete' : 'QI Inspection Failed',
-                    date_audit: new Date().toISOString().split('T')[0]
-                })
-            });
-        } catch (error) {
-            console.error('Error updating work order:', error);
+    const createDefectReports = async (inspectionId) => {
+        const failedItems = Object.entries(inspectionData.items)
+            .filter(([_, data]) => data.status === 'FAIL');
+
+        for (const [itemId, data] of failedItems) {
+            const item = checklistItems.find(i => i.id === parseInt(itemId));
+            
+            try {
+                await fetch(`${API_BASE}/defect-reports/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        inspection: inspectionId,
+                        project: inspectionData.project_id,
+                        defect_type: item?.category || 'General',
+                        defect_category: item?.category || 'Quality',
+                        severity: 'MAJOR',
+                        description: `${item?.item}: ${data.notes || 'Failed inspection'}`,
+                        related_checklist_items: JSON.stringify([itemId]),
+                        photos: data.photos || [],
+                        location_gps: gpsLocation ? `${gpsLocation.lat},${gpsLocation.lng}` : null,
+                        qi_notes: data.notes,
+                        created_by: currentUser?.user_id,
+                        correction_status: 'OPEN'
+                    })
+                });
+            } catch (error) {
+                console.error('Error creating defect report:', error);
+            }
         }
     };
 
@@ -466,6 +581,9 @@ const QIMobileInspection = () => {
                     <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
                         <FileText size={48} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
                         <p>No work orders assigned for inspection</p>
+                        <p style={{ fontSize: '14px', marginTop: '8px' }}>
+                            Work orders will appear here when projects are assigned to you
+                        </p>
                     </div>
                 ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '20px' }}>
@@ -496,6 +614,11 @@ const QIMobileInspection = () => {
                                         <div style={{ fontSize: '16px', color: '#374151', marginBottom: '8px' }}>
                                             {wo.description || 'No description'}
                                         </div>
+                                        {wo.project_info && (
+                                            <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '8px' }}>
+                                                Project: {wo.project_info.project_name || wo.project_info.project_code}
+                                            </div>
+                                        )}
                                         <div style={{
                                             display: 'inline-block',
                                             padding: '4px 10px',
@@ -523,7 +646,7 @@ const QIMobileInspection = () => {
                                 <div style={{ marginBottom: '16px', fontSize: '14px', color: '#6b7280' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                                         <MapPin size={16} />
-                                        <span>{wo.location || 'Location not specified'}</span>
+                                        <span>{wo.location || wo.municipality || 'Location not specified'}</span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                                         <Navigation size={16} />
@@ -533,6 +656,12 @@ const QIMobileInspection = () => {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                                             <Clock size={16} />
                                             <span>Scheduled: {new Date(wo.date_sched).toLocaleDateString()}</span>
+                                        </div>
+                                    )}
+                                    {wo.date_fcomp && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                                            <CheckCircle size={16} />
+                                            <span>Field Completed: {new Date(wo.date_fcomp).toLocaleDateString()}</span>
                                         </div>
                                     )}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1059,8 +1188,6 @@ const QIMobileInspection = () => {
           box-sizing: border-box;
         }
       `}</style>
-
-          
 
             {/* Main Content */}
             <div style={{

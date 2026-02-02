@@ -4,20 +4,24 @@ const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 
 export default function SupervisorPenaltyReview() {
   const [penalties, setPenalties] = useState([]);
+  const [approvedPenalties, setApprovedPenalties] = useState([]);
   const [projects, setProjects] = useState([]);
   const [selectedPenalty, setSelectedPenalty] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [showDashboard, setShowDashboard] = useState(true);
+  const [activeView, setActiveView] = useState('dashboard'); // dashboard, pending, approved
   const [reviewDecision, setReviewDecision] = useState({
     decision: 'approve',
     notes: ''
   });
+  const [filterStatus, setFilterStatus] = useState('all'); // all, paid, unpaid
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchPendingPenalties();
+    fetchApprovedPenalties();
     fetchDelayedProjects();
   }, []);
 
@@ -32,6 +36,17 @@ export default function SupervisorPenaltyReview() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchApprovedPenalties = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/penalties/?penalty_status=Issued`);
+      if (!response.ok) throw new Error('Failed to fetch approved penalties');
+      const data = await response.json();
+      setApprovedPenalties(data.results || data || []);
+    } catch (err) {
+      console.error('Error fetching approved penalties:', err);
     }
   };
 
@@ -57,7 +72,7 @@ export default function SupervisorPenaltyReview() {
         notes: reviewDecision.notes
       };
 
-      const response = await fetch(`${API_BASE_URL}/penalties/${selectedPenalty.id}/`, {
+      const response = await fetch(`${API_BASE_URL}/penalties/${selectedPenalty.penalty_id || selectedPenalty.id}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -70,19 +85,13 @@ export default function SupervisorPenaltyReview() {
       setSelectedPenalty(null);
       setReviewDecision({ decision: 'approve', notes: '' });
       fetchPendingPenalties();
+      fetchApprovedPenalties();
+      
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       setError('Error reviewing penalty: ' + err.message);
+      setTimeout(() => setError(null), 3000);
     }
-  };
-
-  const getStatusColor = (status) => {
-    const colors = {
-      'Open': '#ff9800',
-      'Met': '#4caf50',
-      'Breached': '#f44336',
-      'Waived': '#2196f3'
-    };
-    return colors[status] || '#9e9e9e';
   };
 
   const formatCurrency = (amount) => {
@@ -92,10 +101,34 @@ export default function SupervisorPenaltyReview() {
     }).format(amount);
   };
 
-  const calculatePenalty = (delayDays, contractValue) => {
-    const penaltyRate = 0.001; // 0.1% per day
-    return delayDays * penaltyRate * (contractValue || 0);
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
+
+  // Filter approved penalties
+  const filteredApprovedPenalties = approvedPenalties.filter(penalty => {
+    const matchesSearch = !searchTerm || 
+      penalty.project_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      penalty.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = filterStatus === 'all' || 
+      (filterStatus === 'paid' && penalty.payment_date) ||
+      (filterStatus === 'unpaid' && !penalty.payment_date);
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  // Calculate statistics
+  const totalApprovedAmount = approvedPenalties.reduce((sum, p) => sum + (p.penalty_amount || 0), 0);
+  const totalPaidAmount = approvedPenalties
+    .filter(p => p.payment_date)
+    .reduce((sum, p) => sum + (p.penalty_amount || 0), 0);
+  const totalUnpaidAmount = totalApprovedAmount - totalPaidAmount;
 
   return (
     <div style={{ minHeight: '100vh', background: 'transparent', padding: '20px' }}>
@@ -108,13 +141,13 @@ export default function SupervisorPenaltyReview() {
               Review penalty memos and approve/reject based on SLA compliance
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
-              onClick={() => setShowDashboard(true)}
+              onClick={() => setActiveView('dashboard')}
               style={{
-                background: showDashboard ? 'linear-gradient(45deg, #667eea, #764ba2)' : '#fff',
-                color: showDashboard ? 'white' : '#666',
-                border: showDashboard ? 'none' : '1px solid #ddd',
+                background: activeView === 'dashboard' ? 'linear-gradient(45deg, #667eea, #764ba2)' : '#fff',
+                color: activeView === 'dashboard' ? 'white' : '#666',
+                border: activeView === 'dashboard' ? 'none' : '1px solid #ddd',
                 padding: '10px 20px',
                 borderRadius: '8px',
                 cursor: 'pointer',
@@ -125,11 +158,46 @@ export default function SupervisorPenaltyReview() {
               📊 Dashboard
             </button>
             <button
-              onClick={() => setShowDashboard(false)}
+              onClick={() => setActiveView('pending')}
               style={{
-                background: !showDashboard ? 'linear-gradient(45deg, #667eea, #764ba2)' : '#fff',
-                color: !showDashboard ? 'white' : '#666',
-                border: !showDashboard ? 'none' : '1px solid #ddd',
+                background: activeView === 'pending' ? 'linear-gradient(45deg, #667eea, #764ba2)' : '#fff',
+                color: activeView === 'pending' ? 'white' : '#666',
+                border: activeView === 'pending' ? 'none' : '1px solid #ddd',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                position: 'relative'
+              }}
+            >
+              📋 Pending Reviews
+              {penalties.length > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-8px',
+                  right: '-8px',
+                  background: '#f44336',
+                  color: 'white',
+                  borderRadius: '50%',
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}>
+                  {penalties.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveView('approved')}
+              style={{
+                background: activeView === 'approved' ? 'linear-gradient(45deg, #667eea, #764ba2)' : '#fff',
+                color: activeView === 'approved' ? 'white' : '#666',
+                border: activeView === 'approved' ? 'none' : '1px solid #ddd',
                 padding: '10px 20px',
                 borderRadius: '8px',
                 cursor: 'pointer',
@@ -137,15 +205,15 @@ export default function SupervisorPenaltyReview() {
                 fontWeight: '500'
               }}
             >
-              📋 Pending Reviews
+              ✅ Approved Penalties
             </button>
           </div>
         </div>
       </div>
 
-      {showDashboard ? (
+      {/* Dashboard View */}
+      {activeView === 'dashboard' && (
         <>
-          {/* Dashboard View */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '20px' }}>
             <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
               <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>🟢 Active Projects</div>
@@ -172,6 +240,39 @@ export default function SupervisorPenaltyReview() {
               <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>⚠️ Pending Penalties</div>
               <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#9c27b0' }}>
                 {penalties.length}
+              </div>
+            </div>
+          </div>
+
+          {/* Penalty Summary Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+            <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 15px rgba(102,126,234,0.4)', color: 'white' }}>
+              <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px' }}>💰 Total Approved Penalties</div>
+              <div style={{ fontSize: '28px', fontWeight: 'bold' }}>
+                {formatCurrency(totalApprovedAmount)}
+              </div>
+              <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '8px' }}>
+                {approvedPenalties.length} penalties issued
+              </div>
+            </div>
+            
+            <div style={{ background: 'linear-gradient(135deg, #4caf50 0%, #66bb6a 100%)', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 15px rgba(76,175,80,0.4)', color: 'white' }}>
+              <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px' }}>✅ Paid Penalties</div>
+              <div style={{ fontSize: '28px', fontWeight: 'bold' }}>
+                {formatCurrency(totalPaidAmount)}
+              </div>
+              <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '8px' }}>
+                {approvedPenalties.filter(p => p.payment_date).length} payments received
+              </div>
+            </div>
+            
+            <div style={{ background: 'linear-gradient(135deg, #f44336 0%, #e57373 100%)', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 15px rgba(244,67,54,0.4)', color: 'white' }}>
+              <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px' }}>⏳ Outstanding Penalties</div>
+              <div style={{ fontSize: '28px', fontWeight: 'bold' }}>
+                {formatCurrency(totalUnpaidAmount)}
+              </div>
+              <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '8px' }}>
+                {approvedPenalties.filter(p => !p.payment_date).length} pending payment
               </div>
             </div>
           </div>
@@ -229,40 +330,260 @@ export default function SupervisorPenaltyReview() {
             </div>
           </div>
         </>
-      ) : (
-        <>
-          {/* Pending Penalties Review */}
-          <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
-            <h2 style={{ margin: '0 0 20px 0', fontSize: '24px', color: '#1a1a2e' }}>📝 Pending Penalty Reviews</h2>
+      )}
+
+      {/* Pending Penalties View */}
+      {activeView === 'pending' && (
+        <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+          <h2 style={{ margin: '0 0 20px 0', fontSize: '24px', color: '#1a1a2e' }}>📝 Pending Penalty Reviews</h2>
+          
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Loading penalties...</div>
+          ) : penalties.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
+              <div style={{ fontSize: '18px' }}>No pending penalty reviews</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {penalties.map((penalty) => (
+                <div
+                  key={penalty.id}
+                  style={{
+                    border: '2px solid #ff9800',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    background: '#fff8e1',
+                    transition: 'box-shadow 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.boxShadow = '0 4px 12px rgba(255,152,0,0.3)'}
+                  onMouseOut={(e) => e.currentTarget.style.boxShadow = 'none'}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                        <h3 style={{ margin: 0, fontSize: '20px', color: '#1a1a2e' }}>
+                          Penalty #{penalty.id}
+                        </h3>
+                        <span style={{
+                          background: '#ff9800',
+                          color: 'white',
+                          padding: '4px 12px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: 'bold'
+                        }}>
+                          PENDING REVIEW
+                        </span>
+                      </div>
+                      <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#666' }}>
+                        Project: {penalty.project_code || penalty.project}
+                      </p>
+                      <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>
+                        Vendor: {penalty.vendor_name || penalty.vendor}
+                      </p>
+                    </div>
+                    
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#f44336', marginBottom: '4px' }}>
+                        {formatCurrency(penalty.penalty_amount)}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        {penalty.delay_days} days × 0.1%/day
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'white', padding: '16px', borderRadius: '8px', marginBottom: '12px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                      <div>
+                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Violation Date</div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#1a1a2e' }}>
+                          {formatDate(penalty.violation_date)}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Contract Value</div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#1a1a2e' }}>
+                          {formatCurrency(penalty.contract_value || 0)}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Penalty Rate</div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#1a1a2e' }}>
+                          0.1% per day
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Created By</div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#1a1a2e' }}>
+                          {penalty.created_by_name || 'Clerk'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => {
+                        setSelectedPenalty(penalty);
+                        setReviewDecision({ decision: 'approve', notes: '' });
+                        setShowReviewModal(true);
+                      }}
+                      style={{
+                        background: 'linear-gradient(45deg, #4caf50, #66bb6a)',
+                        color: 'white',
+                        border: 'none',
+                        padding: '10px 20px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      ✅ Review & Approve
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Approved Penalties View */}
+      {activeView === 'approved' && (
+        <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+            <h2 style={{ margin: 0, fontSize: '24px', color: '#1a1a2e' }}>✅ Approved Penalties</h2>
             
-            {loading ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Loading penalties...</div>
-            ) : penalties.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
-                <div style={{ fontSize: '18px' }}>No pending penalty reviews</div>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {/* Search */}
+              <input
+                type="text"
+                placeholder="🔍 Search project or vendor..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                  minWidth: '200px'
+                }}
+              />
+              
+              {/* Filter */}
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="all">All Penalties</option>
+                <option value="paid">Paid Only</option>
+                <option value="unpaid">Unpaid Only</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Summary Stats */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+            <div style={{ background: '#f5f5f5', padding: '16px', borderRadius: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Total Penalties</div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#667eea' }}>
+                {approvedPenalties.length}
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {penalties.map((penalty) => (
-                  <div
-                    key={penalty.id}
-                    style={{
-                      border: '2px solid #ff9800',
-                      borderRadius: '12px',
-                      padding: '20px',
-                      background: '#fff8e1',
-                      transition: 'box-shadow 0.2s'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.boxShadow = '0 4px 12px rgba(255,152,0,0.3)'}
-                    onMouseOut={(e) => e.currentTarget.style.boxShadow = 'none'}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                          <h3 style={{ margin: 0, fontSize: '20px', color: '#1a1a2e' }}>
-                            Penalty #{penalty.id}
-                          </h3>
+            </div>
+            <div style={{ background: '#e8f5e9', padding: '16px', borderRadius: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Paid</div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#4caf50' }}>
+                {approvedPenalties.filter(p => p.payment_date).length}
+              </div>
+            </div>
+            <div style={{ background: '#ffebee', padding: '16px', borderRadius: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Unpaid</div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f44336' }}>
+                {approvedPenalties.filter(p => !p.payment_date).length}
+              </div>
+            </div>
+          </div>
+
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Loading approved penalties...</div>
+          ) : filteredApprovedPenalties.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+              <div style={{ fontSize: '18px' }}>
+                {searchTerm || filterStatus !== 'all' ? 'No penalties match your filters' : 'No approved penalties yet'}
+              </div>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
+                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#666' }}>ID</th>
+                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#666' }}>Project</th>
+                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#666' }}>Vendor</th>
+                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#666' }}>Delay</th>
+                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', fontWeight: '600', color: '#666' }}>Amount</th>
+                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#666' }}>Issue Date</th>
+                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#666' }}>Payment Date</th>
+                    <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#666' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredApprovedPenalties.map((penalty, index) => (
+                    <tr 
+                      key={penalty.id}
+                      style={{ 
+                        borderBottom: '1px solid #eee',
+                        background: index % 2 === 0 ? 'white' : '#fafafa',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.background = '#f0f0f0'}
+                      onMouseOut={(e) => e.currentTarget.style.background = index % 2 === 0 ? 'white' : '#fafafa'}
+                    >
+                      <td style={{ padding: '12px', fontSize: '14px', color: '#1a1a2e', fontWeight: '600' }}>
+                        #{penalty.id}
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '14px', color: '#1a1a2e' }}>
+                        {penalty.project_code || penalty.project}
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>
+                        {penalty.vendor_name || penalty.vendor}
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '14px', color: '#f44336', fontWeight: '600' }}>
+                        {penalty.delay_days} days
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '14px', color: '#1a1a2e', textAlign: 'right', fontWeight: '600' }}>
+                        {formatCurrency(penalty.penalty_amount)}
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>
+                        {formatDate(penalty.issue_date || penalty.approval_date)}
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>
+                        {formatDate(penalty.payment_date)}
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'center' }}>
+                        {penalty.payment_date ? (
+                          <span style={{
+                            background: '#4caf50',
+                            color: 'white',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                          }}>
+                            PAID
+                          </span>
+                        ) : (
                           <span style={{
                             background: '#ff9800',
                             color: 'white',
@@ -271,83 +592,17 @@ export default function SupervisorPenaltyReview() {
                             fontSize: '12px',
                             fontWeight: 'bold'
                           }}>
-                            PENDING REVIEW
+                            UNPAID
                           </span>
-                        </div>
-                        <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#666' }}>
-                          Project: {penalty.project_code || penalty.project}
-                        </p>
-                        <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>
-                          Vendor: {penalty.vendor_name || penalty.vendor}
-                        </p>
-                      </div>
-                      
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#f44336', marginBottom: '4px' }}>
-                          {formatCurrency(penalty.penalty_amount)}
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#666' }}>
-                          {penalty.delay_days} days × 0.1%/day
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ background: 'white', padding: '16px', borderRadius: '8px', marginBottom: '12px' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-                        <div>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Violation Date</div>
-                          <div style={{ fontSize: '14px', fontWeight: '500', color: '#1a1a2e' }}>
-                            {new Date(penalty.violation_date).toLocaleDateString()}
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Contract Value</div>
-                          <div style={{ fontSize: '14px', fontWeight: '500', color: '#1a1a2e' }}>
-                            {formatCurrency(penalty.contract_value || 0)}
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Penalty Rate</div>
-                          <div style={{ fontSize: '14px', fontWeight: '500', color: '#1a1a2e' }}>
-                            0.1% per day
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Created By</div>
-                          <div style={{ fontSize: '14px', fontWeight: '500', color: '#1a1a2e' }}>
-                            {penalty.created_by_name || 'Clerk'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                      <button
-                        onClick={() => {
-                          setSelectedPenalty(penalty);
-                          setReviewDecision({ decision: 'approve', notes: '' });
-                          setShowReviewModal(true);
-                        }}
-                        style={{
-                          background: 'linear-gradient(45deg, #4caf50, #66bb6a)',
-                          color: 'white',
-                          border: 'none',
-                          padding: '10px 20px',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: 'bold'
-                        }}
-                      >
-                        ✅ Review & Approve
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Review Modal */}
@@ -461,7 +716,8 @@ export default function SupervisorPenaltyReview() {
                   border: '1px solid #ddd',
                   fontSize: '14px',
                   minHeight: '100px',
-                  resize: 'vertical'
+                  resize: 'vertical',
+                  fontFamily: 'inherit'
                 }}
               />
             </div>

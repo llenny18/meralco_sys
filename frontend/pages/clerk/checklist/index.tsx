@@ -8,7 +8,7 @@ function ClerkCOCChecklistPage() {
   return (
     <>
       <Head>
-        <title>Change Logs - Clerk Portal</title>
+        <title>Checklist - Clerk Portal</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

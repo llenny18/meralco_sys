@@ -7,6 +7,41 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
 from .models import User, UserRole, UserSession
 
+# Add to serializers.py
+
+class QIInspectionCorrectionPhotoSerializer(serializers.ModelSerializer):
+    photo_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = QIInspectionCorrectionPhoto
+        fields = [
+            'photo_id',
+            'inspection',
+            'photo_file',
+            'photo_url',
+            'caption',
+            'uploaded_by',
+            'uploaded_at'
+        ]
+        read_only_fields = ['photo_id', 'uploaded_at']
+    
+    def get_photo_url(self, obj):
+        if obj.photo_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.photo_file.url)
+        return None
+
+
+class QIInspectionCorrectionSerializer(serializers.Serializer):
+    """Serializer for submitting corrections"""
+    correction_notes = serializers.CharField(required=True)
+    corrective_photos = serializers.ListField(
+        child=serializers.ImageField(),
+        required=False,
+        allow_empty=True
+    )
+
 
 class DelayPredictionSerializer(serializers.Serializer):
     status = serializers.CharField()
@@ -299,7 +334,8 @@ class ProjectSerializer(serializers.ModelSerializer):
     wo_supervisor_name = serializers.CharField(source='wo_supervisor.get_full_name', read_only=True)
     milestones = ProjectMilestoneSerializer(many=True, read_only=True)
     team_members = ProjectTeamSerializer(many=True, read_only=True)
-    
+    contract_value = serializers.DecimalField(max_digits=15, decimal_places=2)
+     
     class Meta:
         model = Project
         fields = '__all__'
@@ -314,7 +350,7 @@ class ProjectListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = ['project_id', 'project_code', 'project_name', 'vendor', 'vendor_name',
-                  'status', 'status_name', 'status_color', 'start_date', 
+                  'status', 'status_name', 'status_color', 'start_date', 'contract_value', 
                   'completion_date', 'is_delayed', 'delay_days', 'priority', 'risk_score']
 
 
@@ -513,33 +549,274 @@ class PaymentSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+# serializers.py - Add these to your existing serializers
+
+from rest_framework import serializers
+from .models import Invoice, Payment, Project, Vendor, User
+
+
 class InvoiceSerializer(serializers.ModelSerializer):
-    project_code = serializers.CharField(source='project.project_code', read_only=True)
+    """Serializer for Invoice model"""
+    
     project_name = serializers.CharField(source='project.project_name', read_only=True)
+    project_code = serializers.CharField(source='project.project_code', read_only=True)
     vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
+    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
     created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
     approved_by_name = serializers.CharField(source='approved_by.get_full_name', read_only=True)
-    payments = PaymentSerializer(many=True, read_only=True)
-    total_paid = serializers.SerializerMethodField()
-    outstanding_amount = serializers.SerializerMethodField()
+    
+    # Calculated fields
+    days_until_due = serializers.SerializerMethodField()
     is_overdue = serializers.SerializerMethodField()
     
     class Meta:
         model = Invoice
-        fields = '__all__'
+        fields = [
+            'invoice_id',
+            'project',
+            'project_name',
+            'project_code',
+            'vendor',
+            'vendor_name',
+            'vendor_code',
+            'invoice_number',
+            'invoice_date',
+            'due_date',
+            'invoice_amount',
+            'penalty_amount',
+            'net_amount',
+            'payment_status',
+            'payment_date',
+            'payment_reference',
+            'notes',
+            'created_by',
+            'created_by_name',
+            'approved_by',
+            'approved_by_name',
+            'approval_date',
+            'created_at',
+            'updated_at',
+            'days_until_due',
+            'is_overdue',
+        ]
+        read_only_fields = ['invoice_id', 'created_at', 'updated_at']
     
-    def get_total_paid(self, obj):
-        return sum(payment.payment_amount for payment in obj.payments.all())
-    
-    def get_outstanding_amount(self, obj):
-        total_paid = self.get_total_paid(obj)
-        return obj.net_amount - total_paid
+    def get_days_until_due(self, obj):
+        """Calculate days until due date"""
+        from datetime import datetime, date
+        
+        if obj.payment_status == 'Paid':
+            return 0
+        
+        today = date.today()
+        due = obj.due_date
+        
+        if isinstance(due, datetime):
+            due = due.date()
+        
+        delta = (due - today).days
+        return delta
     
     def get_is_overdue(self, obj):
-        if obj.payment_status != 'Paid' and obj.due_date:
-            from datetime import date
-            return obj.due_date < date.today()
-        return False
+        """Check if invoice is overdue"""
+        from datetime import date
+        
+        if obj.payment_status == 'Paid':
+            return False
+        
+        return obj.due_date < date.today()
+    
+    def validate(self, data):
+        """Validate invoice data"""
+        # Ensure due date is after invoice date
+        if 'invoice_date' in data and 'due_date' in data:
+            if data['due_date'] < data['invoice_date']:
+                raise serializers.ValidationError(
+                    "Due date must be after invoice date"
+                )
+        
+        # Validate amounts
+        if 'invoice_amount' in data:
+            if float(data['invoice_amount']) < 0:
+                raise serializers.ValidationError(
+                    "Invoice amount cannot be negative"
+                )
+        
+        if 'penalty_amount' in data:
+            if float(data['penalty_amount']) < 0:
+                raise serializers.ValidationError(
+                    "Penalty amount cannot be negative"
+                )
+        
+        # Calculate net amount
+        if 'invoice_amount' in data or 'penalty_amount' in data:
+            invoice_amt = float(data.get('invoice_amount', 0))
+            penalty_amt = float(data.get('penalty_amount', 0))
+            
+            if penalty_amt > invoice_amt:
+                raise serializers.ValidationError(
+                    "Penalty amount cannot exceed invoice amount"
+                )
+        
+        return data
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    """Serializer for Payment model"""
+    
+    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
+    processed_by_name = serializers.CharField(source='processed_by.get_full_name', read_only=True)
+    
+    class Meta:
+        model = Payment
+        fields = [
+            'invoice',
+            'invoice_number',
+            'payment_amount',
+            'payment_date',
+            'payment_method',
+            'payment_reference',
+            'notes',
+            'processed_by',
+            'processed_by_name',
+            'created_at',
+        ]
+        read_only_fields = ['created_at', 'processed_by']
+    
+    def validate(self, data):
+        """Validate payment data"""
+        # Check payment amount
+        if data['payment_amount'] <= 0:
+            raise serializers.ValidationError(
+                "Payment amount must be greater than zero"
+            )
+        
+        # Check if payment exceeds invoice net amount
+        invoice = data['invoice']
+        from django.db.models import Sum
+        
+        existing_payments = Payment.objects.filter(invoice=invoice).aggregate(
+            Sum('payment_amount')
+        )['payment_amount__sum'] or 0
+        
+        total_after_payment = existing_payments + float(data['payment_amount'])
+        net_amount = float(invoice.net_amount)
+        
+        if total_after_payment > net_amount:
+            raise serializers.ValidationError(
+                f"Total payment (₱{total_after_payment:,.2f}) exceeds net amount (₱{net_amount:,.2f})"
+            )
+        
+        return data
+
+
+class InvoiceDetailSerializer(InvoiceSerializer):
+    """Detailed invoice serializer with related data"""
+    
+    payments = PaymentSerializer(many=True, read_only=True)
+    penalties = serializers.SerializerMethodField()
+    total_paid = serializers.SerializerMethodField()
+    balance = serializers.SerializerMethodField()
+    
+    class Meta(InvoiceSerializer.Meta):
+        fields = InvoiceSerializer.Meta.fields + [
+            'payments',
+            'penalties',
+            'total_paid',
+            'balance',
+        ]
+    
+    def get_penalties(self, obj):
+        """Get penalties associated with this invoice's project"""
+        from .models import Penalty
+        penalties = Penalty.objects.filter(
+            project=obj.project,
+            penalty_status='Issued'
+        ).select_related('penalty_rule')
+        
+        return [{
+            'penalty_id': p.penalty_id,
+            'rule_name': p.penalty_rule.rule_name,
+            'amount': str(p.penalty_amount),
+            'violation_date': p.violation_date,
+        } for p in penalties]
+    
+    def get_total_paid(self, obj):
+        """Calculate total amount paid"""
+        from django.db.models import Sum
+        
+        total = obj.payments.aggregate(Sum('payment_amount'))['payment_amount__sum']
+        return str(total or 0)
+    
+    def get_balance(self, obj):
+        """Calculate remaining balance"""
+        from django.db.models import Sum
+        
+        total_paid = obj.payments.aggregate(
+            Sum('payment_amount')
+        )['payment_amount__sum'] or 0
+        
+        balance = float(obj.net_amount) - float(total_paid)
+        return str(balance)
+
+
+class InvoiceCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating invoices with items"""
+    
+    items = serializers.JSONField(required=False, write_only=True)
+    
+    class Meta:
+        model = Invoice
+        fields = [
+            'project',
+            'vendor',
+            'invoice_number',
+            'invoice_date',
+            'due_date',
+            'invoice_amount',
+            'penalty_amount',
+            'net_amount',
+            'payment_status',
+            'notes',
+            'items',
+        ]
+    
+    def create(self, validated_data):
+        """Create invoice with items"""
+        items = validated_data.pop('items', [])
+        
+        # Calculate amounts from items if provided
+        if items:
+            total = sum(
+                item.get('quantity', 1) * item.get('unit_price', 0) 
+                for item in items
+            )
+            validated_data['invoice_amount'] = str(total)
+        
+        # Calculate net amount
+        invoice_amt = float(validated_data.get('invoice_amount', 0))
+        penalty_amt = float(validated_data.get('penalty_amount', 0))
+        validated_data['net_amount'] = str(invoice_amt - penalty_amt)
+        
+        invoice = super().create(validated_data)
+        
+        # Store items in notes if needed (or create separate InvoiceItem model)
+        if items:
+            items_text = "\n".join([
+                f"- {item.get('description', 'N/A')}: "
+                f"{item.get('quantity', 1)} x ₱{item.get('unit_price', 0):,.2f} = "
+                f"₱{item.get('quantity', 1) * item.get('unit_price', 0):,.2f}"
+                for item in items
+            ])
+            
+            if invoice.notes:
+                invoice.notes += f"\n\nItems:\n{items_text}"
+            else:
+                invoice.notes = f"Items:\n{items_text}"
+            
+            invoice.save()
+        
+        return invoice
 
 
 # ============================================
@@ -909,6 +1186,7 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
         fields = [
             # Primary / Basic
             'id',
+            'project_id',
             'wo_no',
             'vip',
             'description',
@@ -1598,3 +1876,305 @@ class COCChecklistSerializer(serializers.ModelSerializer):
             days = (timezone.now().date() - obj.date_sched).days
             return days > 3  # Alert if not sent for audit after 3 days
         return False
+
+
+from rest_framework import serializers
+from .models import (
+    InspectionFlag,
+    InspectionChecklistItem,
+    DefectReport,
+    DefectCorrectionHistory,
+    QIInspection,
+    User
+)
+
+# ==================== CHECKLIST ITEM SERIALIZERS ====================
+class InspectionChecklistItemSerializer(serializers.ModelSerializer):
+    checked_by_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = InspectionChecklistItem
+        fields = [
+            'id',
+            'inspection',
+            'item_name',
+            'item_category',
+            'item_order',
+            'status',
+            'notes',
+            'photos',
+            'checked_at',
+            'checked_by',
+            'checked_by_name',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_checked_by_name(self, obj):
+        if obj.checked_by:
+            return f"{obj.checked_by.first_name} {obj.checked_by.last_name}".strip() or obj.checked_by.username
+        return None
+
+
+# ==================== INSPECTION FLAG SERIALIZERS ====================
+class InspectionFlagSerializer(serializers.ModelSerializer):
+    inspection_code = serializers.CharField(source='inspection.inspection_id', read_only=True)
+    project_code = serializers.CharField(source='inspection.project.project_code', read_only=True)
+    reviewed_by_name = serializers.SerializerMethodField()
+    failed_items = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = InspectionFlag
+        fields = [
+            'id',
+            'inspection',
+            'inspection_code',
+            'project_code',
+            'flag_type',
+            'item_count',
+            'requires_action',
+            'status',
+            'ai_suggestions',
+            'created_at',
+            'reviewed_at',
+            'reviewed_by',
+            'reviewed_by_name',
+            'failed_items'
+        ]
+        read_only_fields = ['created_at']
+    
+    def get_reviewed_by_name(self, obj):
+        if obj.reviewed_by:
+            return f"{obj.reviewed_by.first_name} {obj.reviewed_by.last_name}".strip() or obj.reviewed_by.username
+        return None
+    
+    def get_failed_items(self, obj):
+        """Get the actual failed checklist items"""
+        items = InspectionChecklistItem.objects.filter(
+            inspection=obj.inspection,
+            status='FAIL'
+        )
+        return InspectionChecklistItemSerializer(items, many=True).data
+
+
+# ==================== DEFECT REPORT SERIALIZERS ====================
+class DefectCorrectionHistorySerializer(serializers.ModelSerializer):
+    action_by_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = DefectCorrectionHistory
+        fields = [
+            'id',
+            'defect',
+            'action',
+            'action_by',
+            'action_by_name',
+            'action_at',
+            'notes',
+            'photos'
+        ]
+    
+    def get_action_by_name(self, obj):
+        if obj.action_by:
+            return f"{obj.action_by.first_name} {obj.action_by.last_name}".strip() or obj.action_by.username
+        return None
+
+
+class DefectReportSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+    reviewed_by_name = serializers.SerializerMethodField()
+    correction_submitted_by_name = serializers.SerializerMethodField()
+    project_code = serializers.CharField(source='project.project_code', read_only=True)
+    vendor_name = serializers.CharField(source='project.vendor.vendor_name', read_only=True)
+    inspection_date = serializers.DateField(source='inspection.inspection_date', read_only=True)
+    correction_history = DefectCorrectionHistorySerializer(many=True, read_only=True)
+    days_overdue = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = DefectReport
+        fields = [
+            'defect_id',
+            'inspection',
+            'project',
+            'project_code',
+            'vendor_name',
+            'inspection_date',
+            'defect_type',
+            'defect_category',
+            'severity',
+            'description',
+            'related_checklist_items',
+            'photos',
+            'location_gps',
+            'qi_notes',
+            'qi_signature',
+            'created_by',
+            'created_by_name',
+            'created_at',
+            'correction_status',
+            'correction_due_date',
+            'correction_photos',
+            'correction_notes',
+            'correction_submitted_at',
+            'correction_submitted_by',
+            'correction_submitted_by_name',
+            'failure_count',
+            'reviewed_by',
+            'reviewed_by_name',
+            'reviewed_at',
+            'review_notes',
+            'is_escalated',
+            'escalated_at',
+            'escalation_reason',
+            'correction_history',
+            'days_overdue'
+        ]
+        read_only_fields = ['defect_id', 'created_at', 'failure_count']
+    
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return f"{obj.created_by.first_name} {obj.created_by.last_name}".strip() or obj.created_by.username
+        return None
+    
+    def get_reviewed_by_name(self, obj):
+        if obj.reviewed_by:
+            return f"{obj.reviewed_by.first_name} {obj.reviewed_by.last_name}".strip() or obj.reviewed_by.username
+        return None
+    
+    def get_correction_submitted_by_name(self, obj):
+        if obj.correction_submitted_by:
+            return f"{obj.correction_submitted_by.first_name} {obj.correction_submitted_by.last_name}".strip() or obj.correction_submitted_by.username
+        return None
+    
+    def get_days_overdue(self, obj):
+        if obj.correction_due_date and obj.correction_status not in ['APPROVED', 'CLOSED']:
+            from datetime import date
+            delta = date.today() - obj.correction_due_date
+            return delta.days if delta.days > 0 else 0
+        return 0
+
+
+class DefectReportCreateSerializer(serializers.ModelSerializer):
+    """Serializer for QI to create defect reports"""
+    
+    class Meta:
+        model = DefectReport
+        fields = [
+            'inspection',
+            'project',
+            'defect_type',
+            'defect_category',
+            'severity',
+            'description',
+            'related_checklist_items',
+            'photos',
+            'location_gps',
+            'qi_notes',
+            'qi_signature',
+            'correction_due_date'
+        ]
+    
+    def validate_qi_signature(self, value):
+        if not value:
+            raise serializers.ValidationError("QI signature is required for legal validity")
+        return value
+    
+    def create(self, validated_data):
+        # Set created_by from request user
+        validated_data['created_by'] = self.context['request'].user
+        validated_data['correction_status'] = 'OPEN'
+        return super().create(validated_data)
+
+
+# ==================== AI SUGGESTION SERIALIZER ====================
+class AIDefectSuggestionSerializer(serializers.Serializer):
+    """Serializer for AI-generated defect grouping suggestions"""
+    suggested_defect_type = serializers.CharField()
+    suggested_severity = serializers.CharField()
+    suggested_description = serializers.CharField()
+    related_item_ids = serializers.ListField(child=serializers.IntegerField())
+    confidence_score = serializers.FloatField()
+    reasoning = serializers.CharField()
+    
+from .models import QIInspectionPhoto
+
+class QIInspectionPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QIInspectionPhoto
+        fields = '__all__'
+        read_only_fields = ('photo_id', 'uploaded_at', 'created_at')
+        
+        
+
+# Add this to your serializers.py file
+
+from rest_framework import serializers
+from .models import PaymentReceipt, Invoice
+
+class PaymentReceiptSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.CharField(read_only=True)
+    reviewed_by_name = serializers.CharField(read_only=True)
+    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
+    
+    class Meta:
+        model = PaymentReceipt
+        fields = [
+            'receipt_id',
+            'invoice',
+            'invoice_number',
+            'receipt_image',
+            'receipt_number',
+            'payment_amount',
+            'payment_date',
+            'payment_method',
+            'notes',
+            'status',
+            'uploaded_by',
+            'uploaded_by_name',
+            'uploaded_at',
+            'reviewed_by',
+            'reviewed_by_name',
+            'reviewed_at',
+            'review_notes',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = [
+            'receipt_id',
+            'uploaded_by',
+            'uploaded_at',
+            'status',
+            'reviewed_by',
+            'reviewed_at',
+            'review_notes',
+            'created_at',
+            'updated_at'
+        ]
+    
+    def create(self, validated_data):
+        # Set uploaded_by from request user
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            validated_data['uploaded_by'] = request.user
+        
+        return super().create(validated_data)
+    
+    def validate_payment_amount(self, value):
+        """Ensure payment amount is positive"""
+        if value <= 0:
+            raise serializers.ValidationError("Payment amount must be greater than zero")
+        return value
+    
+    def validate(self, data):
+        """Validate that payment amount doesn't exceed invoice amount"""
+        invoice = data.get('invoice')
+        payment_amount = data.get('payment_amount')
+        
+        if invoice and payment_amount:
+            if payment_amount > invoice.net_amount:
+                raise serializers.ValidationError({
+                    'payment_amount': f'Payment amount cannot exceed invoice net amount of ₱{invoice.net_amount}'
+                })
+        
+        return data

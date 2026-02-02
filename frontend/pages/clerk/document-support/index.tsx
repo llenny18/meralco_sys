@@ -8,7 +8,7 @@ function ClerkChangeLogsPage() {
   return (
     <>
       <Head>
-        <title>Change Logs - Clerk Portal</title>
+        <title>Document Support - Clerk Portal</title>
       </Head>
       <Container maxWidth="lg">
         <Grid

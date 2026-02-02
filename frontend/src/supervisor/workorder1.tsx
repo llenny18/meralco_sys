@@ -44,13 +44,32 @@ import CloudUploadTwoToneIcon from '@mui/icons-material/CloudUploadTwoTone';
 import CloudDownloadTwoToneIcon from '@mui/icons-material/CloudDownloadTwoTone';
 import FilterListTwoToneIcon from '@mui/icons-material/FilterListTwoTone';
 import TimelineTwoToneIcon from '@mui/icons-material/TimelineTwoTone';
+import BusinessTwoToneIcon from '@mui/icons-material/BusinessTwoTone';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 const ENDPOINT = 'work-orders';
 
+interface Project {
+  project_id: number;
+  project_code: string;
+  project_name: string;
+  vendor?: {
+    vendor_id: number;
+    vendor_name: string;
+  };
+  status?: {
+    status_name: string;
+  };
+  sector?: {
+    sector_name: string;
+  };
+}
+
 interface WorkOrder {
   id?: number;
   wo_no: string;
+  project_id?: number;
+  project?: Project;
   date_received_jacket_ps?: string;
   date_received_awarding_wo?: string;
   vip: boolean;
@@ -108,8 +127,11 @@ function WorkOrders() {
   const [assignedFilter, setAssignedFilter] = useState<string>('');
   const [vipFilter, setVipFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [projectFilter, setProjectFilter] = useState<string>('');
 
-  
+  // Projects
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState<boolean>(false);
 
   // File upload
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -130,39 +152,36 @@ function WorkOrders() {
     'PCAN'
   ];
 
-
   const MUNICIPALITY_OPTIONS = [
     'Angono', 'Antipolo', 'Binangonan', 'Cainta', 'Cardona',
     'Jalajala', 'Morong', 'Pililla', 'Rodriguez', 'San Mateo',
     'Tanay', 'Taytay', 'Teresa', 'Baras'
   ];
 
-  useEffect(() => {
-    fetchTableData();
-    
-  }, [page, rowsPerPage, statusFilter, municipalityFilter, assignedFilter, vipFilter]);
-
   const [supervisorName, setSupervisorName] = useState<string>('');
 
-useEffect(() => {
-  const storedUser = localStorage?.getItem('user');
-  const supervisorUserId = storedUser ? JSON.parse(storedUser).user_id : null;
+  useEffect(() => {
+    const storedUser = localStorage?.getItem('user');
+    const supervisorUserId = storedUser ? JSON.parse(storedUser).user_id : null;
 
-  if (!supervisorUserId) return;
+    if (!supervisorUserId) return;
 
-  const fetchSupervisorName = async () => {
-    const response = await fetch(
-      `${API_BASE_URL}/users/?user_id=${supervisorUserId}`
-    );
-    const data = await response.json();
+    const fetchSupervisorName = async () => {
+      const response = await fetch(
+        `${API_BASE_URL}/users/?user_id=${supervisorUserId}`
+      );
+      const data = await response.json();
 
-    const fullName = data?.results?.[0]?.full_name || '';
-    setSupervisorName(fullName);
-  };
+      const fullName = data?.results?.[0]?.full_name || '';
+      setSupervisorName(fullName);
+    };
 
-  fetchSupervisorName();
-}, []);
+    fetchSupervisorName();
+  }, []);
 
+  useEffect(() => {
+    fetchTableData();
+  }, [page, rowsPerPage, statusFilter, municipalityFilter, assignedFilter, vipFilter, projectFilter]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -174,6 +193,26 @@ useEffect(() => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  const fetchProjects = async () => {
+    setProjectsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects`);
+
+      if (!response.ok) throw new Error('Failed to fetch projects');
+
+      const data = await response.json();
+      setProjects(data.results || data || []);
+    } catch (err: any) {
+      console.error('Error fetching projects:', err);
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
+
   const fetchTableData = async () => {
     setLoading(true);
     setError(null);
@@ -181,41 +220,49 @@ useEffect(() => {
       const params = new URLSearchParams();
       params.append('page', (page + 1).toString());
       params.append('page_size', rowsPerPage.toString());
-    if (statusFilter) params.append('status', statusFilter);
-if (municipalityFilter) params.append('municipality', municipalityFilter);
-if (assignedFilter) params.append('assigned', assignedFilter);
-if (vipFilter) params.append('vip', vipFilter);
-if (searchQuery) params.append('search', searchQuery);
+      if (statusFilter) params.append('status', statusFilter);
+      if (municipalityFilter) params.append('municipality', municipalityFilter);
+      if (assignedFilter) params.append('assigned', assignedFilter);
+      if (vipFilter) params.append('vip', vipFilter);
+      if (searchQuery) params.append('search', searchQuery);
+      if (projectFilter) params.append('project_id', projectFilter);
 
-// Get logged-in supervisor ID from localStorage
-const storedUser = localStorage?.getItem('user');
-const supervisorUserId = storedUser ? JSON.parse(storedUser).user_id : null;
+      // Get logged-in supervisor ID from localStorage
+      const storedUser = localStorage?.getItem('user');
+      const supervisorUserId = storedUser ? JSON.parse(storedUser).user_id : null;
 
-// Fetch supervisor details
-const supervisorResponse = await fetch(
-  `${API_BASE_URL}/users/?user_id=${supervisorUserId}`
-);
-const supervisorData = await supervisorResponse.json();
+      // Fetch supervisor details
+      const supervisorResponse = await fetch(
+        `${API_BASE_URL}/users/?user_id=${supervisorUserId}`
+      );
+      const supervisorData = await supervisorResponse.json();
 
-// Extract supervisor full name
-const supervisorFullName = supervisorData?.results?.[0]?.full_name;
+      // Extract supervisor full name
+      const supervisorFullName = supervisorData?.results?.[0]?.full_name;
 
-// Append supervisor filter (auto-encoded by URLSearchParams)
-if (supervisorFullName) {
-  params.append('supervisor_full_name', supervisorFullName);
-}
+      // Append supervisor filter (auto-encoded by URLSearchParams)
+      if (supervisorFullName) {
+        params.append('supervisor_full_name', supervisorFullName);
+      }
 
-// Final API request
-const url = `${API_BASE_URL}/${ENDPOINT}/?${params.toString()}`;
-console.log('Final API URL:', url);
+      // Final API request
+      const url = `${API_BASE_URL}/${ENDPOINT}/?${params.toString()}`;
+      console.log('Final API URL:', url);
 
-const response = await fetch(url);
+      const response = await fetch(url);
 
-      
       if (!response.ok) throw new Error(`Failed to fetch data: ${response.statusText}`);
-      
+
       const data = await response.json();
       
+      // Log the first record to see structure
+      if (data.results && data.results.length > 0) {
+        console.log('Sample work order structure:', data.results[0]);
+        console.log('Keys in work order:', Object.keys(data.results[0]));
+        console.log('Has project_id?', 'project_id' in data.results[0]);
+        console.log('Has project?', 'project' in data.results[0]);
+      }
+
       if (data.results) {
         setTableData(data.results);
         setTotalCount(data.count || 0);
@@ -240,6 +287,7 @@ const response = await fetch(url);
     setModalMode('add');
     setFormData({
       wo_no: '',
+      project_id: undefined,
       vip: false,
       description: '',
       location: '',
@@ -253,7 +301,7 @@ const response = await fetch(url);
       ccti_exclusion: false,
       apt_exclusion: false,
       actual_field_status: '',
-      supervisor_full_name: ''
+      supervisor_full_name: supervisorName
     });
     setCurrentRecord(null);
     setShowModal(true);
@@ -262,7 +310,10 @@ const response = await fetch(url);
   const handleEdit = (row: WorkOrder) => {
     setModalMode('edit');
     setCurrentRecord(row);
-    setFormData({ ...row });
+    setFormData({ 
+      ...row,
+      project_id: row.project?.project_id || row.project_id
+    });
     setShowModal(true);
   };
 
@@ -274,14 +325,14 @@ const response = await fetch(url);
   const handleViewTimeline = async (row: WorkOrder) => {
     setCurrentRecord(row);
     setShowTimelineModal(true);
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/${row.id}/timeline/`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setTimelineData(data);
@@ -293,11 +344,11 @@ const response = await fetch(url);
 
   const handleDelete = async (row: WorkOrder) => {
     if (!window.confirm(`Are you sure you want to delete work order ${row.wo_no}?`)) return;
-    
+
     try {
       const primaryKey = row.id;
       if (!primaryKey) throw new Error('Cannot determine record ID');
-      
+
       const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/${primaryKey}/`, {
         method: 'DELETE',
         headers: {
@@ -305,12 +356,12 @@ const response = await fetch(url);
           'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
         }
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || `Failed to delete: ${response.statusText}`);
       }
-      
+
       showSuccess('Work order deleted successfully!');
       fetchTableData();
     } catch (err: any) {
@@ -319,108 +370,119 @@ const response = await fetch(url);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError(null);
-  
-  // Validate required fields
-  if (!formData.wo_no || formData.wo_no.trim() === '') {
-    setError('Work Order Number is required');
-    return;
-  }
-  
-  try {
-    const url = modalMode === 'add' 
-      ? `${API_BASE_URL}/${ENDPOINT}/`
-      : `${API_BASE_URL}/${ENDPOINT}/${currentRecord?.id}/`;
-    const method = modalMode === 'add' ? 'POST' : 'PUT';
-    
-    // Clean the data before sending
-    const cleanedData: any = {};
-    
-    // Explicitly include wo_no (REQUIRED)
-    cleanedData.wo_no = formData.wo_no;
-    
-    // Add all other fields
-    Object.keys(formData).forEach(key => {
-      if (key !== 'wo_no' && formData[key] !== undefined) {
-        cleanedData[key] = formData[key];
+    e.preventDefault();
+    setError(null);
+
+    // Validate required fields
+    if (!formData.wo_no || formData.wo_no.trim() === '') {
+      setError('Work Order Number is required');
+      return;
+    }
+
+    try {
+      const url = modalMode === 'add'
+        ? `${API_BASE_URL}/${ENDPOINT}/`
+        : `${API_BASE_URL}/${ENDPOINT}/${currentRecord?.id}/`;
+      const method = modalMode === 'add' ? 'POST' : 'PUT';
+
+      // Clean the data before sending
+      const cleanedData: any = {};
+
+      // Explicitly include wo_no (REQUIRED)
+      cleanedData.wo_no = formData.wo_no;
+
+      // Add project_id if selected
+      if (formData.project_id) {
+        cleanedData.project_id = formData.project_id;
       }
-    });
-    
-    // Convert empty strings to null for date fields
-    const dateFields = [
-      'date_received_jacket_ps',
-      'date_received_awarding_wo',
-      'date_wmtrl',
-      'date_sched',
-      'date_received_by_vc',
-      'actual_date_completed_on_site',
-      'date_fcomp',
-      'date_comp',
-      'date_received_by_contractor',
-      'date_corrected'
-    ];
-    
-    dateFields.forEach(field => {
-      if (cleanedData[field] === '') {
-        cleanedData[field] = null;
+
+      // Add all other fields
+      Object.keys(formData).forEach(key => {
+        if (key !== 'wo_no' && key !== 'project_id' && key !== 'project' && formData[key] !== undefined) {
+          cleanedData[key] = formData[key];
+        }
+      });
+
+      // Convert empty strings to null for date fields
+      const dateFields = [
+        'date_received_jacket_ps',
+        'date_received_awarding_wo',
+        'date_wmtrl',
+        'date_sched',
+        'date_received_by_vc',
+        'actual_date_completed_on_site',
+        'date_fcomp',
+        'date_comp',
+        'date_received_by_contractor',
+        'date_corrected'
+      ];
+
+      dateFields.forEach(field => {
+        if (cleanedData[field] === '') {
+          cleanedData[field] = null;
+        }
+      });
+
+      // Ensure booleans are actual booleans
+      cleanedData.vip = Boolean(cleanedData.vip);
+      cleanedData.ccti_exclusion = Boolean(cleanedData.ccti_exclusion);
+      cleanedData.apt_exclusion = Boolean(cleanedData.apt_exclusion);
+
+      console.log('Sending cleaned data:', cleanedData);
+      console.log('wo_no specifically:', cleanedData.wo_no, typeof cleanedData.wo_no);
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
+        },
+        body: JSON.stringify(cleanedData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.error || `Failed to save: ${response.statusText}`);
       }
-    });
-    
-    // Ensure booleans are actual booleans
-    cleanedData.vip = Boolean(cleanedData.vip);
-    cleanedData.ccti_exclusion = Boolean(cleanedData.ccti_exclusion);
-    cleanedData.apt_exclusion = Boolean(cleanedData.apt_exclusion);
-    
-    console.log('Sending cleaned data:', cleanedData);
-    console.log('wo_no specifically:', cleanedData.wo_no, typeof cleanedData.wo_no);
-    
-    const response = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
-      },
-      body: JSON.stringify(cleanedData)
-    });
-    
-    // ... rest of error handling
-  } catch (err: any) {
-    setError('Error saving record: ' + err.message);
-  }
-};
+
+      showSuccess(`Work order ${modalMode === 'add' ? 'added' : 'updated'} successfully!`);
+      setShowModal(false);
+      fetchTableData();
+    } catch (err: any) {
+      setError('Error saving record: ' + err.message);
+    }
+  };
 
   const handleInputChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   // Download Excel template from API
-const handleDownloadTemplate = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/download_template/`, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
-      }
-    });
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/${ENDPOINT}/download_template/`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
+        }
+      });
 
-    if (!response.ok) throw new Error('Template download failed');
+      if (!response.ok) throw new Error('Template download failed');
 
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'work_orders_import_template.xlsx';
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'work_orders_import_template.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
 
-    showSuccess('Template downloaded successfully');
-  } catch (err: any) {
-    setError('Download error: ' + err.message);
-  }
-};
-
+      showSuccess('Template downloaded successfully');
+    } catch (err: any) {
+      setError('Download error: ' + err.message);
+    }
+  };
 
   const handleChangePage = (_event: unknown, newPage: number) => setPage(newPage);
 
@@ -480,6 +542,7 @@ const handleDownloadTemplate = async () => {
       if (statusFilter) params.append('status', statusFilter);
       if (municipalityFilter) params.append('municipality', municipalityFilter);
       if (assignedFilter) params.append('assigned', assignedFilter);
+      if (projectFilter) params.append('project_id', projectFilter);
 
       const response = await fetch(
         `${API_BASE_URL}/${ENDPOINT}/export_excel/?${params.toString()}`,
@@ -536,9 +599,64 @@ const handleDownloadTemplate = async () => {
       'FCOMP': 'primary',
       'COMPLETED': 'success',
       'CANCELLED': 'error',
-      'ON HOLD': 'warning'
+      'ON HOLD': 'warning',
+      'INPRG': 'info',
+      'TECO': 'success',
+      'CLOSED-CAN': 'error',
+      'CLOSE': 'success',
+      'SCHED': 'info',
+      'PCAN3': 'warning',
+      'COMP': 'success',
+      'PCAN': 'warning'
     };
     return colors[status] || 'default';
+  };
+
+  const getProjectDisplay = (workOrder: WorkOrder) => {
+    console.log('Rendering project for work order:', workOrder);
+    console.log('Project data:', workOrder.project);
+    console.log('Project ID:', workOrder.project_id);
+    
+    // If we have the full project object
+    if (workOrder.project) {
+      return (
+        <Box>
+          <Typography variant="body2" fontWeight="medium">
+            {workOrder.project.project_code}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {workOrder.project.project_name}
+          </Typography>
+        </Box>
+      );
+    }
+    
+    // If we only have project_id, show it with a label
+    if (workOrder.project_id) {
+      const project = projects.find(p => p.project_id === workOrder.project_id);
+      if (project) {
+        return (
+          <Box>
+            <Typography variant="body2" fontWeight="medium">
+              {project.project_code}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {project.project_name}
+            </Typography>
+          </Box>
+        );
+      }
+      return (
+        <Chip 
+          label={`Project #${workOrder.project_id}`} 
+          size="small" 
+          variant="outlined"
+          color="primary"
+        />
+      );
+    }
+    
+    return <Typography variant="body2" color="text.secondary">No Project</Typography>;
   };
 
   return (
@@ -565,12 +683,12 @@ const handleDownloadTemplate = async () => {
                   {showFilters ? 'Hide' : 'Show'} Filters
                 </Button>
                 <Button
-                variant="outlined"
-                startIcon={<CloudDownloadTwoToneIcon />}
-                onClick={handleDownloadTemplate}
-              >
-                Download Template
-              </Button>
+                  variant="outlined"
+                  startIcon={<CloudDownloadTwoToneIcon />}
+                  onClick={handleDownloadTemplate}
+                >
+                  Download Template
+                </Button>
                 <Button
                   variant="outlined"
                   startIcon={<CloudUploadTwoToneIcon />}
@@ -578,8 +696,6 @@ const handleDownloadTemplate = async () => {
                 >
                   Import Excel
                 </Button>
-                
-
                 <Button
                   variant="outlined"
                   startIcon={<CloudDownloadTwoToneIcon />}
@@ -661,6 +777,23 @@ const handleDownloadTemplate = async () => {
                         </Select>
                       </FormControl>
                     </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                      <FormControl fullWidth>
+                        <InputLabel>Project</InputLabel>
+                        <Select
+                          value={projectFilter}
+                          onChange={(e) => setProjectFilter(e.target.value)}
+                          label="Project"
+                        >
+                          <MenuItem value="">All Projects</MenuItem>
+                          {projects.map(project => (
+                            <MenuItem key={project.project_id} value={project.project_id.toString()}>
+                              {project.project_code} - {project.project_name}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
                   </Grid>
                 </CardContent>
               </Card>
@@ -707,6 +840,7 @@ const handleDownloadTemplate = async () => {
                         <TableHead>
                           <TableRow>
                             <TableCell><Typography variant="subtitle2" fontWeight="bold">WO NO</Typography></TableCell>
+                            <TableCell><Typography variant="subtitle2" fontWeight="bold">PROJECT</Typography></TableCell>
                             <TableCell><Typography variant="subtitle2" fontWeight="bold">DESCRIPTION</Typography></TableCell>
                             <TableCell><Typography variant="subtitle2" fontWeight="bold">LOCATION</Typography></TableCell>
                             <TableCell><Typography variant="subtitle2" fontWeight="bold">MUNICIPALITY</Typography></TableCell>
@@ -728,6 +862,7 @@ const handleDownloadTemplate = async () => {
                                   </Typography>
                                 </Box>
                               </TableCell>
+                              <TableCell>{getProjectDisplay(row)}</TableCell>
                               <TableCell>{renderCellValue(row.description)}</TableCell>
                               <TableCell>{renderCellValue(row.location)}</TableCell>
                               <TableCell>{renderCellValue(row.municipality)}</TableCell>
@@ -797,7 +932,7 @@ const handleDownloadTemplate = async () => {
         </DialogTitle>
         <DialogContent dividers>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          
+
           <Box component="form" onSubmit={handleSubmit}>
             <Grid container spacing={2}>
               {/* Basic Information */}
@@ -818,6 +953,41 @@ const handleDownloadTemplate = async () => {
               </Grid>
 
               <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Project</InputLabel>
+                  <Select
+                    value={formData.project_id?.toString() || ''}
+                    onChange={(e) => handleInputChange('project_id', e.target.value ? parseInt(e.target.value) : undefined)}
+                    label="Project"
+                    startAdornment={<BusinessTwoToneIcon sx={{ mr: 1, color: 'action.active' }} />}
+                  >
+                    <MenuItem value="">
+                      <em>No Project</em>
+                    </MenuItem>
+                    {projectsLoading ? (
+                      <MenuItem disabled>
+                        <CircularProgress size={20} sx={{ mr: 1 }} />
+                        Loading projects...
+                      </MenuItem>
+                    ) : (
+                      projects.map(project => (
+                        <MenuItem key={project.project_id} value={project.project_id.toString()}>
+                          <Box>
+                            <Typography variant="body2" fontWeight="medium">
+                              {project.project_code}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {project.project_name}
+                            </Typography>
+                          </Box>
+                        </MenuItem>
+                      ))
+                    )}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
                 <FormControl fullWidth required>
                   <InputLabel>Status</InputLabel>
                   <Select
@@ -830,6 +1000,19 @@ const handleDownloadTemplate = async () => {
                     ))}
                   </Select>
                 </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.vip || false}
+                      onChange={(e) => handleInputChange('vip', e.target.checked)}
+                      color="error"
+                    />
+                  }
+                  label="VIP Project"
+                />
               </Grid>
 
               <Grid item xs={12}>
@@ -894,10 +1077,11 @@ const handleDownloadTemplate = async () => {
                 <TextField
                   fullWidth
                   label="Supervisor Full Name"
-                  value={supervisorName || ''}
+                  value={formData.supervisor_full_name || supervisorName || ''}
                   onChange={(e) => handleInputChange('supervisor_full_name', e.target.value)}
                   placeholder="Enter supervisor name"
-                  aria-readonly={true}
+                  InputProps={{ readOnly: true }}
+                  disabled
                 />
               </Grid>
 
@@ -908,19 +1092,6 @@ const handleDownloadTemplate = async () => {
                   value={formData.actual_field_status || ''}
                   onChange={(e) => handleInputChange('actual_field_status', e.target.value)}
                   placeholder="Enter field status"
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={formData.vip || false}
-                      onChange={(e) => handleInputChange('vip', e.target.checked)}
-                      color="error"
-                    />
-                  }
-                  label="VIP Project"
                 />
               </Grid>
 
@@ -1204,8 +1375,18 @@ const handleDownloadTemplate = async () => {
               </Grid>
 
               <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">Project</Typography>
+                {getProjectDisplay(currentRecord)}
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
                 <Typography variant="subtitle2" color="text.secondary">Status</Typography>
                 <Chip label={currentRecord.status} color={getStatusColor(currentRecord.status)} />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">VIP Project</Typography>
+                {renderCellValue(currentRecord.vip)}
               </Grid>
 
               <Grid item xs={12}>
@@ -1239,8 +1420,8 @@ const handleDownloadTemplate = async () => {
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2" color="text.secondary">VIP Project</Typography>
-                {renderCellValue(currentRecord.vip)}
+                <Typography variant="subtitle2" color="text.secondary">Actual Field Status</Typography>
+                <Typography variant="body1">{currentRecord.actual_field_status || '-'}</Typography>
               </Grid>
 
               {/* Dates */}
@@ -1422,9 +1603,9 @@ const handleDownloadTemplate = async () => {
         </DialogActions>
       </Dialog>
 
-      <Snackbar 
-        open={!!successMessage} 
-        autoHideDuration={3000} 
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={3000}
         onClose={() => setSuccessMessage('')}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >

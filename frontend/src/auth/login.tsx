@@ -77,6 +77,7 @@ export default function LoginPage() {
         })
       });
 
+
       let data;
       const contentType = response.headers.get('content-type');
       
@@ -88,6 +89,8 @@ export default function LoginPage() {
         throw new Error('Server returned an invalid response. Please check if Django is running correctly.');
       }
 
+
+      console.log(data.token);
       if (response.ok && data.success) {
         const roleMapping: { [key: string]: string } = {
           'Vendor Representative': 'vendor',
@@ -106,6 +109,7 @@ export default function LoginPage() {
         // Store user role in localStorage
         localStorage.setItem('userRole', normalizedRole);
         localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('auth_token', data.token);
         // Store authentication data in sessionStorage (to match dashboard)
         sessionStorage.setItem('auth_token', data.token);
         sessionStorage.setItem('user_data', JSON.stringify(data.user));

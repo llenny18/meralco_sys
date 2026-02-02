@@ -8,6 +8,12 @@ export default function ClerkReInspectionScheduling() {
   const [scheduledInspections, setScheduledInspections] = useState([]);
   const [selectedInspection, setSelectedInspection] = useState(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [inspectionToDelete, setInspectionToDelete] = useState(null);
+  const [inspectionToReschedule, setInspectionToReschedule] = useState(null);
+  const [errorDetails, setErrorDetails] = useState({ title: '', message: '', details: '' });
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const [loading, setLoading] = useState(false);
@@ -129,31 +135,76 @@ export default function ClerkReInspectionScheduling() {
     }
   };
 
-  const handleReschedule = async (inspectionId) => {
-    const newDate = prompt('Enter new date (YYYY-MM-DD):');
-    if (!newDate) return;
+  const handleRescheduleClick = (inspection) => {
+    setInspectionToReschedule(inspection);
+    setScheduleDate(inspection.scheduled_date || '');
+    setScheduleTime(inspection.scheduled_time || '09:00');
+    setShowRescheduleModal(true);
+  };
 
-    const newTime = prompt('Enter new time (HH:MM):', '09:00');
-    if (!newTime) return;
+  const handleConfirmReschedule = async () => {
+    if (!scheduleDate || !scheduleTime) {
+      alert('Please select date and time');
+      return;
+    }
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/qi-inspections/${inspectionId}/`, {
+      const response = await fetch(`${API_BASE_URL}/qi-inspections/${inspectionToReschedule.inspection_id}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          scheduled_date: newDate,
-          scheduled_time: newTime
+          scheduled_date: scheduleDate,
+          scheduled_time: scheduleTime
         })
       });
 
       if (!response.ok) throw new Error('Rescheduling failed');
 
       alert('✅ Inspection rescheduled successfully!');
+      setShowRescheduleModal(false);
+      setInspectionToReschedule(null);
       fetchScheduledInspections();
     } catch (err) {
       console.error('Error rescheduling:', err);
       alert('❌ Error rescheduling inspection');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteClick = (inspection) => {
+    setInspectionToDelete(inspection);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!inspectionToDelete) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/qi-inspections/${inspectionToDelete.inspection_id}/`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Delete failed');
+      }
+
+      alert('✅ Inspection deleted successfully!');
+      setShowDeleteModal(false);
+      setInspectionToDelete(null);
+      fetchPendingReinspections();
+      fetchScheduledInspections();
+      
+    } catch (err) {
+      console.error('Error deleting inspection:', err);
+      alert(`❌ Error deleting inspection: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -165,7 +216,7 @@ export default function ClerkReInspectionScheduling() {
     setLoading(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/qi-inspections/${inspectionId}/archive_documents/`,
+        `${API_BASE_URL}/qi-inspections/${inspectionId}/archive-documents/`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -177,13 +228,42 @@ export default function ClerkReInspectionScheduling() {
         }
       );
 
-      if (!response.ok) throw new Error('Archiving failed');
+      // Get response text first
+      const responseText = await response.text();
+      let errorData = {};
+      
+      // Try to parse as JSON
+      try {
+        errorData = responseText ? JSON.parse(responseText) : {};
+      } catch (e) {
+        errorData = { detail: responseText || 'Unknown error' };
+      }
+
+      if (!response.ok) {
+        // Show detailed error modal
+        setErrorDetails({
+          title: '❌ Archive Documents Failed',
+          message: `HTTP ${response.status}: ${response.statusText}`,
+          details: JSON.stringify(errorData, null, 2)
+        });
+        setShowErrorModal(true);
+        return;
+      }
 
       alert('✅ Documents archived successfully with 10-year retention!');
       fetchPendingReinspections();
+      
     } catch (err) {
       console.error('Error archiving documents:', err);
-      alert('❌ Error archiving documents');
+      
+      // Show detailed error modal for network/other errors
+      setErrorDetails({
+        title: '❌ Archive Documents Error',
+        message: err.message || 'Network error or server unreachable',
+        details: err.stack || 'No additional details available'
+      });
+      setShowErrorModal(true);
+      
     } finally {
       setLoading(false);
     }
@@ -293,6 +373,20 @@ export default function ClerkReInspectionScheduling() {
                       }}>
                       📦 Archive Documents
                     </button>
+                    <button
+                      onClick={() => handleDeleteClick(inspection)}
+                      style={{
+                        background: '#fff',
+                        color: '#f44336',
+                        border: '1px solid #f44336',
+                        padding: '12px 24px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: 'bold'
+                      }}>
+                      🗑️ Delete
+                    </button>
                   </div>
                 </div>
               </div>
@@ -350,19 +444,34 @@ export default function ClerkReInspectionScheduling() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => handleReschedule(inspection.inspection_id)}
-                  style={{
-                    background: '#fff',
-                    color: '#666',
-                    border: '1px solid #ddd',
-                    padding: '8px 16px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '13px'
-                  }}>
-                  🔄 Reschedule
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => handleRescheduleClick(inspection)}
+                    style={{
+                      background: '#fff',
+                      color: '#666',
+                      border: '1px solid #ddd',
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '13px'
+                    }}>
+                    🔄 Reschedule
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClick(inspection)}
+                    style={{
+                      background: '#fff',
+                      color: '#f44336',
+                      border: '1px solid #f44336',
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '13px'
+                    }}>
+                    🗑️ Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -483,6 +592,304 @@ export default function ClerkReInspectionScheduling() {
                   fontWeight: 'bold'
                 }}>
                 {loading ? 'Scheduling...' : '✅ Confirm Schedule'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Modal */}
+      {showRescheduleModal && inspectionToReschedule && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '500px',
+            width: '100%'
+          }}>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: '28px', color: '#1a1a2e' }}>🔄 Reschedule Inspection</h2>
+            <p style={{ margin: '0 0 24px 0', color: '#666', fontSize: '14px' }}>
+              Project: <strong>#{inspectionToReschedule.project}</strong>
+              {inspectionToReschedule.is_reinspection && (
+                <span style={{
+                  background: '#9c27b0',
+                  color: 'white',
+                  padding: '3px 8px',
+                  borderRadius: '8px',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  marginLeft: '8px'
+                }}>
+                  RE-INSPECTION
+                </span>
+              )}
+            </p>
+
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ background: '#f5f5f5', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>CURRENT SCHEDULE</div>
+                <div style={{ fontSize: '14px', color: '#1a1a2e' }}>
+                  📅 {new Date(inspectionToReschedule.scheduled_date).toLocaleDateString()} 
+                  {inspectionToReschedule.scheduled_time && ` • ⏰ ${inspectionToReschedule.scheduled_time}`}
+                </div>
+                <div style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
+                  👤 QI: {qiTeam.find(qi => qi.user_id === inspectionToReschedule.assigned_qi)?.first_name || 'N/A'}
+                </div>
+              </div>
+
+              <label style={{ display: 'block', marginBottom: '16px' }}>
+                <span style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 'bold', color: '#1a1a2e' }}>
+                  New Inspection Date
+                </span>
+                <input
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px'
+                  }}
+                />
+              </label>
+
+              <label style={{ display: 'block', marginBottom: '20px' }}>
+                <span style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 'bold', color: '#1a1a2e' }}>
+                  New Time
+                </span>
+                <input
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px'
+                  }}
+                />
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowRescheduleModal(false);
+                  setInspectionToReschedule(null);
+                }}
+                style={{
+                  background: '#fff',
+                  color: '#666',
+                  border: '1px solid #ddd',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px'
+                }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmReschedule}
+                disabled={loading || !scheduleDate}
+                style={{
+                  background: (!scheduleDate || loading) ? '#ccc' : '#2196f3',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  cursor: (!scheduleDate || loading) ? 'not-allowed' : 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold'
+                }}>
+                {loading ? 'Rescheduling...' : '✅ Confirm Reschedule'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && inspectionToDelete && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '450px',
+            width: '100%'
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+              <h2 style={{ margin: '0 0 12px 0', fontSize: '24px', color: '#1a1a2e' }}>Delete Inspection?</h2>
+              <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+                Are you sure you want to delete this inspection for Project #{inspectionToDelete.project}?
+              </p>
+              <p style={{ margin: '12px 0 0 0', color: '#f44336', fontSize: '13px', fontWeight: 'bold' }}>
+                This action cannot be undone.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setInspectionToDelete(null);
+                }}
+                style={{
+                  background: '#fff',
+                  color: '#666',
+                  border: '1px solid #ddd',
+                  padding: '12px 32px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px'
+                }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={loading}
+                style={{
+                  background: loading ? '#ccc' : '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 32px',
+                  borderRadius: '8px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold'
+                }}>
+                {loading ? 'Deleting...' : '🗑️ Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Details Modal */}
+      {showErrorModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '600px',
+            width: '100%',
+            maxHeight: '80vh',
+            overflow: 'auto'
+          }}>
+            <div style={{ marginBottom: '24px' }}>
+              <h2 style={{ margin: '0 0 12px 0', fontSize: '24px', color: '#f44336' }}>
+                {errorDetails.title}
+              </h2>
+              <p style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#666', fontWeight: 'bold' }}>
+                {errorDetails.message}
+              </p>
+              
+              <div style={{ 
+                background: '#f5f5f5', 
+                borderRadius: '8px', 
+                padding: '16px',
+                border: '1px solid #ddd'
+              }}>
+                <div style={{ 
+                  fontSize: '12px', 
+                  color: '#666', 
+                  marginBottom: '8px',
+                  fontWeight: 'bold'
+                }}>
+                  ERROR DETAILS:
+                </div>
+                <pre style={{ 
+                  margin: 0, 
+                  fontSize: '13px', 
+                  color: '#333',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  fontFamily: 'monospace'
+                }}>
+                  {errorDetails.details}
+                </pre>
+              </div>
+
+              <div style={{
+                marginTop: '16px',
+                padding: '12px',
+                background: '#fff3cd',
+                borderRadius: '8px',
+                border: '1px solid #ffc107'
+              }}>
+                <div style={{ fontSize: '13px', color: '#856404' }}>
+                  <strong>💡 Troubleshooting Tips:</strong>
+                  <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
+                    <li>Check if the endpoint exists in your Django backend</li>
+                    <li>Verify the URL path is correct (should be /api/v1/qi-inspections/[id]/archive-documents/)</li>
+                    <li>Ensure the backend method handles POST requests</li>
+                    <li>Check Django logs for server-side errors</li>
+                    <li>Verify authentication and permissions</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button
+                onClick={() => {
+                  setShowErrorModal(false);
+                  setErrorDetails({ title: '', message: '', details: '' });
+                }}
+                style={{
+                  background: '#2196f3',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 32px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold'
+                }}>
+                Close
               </button>
             </div>
           </div>

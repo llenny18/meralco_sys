@@ -498,7 +498,7 @@ class SLATracking(models.Model):
     is_breached = models.BooleanField(default=False)
     breach_days = models.IntegerField(default=0)
     waiver_reason = models.TextField(blank=True, null=True)
-    waived_by = models.IntegerField(default=0)
+    waived_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='penalty_waivers22')
     waiver_date = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -517,7 +517,7 @@ class SLATracking(models.Model):
 # ============================================
 
 class InspectionType(models.Model):
-    inspection_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    inspection_type_id = models.IntegerField(primary_key=True, default=generate_project_id, editable=False)
     inspection_name = models.CharField(max_length=100, unique=True)
     inspection_description = models.TextField(blank=True, null=True)
     estimated_duration_hours = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
@@ -539,7 +539,7 @@ class QIInspection(models.Model):
         ('Conditional', 'Conditional'),
     ]
 
-    inspection_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    inspection_id = models.IntegerField(primary_key=True, default=generate_project_id, editable=False)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='inspections')
     inspection_type = models.ForeignKey(InspectionType, on_delete=models.CASCADE, related_name='inspections')
     assigned_qi = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_inspections')
@@ -553,6 +553,34 @@ class QIInspection(models.Model):
     is_completed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    correction_photos = models.JSONField(default=list, blank=True)  # Keep this for paths
+    correction_notes = models.TextField(blank=True, null=True)
+    correction_completed_at = models.DateTimeField(null=True, blank=True)
+    correction_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('PENDING', 'Pending'),
+            ('SUBMITTED', 'Submitted'),
+            ('APPROVED', 'Approved'),
+            ('REJECTED', 'Rejected'),
+        ],
+        default='PENDING'
+    )
+    failure_count = models.IntegerField(default=0)
+    
+    documents_archived = models.BooleanField(default=False)
+    documents_archived_at = models.DateTimeField(null=True, blank=True)
+    documents_archived_by = models.ForeignKey(
+        'User', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='archived_inspections'
+    )
+    archive_retention_years = models.IntegerField(default=10)
+    archive_expiry_date = models.DateTimeField(null=True, blank=True)
+    
 
     class Meta:
         managed = False
@@ -561,6 +589,34 @@ class QIInspection(models.Model):
 
     def __str__(self):
         return f"{self.project.project_code} - {self.inspection_type.inspection_name}"
+
+
+
+class ArchiveLog(models.Model):
+    """
+    Optional model to track archiving activities
+    """
+    inspection = models.ForeignKey(
+        QIInspection, 
+        on_delete=models.CASCADE,
+        related_name='archive_logs'
+    )
+    archived_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='archive_actions'
+    )
+    archive_date = models.DateTimeField(auto_now_add=True)
+    retention_period_years = models.IntegerField(default=10)
+    expiry_date = models.DateTimeField()
+    document_count = models.IntegerField(default=0)
+    document_details = models.TextField(blank=True)  # JSON string
+    notes = models.TextField(blank=True)
+    
+    class Meta:
+        db_table = 'archive_logs'
+        ordering = ['-archive_date']
 
 
 class QIDailyTarget(models.Model):
@@ -642,6 +698,7 @@ class Penalty(models.Model):
         ('Disputed', 'Disputed'),
     ]
 
+    penalty_id = models.AutoField(primary_key=True)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='penalties')
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='penalties')
     penalty_rule = models.ForeignKey(PenaltyRule, on_delete=models.CASCADE, related_name='penalties')
@@ -684,6 +741,7 @@ class Invoice(models.Model):
         ('Paid', 'Paid'),
         ('Overdue', 'Overdue'),
     ]
+    invoice_id = models.AutoField(primary_key=True,  editable=False)
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='invoices')
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='invoices')
@@ -777,6 +835,7 @@ class Notification(models.Model):
         ('Read', 'Read'),
     ]
 
+    notification_id = models.IntegerField(primary_key=True, default=uuid.uuid4, editable=False)
     recipient_user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
     recipient_email = models.EmailField(blank=True, null=True)
     recipient_phone = models.CharField(max_length=20, blank=True, null=True)
@@ -1892,3 +1951,397 @@ class VendorActivityPhoto(models.Model):
     def __str__(self):
         return f"{self.activity.vendor.vendor_code} - {self.photo_type} - {self.uploaded_at}"
 
+
+# ==================== INSPECTION FLAG MODEL ====================
+class InspectionFlag(models.Model):
+    """
+    Auto-generated alert when inspection has failed items
+    This is NOT a formal defect report - just a system flag
+    """
+    FLAG_TYPES = [
+        ('FAILED_ITEMS', 'Failed Checklist Items'),
+        ('MISSING_PHOTOS', 'Missing Required Photos'),
+        ('INCOMPLETE_DATA', 'Incomplete Inspection Data'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('PENDING_QI_REVIEW', 'Pending QI Review'),
+        ('UNDER_REVIEW', 'Under Review'),
+        ('RESOLVED', 'Resolved'),
+        ('DISMISSED', 'Dismissed'),
+    ]
+    
+    inspection = models.ForeignKey(
+        'QIInspection', 
+        on_delete=models.CASCADE,
+        related_name='flags'
+    )
+    flag_type = models.CharField(max_length=50, choices=FLAG_TYPES)
+    item_count = models.IntegerField(default=0)
+    requires_action = models.BooleanField(default=True)
+    status = models.CharField(
+        max_length=20, 
+        choices=STATUS_CHOICES,
+        default='PENDING_QI_REVIEW'
+    )
+    
+    # AI Suggestions (stored as JSON)
+    ai_suggestions = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='AI-generated grouping and severity suggestions'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_flags'
+    )
+    
+    class Meta:
+        db_table = 'inspection_flags'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['inspection', 'status']),
+            models.Index(fields=['status', 'created_at']),
+        ]
+    
+    def __str__(self):
+        return f"Flag: {self.flag_type} - {self.inspection.inspection_id}"
+
+
+
+class QIInspectionCorrectionPhoto(models.Model):
+    """Store correction photos uploaded by vendors"""
+    
+    photo_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    inspection = models.ForeignKey(
+        'QIInspection', 
+        on_delete=models.CASCADE, 
+        related_name='correction_photo_files'
+    )
+    photo_file = models.ImageField(
+        upload_to='qi_corrections/%Y/%m/',
+        null=True,
+        blank=True
+    )
+    caption = models.CharField(max_length=255, null=True, blank=True)
+    uploaded_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='uploaded_correction_photos'
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'qi_inspection_correction_photos'
+        ordering = ['-uploaded_at']
+    
+    def __str__(self):
+        return f"Correction Photo for Inspection {self.inspection_id}"
+
+
+
+# ==================== INSPECTION CHECKLIST ITEM MODEL ====================
+class InspectionChecklistItem(models.Model):
+    """
+    Individual checklist items for an inspection
+    Failed items trigger the flag system
+    """
+    STATUS_CHOICES = [
+        ('PASS', 'Pass'),
+        ('FAIL', 'Fail'),
+        ('NA', 'Not Applicable'),
+        ('PENDING', 'Pending'),
+    ]
+    
+    inspection = models.ForeignKey(
+        'QIInspection',
+        on_delete=models.CASCADE,
+        related_name='checklist_items'
+    )
+    item_name = models.CharField(max_length=200)
+    item_category = models.CharField(max_length=100, blank=True)
+    item_order = models.IntegerField(default=0)
+    
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default='PENDING'
+    )
+    
+    notes = models.TextField(blank=True)
+    photos = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='List of photo URLs/paths'
+    )
+    
+    checked_at = models.DateTimeField(null=True, blank=True)
+    checked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='checked_items'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'inspection_checklist_items'
+        ordering = ['inspection', 'item_order', 'item_name']
+        indexes = [
+            models.Index(fields=['inspection', 'status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.item_name} - {self.status}"
+
+
+
+
+
+# ==================== DEFECT REPORT MODEL ====================
+class DefectReport(models.Model):
+    """
+    FORMAL defect report created by QI after reviewing failed items
+    Has legal/contractual weight
+    """
+    SEVERITY_CHOICES = [
+        ('MINOR', 'Minor'),
+        ('MAJOR', 'Major'),
+        ('CRITICAL', 'Critical'),
+    ]
+    
+    CORRECTION_STATUS_CHOICES = [
+        ('OPEN', 'Open'),
+        ('PENDING', 'Pending Vendor Action'),
+        ('SUBMITTED', 'Correction Submitted'),
+        ('APPROVED', 'Correction Approved'),
+        ('REJECTED', 'Correction Rejected'),
+        ('CLOSED', 'Closed'),
+    ]
+    
+    # Primary keys
+    defect_id = models.AutoField(primary_key=True)
+    
+    # Relationships
+    inspection = models.ForeignKey(
+        'QIInspection',
+        on_delete=models.CASCADE,
+        related_name='defects'
+    )
+    project = models.ForeignKey(
+        'Project',
+        on_delete=models.CASCADE,
+        related_name='defects',
+        null=True,
+        blank=True
+    )
+    
+    # Defect Details (QI creates these)
+    defect_type = models.CharField(max_length=100)
+    defect_category = models.CharField(max_length=100, blank=True)
+    severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES)
+    description = models.TextField()
+    
+    # Related checklist items (links to failed items)
+    related_checklist_items = models.JSONField(
+        default=list,
+        help_text='List of checklist item IDs that caused this defect'
+    )
+    
+    # Evidence
+    photos = models.JSONField(default=list, blank=True)
+    location_gps = models.CharField(max_length=100, blank=True)
+    
+    # QI Information (REQUIRED for legal validity)
+    qi_notes = models.TextField(blank=True)
+    qi_signature = models.CharField(max_length=255)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_defects'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Correction Tracking
+    correction_status = models.CharField(
+        max_length=20,
+        choices=CORRECTION_STATUS_CHOICES,
+        default='OPEN'
+    )
+    correction_due_date = models.DateField(null=True, blank=True)
+    correction_photos = models.JSONField(default=list, blank=True)
+    correction_notes = models.TextField(blank=True)
+    correction_submitted_at = models.DateTimeField(null=True, blank=True)
+    correction_submitted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='submitted_corrections'
+    )
+    
+    # Approval/Rejection
+    failure_count = models.IntegerField(default=0)
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_defects'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True)
+    
+    # Escalation
+    is_escalated = models.BooleanField(default=False)
+    escalated_at = models.DateTimeField(null=True, blank=True)
+    escalation_reason = models.TextField(blank=True)
+    
+    class Meta:
+        db_table = 'defect_reports'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['inspection', 'correction_status']),
+            models.Index(fields=['project', 'severity']),
+            models.Index(fields=['correction_status', 'created_at']),
+        ]
+    
+    def __str__(self):
+        return f"Defect #{self.defect_id}: {self.defect_type} ({self.severity})"
+    
+    def can_escalate(self):
+        """Check if defect should be escalated"""
+        return self.failure_count >= 3 and not self.is_escalated
+
+
+# ==================== DEFECT CORRECTION HISTORY MODEL ====================
+class DefectCorrectionHistory(models.Model):
+    """
+    Track all correction attempts for audit trail
+    """
+    ACTION_CHOICES = [
+        ('SUBMITTED', 'Correction Submitted'),
+        ('APPROVED', 'Correction Approved'),
+        ('REJECTED', 'Correction Rejected'),
+        ('RESUBMITTED', 'Correction Resubmitted'),
+    ]
+    
+    defect = models.ForeignKey(
+        DefectReport,
+        on_delete=models.CASCADE,
+        related_name='correction_history'
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    action_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True
+    )
+    action_at = models.DateTimeField(auto_now_add=True)
+    
+    notes = models.TextField(blank=True)
+    photos = models.JSONField(default=list, blank=True)
+    
+    class Meta:
+        db_table = 'defect_correction_history'
+        ordering = ['-action_at']
+        verbose_name_plural = 'Defect correction histories'
+    
+    def __str__(self):
+        return f"{self.action} - Defect #{self.defect.defect_id}"
+    
+
+
+# models.py
+class QIInspectionPhoto(models.Model):
+    photo_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    inspection = models.ForeignKey('QIInspection', on_delete=models.CASCADE, related_name='photos')
+    photo_file = models.ImageField(upload_to='qi_inspections/%Y/%m/', null=True, blank=True)
+    photo_url = models.URLField(max_length=500, null=True, blank=True)
+    caption = models.CharField(max_length=255, null=True, blank=True)
+    location_coordinates = models.CharField(max_length=100, null=True, blank=True)
+    uploaded_by = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, related_name='uploaded_qi_photos')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'qi_inspection_photos'
+        managed = True
+
+    def __str__(self):
+        return f"Photo {self.photo_id} for Inspection {self.inspection_id}"
+    
+    
+
+
+class PaymentReceipt(models.Model):
+    """
+    Track payment receipts uploaded by vendors
+    Requires supervisor approval before invoice is marked as paid
+    """
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending Review'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+    ]
+    
+    PAYMENT_METHOD_CHOICES = [
+        ('Bank Transfer', 'Bank Transfer'),
+        ('Check', 'Check'),
+        ('Cash', 'Cash'),
+        ('Online Payment', 'Online Payment'),
+    ]
+    
+    receipt_id = models.AutoField(primary_key=True)
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='payment_receipts')
+    
+    # Receipt Details
+    receipt_image = models.ImageField(upload_to='payment_receipts/%Y/%m/', null=False)
+    receipt_number = models.CharField(max_length=100)
+    payment_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    payment_date = models.DateField()
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_METHOD_CHOICES)
+    notes = models.TextField(blank=True, null=True)
+    
+    # Status & Review
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='uploaded_receipts')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    # Approval/Rejection
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_receipts')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'payment_receipts'
+        ordering = ['-uploaded_at']
+        indexes = [
+            models.Index(fields=['invoice', 'status']),
+            models.Index(fields=['status', 'uploaded_at']),
+        ]
+    
+    def __str__(self):
+        return f"Receipt {self.receipt_number} - Invoice {self.invoice.invoice_number}"
+    
+    @property
+    def uploaded_by_name(self):
+        return self.uploaded_by.get_full_name() if self.uploaded_by else 'Unknown'
+    
+    @property
+    def reviewed_by_name(self):
+        return self.reviewed_by.get_full_name() if self.reviewed_by else None

@@ -26,10 +26,14 @@ export default function TeamLeaderBillingOversight() {
   const fetchPendingInvoices = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/invoices/?payment_status=${filters.status}`);
+      const response = await fetch(
+        `${API_BASE_URL}/invoices/?payment_status=${filters.status}&approved_by__isnull=true`
+      );
+
       if (!response.ok) throw new Error('Failed to fetch invoices');
       const data = await response.json();
       const allInvoices = data.results || data || [];
+      console.log('Fetched Invoices:', allInvoices);
       
       // Filter high-value invoices
       const highValueInvoices = allInvoices.filter(inv => 
@@ -37,7 +41,7 @@ export default function TeamLeaderBillingOversight() {
       );
       
       setInvoices(highValueInvoices);
-      
+       
       // Calculate stats
       const totalValue = highValueInvoices.reduce((sum, inv) => sum + parseFloat(inv.net_amount || 0), 0);
       setStats({
@@ -62,11 +66,13 @@ export default function TeamLeaderBillingOversight() {
       const userId = JSON.parse(localStorage.getItem('user') || '{}').user_id || 0;
       
       // Update invoice with Team Leader approval
-      const response = await fetch(`${API_BASE_URL}/invoices/${selectedInvoice.invoice_number}/`, {
+      const response = await fetch(`${API_BASE_URL}/invoices/${selectedInvoice.invoice_id}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           notes: `Team Leader approved: ${new Date().toISOString()}`,
+          approved_by: userId,
+          approval_date: new Date().toISOString(),
           // Additional Team Leader approval flag could be added to model
         })
       });

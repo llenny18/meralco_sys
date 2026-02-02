@@ -22,6 +22,9 @@ router.register(r'auth', AuthViewSet, basename='auth')
 # Emailings
 router.register(r'daily-action-emails', DailyActionEmailViewSet, basename='daily-action-email')
 
+# QI Correction photos
+router.register(r'qi-inspection-correction-photos', QIInspectionCorrectionPhotoViewSet, basename='qi-inspection-correction-photo')
+
 # User Management
 router.register(r'user-roles', UserRoleViewSet, basename='user-role')
 router.register(r'permissions', PermissionViewSet, basename='permission')
@@ -98,6 +101,13 @@ router.register(r'dashboard', DashboardViewSet, basename='dashboard')
 router.register(r'work-orders', WorkOrderViewSet, basename='work-order')
 router.register(r'work-order-documents', WorkOrderDocumentViewSet, basename='work-order-document')
 
+# Defect Reporting and Inspection
+router.register(r'inspection-checklist-items', InspectionChecklistItemViewSet, basename='inspection-checklist-item')
+router.register(r'inspection-flags', InspectionFlagViewSet, basename='inspection-flag')
+router.register(r'defect-reports', DefectReportViewSet, basename='defect-report')
+
+
+
 # Crew Monitoring
 router.register(r'crew-types', CrewTypeViewSet, basename='crew-type')
 router.register(r'daily-crew-monitoring', DailyCrewMonitoringViewSet, basename='daily-crew-monitoring')
@@ -162,8 +172,64 @@ router.register(r'clerk-validation', ClerkDocumentValidationViewSet, basename='c
 router.register(r'vendor-daily-activities', VendorDailyActivityViewSet, basename='vendor-daily-activity')
 router.register(r'vendor-activity-photos', VendorActivityPhotoViewSet, basename='vendor-activity-photo')
 
+# QI Inspection Photos
+router.register(r'qi-inspection-photos', QIInspectionPhotoViewSet, basename='qi-inspection-photo')
+
+router.register(r'payment-receipts', PaymentReceiptViewSet, basename='payment-receipt')
+
+# Add these custom URL patterns if needed:
+payment_receipt_urls = [
+    # Approve receipt
+    path('payment-receipts/<int:pk>/approve/', 
+         PaymentReceiptViewSet.as_view({'post': 'approve'}), 
+         name='payment-receipt-approve'),
+    
+    # Reject receipt
+    path('payment-receipts/<int:pk>/reject/', 
+         PaymentReceiptViewSet.as_view({'post': 'reject'}), 
+         name='payment-receipt-reject'),
+    
+    # Pending count
+    path('payment-receipts/pending_count/', 
+         PaymentReceiptViewSet.as_view({'get': 'pending_count'}), 
+         name='payment-receipt-pending-count'),
+    
+    # Statistics
+    path('payment-receipts/statistics/', 
+         PaymentReceiptViewSet.as_view({'get': 'statistics'}), 
+         name='payment-receipt-statistics'),
+]
+
+invoice_urls = [
+    # Generate documents
+    path('invoices/<int:pk>/generate_document/', 
+         InvoiceViewSet.as_view({'post': 'generate_document'}), 
+         name='invoice-generate-document'),
+    
+    path('invoices/<int:pk>/generate_receipt/', 
+         InvoiceViewSet.as_view({'post': 'generate_receipt'}), 
+         name='invoice-generate-receipt'),
+    
+    # Email
+    path('invoices/<int:pk>/send_email/', 
+         InvoiceViewSet.as_view({'post': 'send_email'}), 
+         name='invoice-send-email'),
+    
+    # Approve
+    path('invoices/<int:pk>/approve/', 
+         InvoiceViewSet.as_view({'post': 'approve'}), 
+         name='invoice-approve'),
+    
+    # Statistics
+    path('invoices/statistics/', 
+         InvoiceViewSet.as_view({'get': 'statistics'}), 
+         name='invoice-statistics'),
+]
+
 # URL patterns
 urlpatterns = [
+    path('api/v1/', include(invoice_urls)),
+    path('api/v1/', include(payment_receipt_urls)),
     # Include router URLs
     path('api/v1/', include(router.urls)),
     path('test-email/', test_email_view, name='test-email'),

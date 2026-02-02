@@ -31,14 +31,17 @@ export default function SupervisorQIAssignment() {
 
   const fetchQITeam = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/users/?role_name=QI`);
+      const response = await fetch(`${API_BASE_URL}/users/`);
       const data = await response.json();
-      const qiUsers = (data.results || data || []).map(qi => ({
-        ...qi,
-        workload: Math.floor(Math.random() * 40) + 60, // Mock workload 60-100%
-        proximity: Math.floor(Math.random() * 30) + 1, // Mock distance 1-30km
-        specialization: ['Electrical', 'Civil', 'Mechanical'][Math.floor(Math.random() * 3)]
-      }));
+      // Filter only users with role_id = 4 (Quality Inspector)
+      const qiUsers = (data.results || data || [])
+        .filter(user => user.role === 4 || user.role_id === 4)
+        .map(qi => ({
+          ...qi,
+          workload: Math.floor(Math.random() * 40) + 60, // Mock workload 60-100%
+          proximity: Math.floor(Math.random() * 30) + 1, // Mock distance 1-30km
+          specialization: ['Electrical', 'Civil', 'Mechanical'][Math.floor(Math.random() * 3)]
+        }));
       setQiTeam(qiUsers);
     } catch (err) {
       console.error('Error fetching QI team:', err);
@@ -150,48 +153,54 @@ export default function SupervisorQIAssignment() {
 
       {/* QI Team Capacity Overview */}
       <div style={{ background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
-        <h2 style={{ margin: '0 0 20px 0', fontSize: '24px', color: '#1a1a2e' }}>👥 QI Team Capacity</h2>
+        <h2 style={{ margin: '0 0 20px 0', fontSize: '24px', color: '#1a1a2e' }}>👥 QI Team Capacity (Role ID: 4 - Quality Inspector)</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
-          {qiTeam.map(qi => (
-            <div key={qi.user_id} style={{ border: '1px solid #e0e0e0', borderRadius: '12px', padding: '16px', background: '#fafafa' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
-                <div>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#1a1a2e' }}>{qi.first_name} {qi.last_name}</h3>
-                  <p style={{ margin: 0, fontSize: '13px', color: '#666' }}>{qi.specialization}</p>
-                </div>
-                <span style={{
-                  background: getWorkloadColor(qi.workload),
-                  color: 'white',
-                  padding: '4px 8px',
-                  borderRadius: '12px',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
-                }}>
-                  {qi.workload}%
-                </span>
-              </div>
-              
-              <div style={{ marginBottom: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                  <span style={{ color: '#1a1a2e' }}>Workload</span>
-                  <span style={{ color: '#1a1a2e' }}>{qi.workload}%</span>
-                </div>
-                <div style={{ background: '#e0e0e0', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-                  <div style={{ 
-                    width: `${qi.workload}%`, 
-                    height: '100%', 
-                    background: getWorkloadColor(qi.workload),
-                    transition: 'width 0.3s'
-                  }} />
-                </div>
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#1a1a2e' }}>
-                <span>📍 Avg Distance:</span>
-                <span>{qi.proximity}km</span>
-              </div>
+          {qiTeam.length === 0 ? (
+            <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: '#999' }}>
+              <p style={{ fontSize: '16px', margin: 0 }}>No Quality Inspectors (role_id: 4) found in the system</p>
             </div>
-          ))}
+          ) : (
+            qiTeam.map(qi => (
+              <div key={qi.user_id} style={{ border: '1px solid #e0e0e0', borderRadius: '12px', padding: '16px', background: '#fafafa' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#1a1a2e' }}>{qi.first_name} {qi.last_name}</h3>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#666' }}>{qi.specialization}</p>
+                  </div>
+                  <span style={{
+                    background: getWorkloadColor(qi.workload),
+                    color: 'white',
+                    padding: '4px 8px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}>
+                    {qi.workload}%
+                  </span>
+                </div>
+                
+                <div style={{ marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+                    <span style={{ color: '#1a1a2e' }}>Workload</span>
+                    <span style={{ color: '#1a1a2e' }}>{qi.workload}%</span>
+                  </div>
+                  <div style={{ background: '#e0e0e0', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ 
+                      width: `${qi.workload}%`, 
+                      height: '100%', 
+                      background: getWorkloadColor(qi.workload),
+                      transition: 'width 0.3s'
+                    }} />
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#1a1a2e' }}>
+                  <span>📍 Avg Distance:</span>
+                  <span>{qi.proximity}km</span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -242,16 +251,17 @@ export default function SupervisorQIAssignment() {
                   
                   <button
                     onClick={() => handleAssignClick(project)}
+                    disabled={qiTeam.length === 0}
                     style={{
-                      background: 'linear-gradient(45deg, #667eea, #764ba2)',
+                      background: qiTeam.length === 0 ? '#ccc' : 'linear-gradient(45deg, #667eea, #764ba2)',
                       color: 'white',
                       border: 'none',
                       padding: '12px 24px',
                       borderRadius: '8px',
-                      cursor: 'pointer',
+                      cursor: qiTeam.length === 0 ? 'not-allowed' : 'pointer',
                       fontSize: '14px',
                       fontWeight: 'bold',
-                      boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
+                      boxShadow: qiTeam.length === 0 ? 'none' : '0 4px 12px rgba(102, 126, 234, 0.3)'
                     }}>
                     🤖 AI Assign
                   </button>
@@ -382,41 +392,45 @@ export default function SupervisorQIAssignment() {
             {/* Alternatives */}
             <div style={{ marginBottom: '20px' }}>
               <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#1a1a2e' }}>Alternative Options</h4>
-              {aiRecommendation.alternatives.map((qi, idx) => (
-                <div key={idx} style={{
-                  border: '1px solid #e0e0e0',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  marginBottom: '8px',
-                  background: '#fafafa'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', color: '#1a1a2e' }}>
-                        {qi.first_name} {qi.last_name}
-                      </h4>
-                      <p style={{ margin: 0, fontSize: '13px', color: '#666' }}>
-                        {qi.workload}% workload • {qi.proximity}km away • {qi.specialization}
-                      </p>
+              {aiRecommendation.alternatives.length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#999', padding: '20px', fontSize: '14px' }}>No alternative QI inspectors available</p>
+              ) : (
+                aiRecommendation.alternatives.map((qi, idx) => (
+                  <div key={idx} style={{
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    marginBottom: '8px',
+                    background: '#fafafa'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', color: '#1a1a2e' }}>
+                          {qi.first_name} {qi.last_name}
+                        </h4>
+                        <p style={{ margin: 0, fontSize: '13px', color: '#666' }}>
+                          {qi.workload}% workload • {qi.proximity}km away • {qi.specialization}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleAssignQI(qi, true)}
+                        disabled={loading}
+                        style={{
+                          background: '#2196f3',
+                          color: 'white',
+                          border: 'none',
+                          padding: '8px 16px',
+                          borderRadius: '6px',
+                          cursor: loading ? 'not-allowed' : 'pointer',
+                          fontSize: '14px',
+                          opacity: loading ? 0.6 : 1
+                        }}>
+                        Override & Assign
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleAssignQI(qi, true)}
-                      disabled={loading}
-                      style={{
-                        background: '#2196f3',
-                        color: 'white',
-                        border: 'none',
-                        padding: '8px 16px',
-                        borderRadius: '6px',
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        fontSize: '14px',
-                        opacity: loading ? 0.6 : 1
-                      }}>
-                      Override & Assign
-                    </button>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
 
             <button

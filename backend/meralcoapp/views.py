@@ -1261,6 +1261,370 @@ class QIInspectionViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['project', 'inspection_type', 'assigned_qi', 'inspection_result', 'is_completed']
     ordering_fields = ['scheduled_date', 'inspection_date']
+    
+        
+     
+    @action(detail=True, methods=['post'], url_path='submit_corrections')
+    def submit_corrections(self, request, pk=None):
+        """
+        Handle vendor correction submissions with file uploads
+        """
+        try:
+            inspection = self.get_object()
+            
+            # Check if already submitted
+            if inspection.correction_status in ['SUBMITTED', 'APPROVED']:
+                return Response({
+                    'error': 'Corrections already submitted for this inspection',
+                    'status': inspection.correction_status
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get correction notes
+            correction_notes = request.data.get('correction_notes', '')
+            
+            if not correction_notes:
+                return Response(
+                    {'error': 'Correction notes are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Handle uploaded photos
+            uploaded_files = request.FILES.getlist('corrective_photos')
+            
+            if not uploaded_files:
+                return Response(
+                    {'error': 'At least one correction photo is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            photo_urls = []
+            
+            for idx, photo_file in enumerate(uploaded_files):
+                # Validate file type
+                if not photo_file.content_type.startswith('image/'):
+                    return Response(
+                        {'error': f'Invalid file type: {photo_file.name}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Validate file size (5MB max)
+                if photo_file.size > 5 * 1024 * 1024:
+                    return Response(
+                        {'error': f'File too large: {photo_file.name}. Max 5MB'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Create photo record
+                correction_photo = QIInspectionCorrectionPhoto.objects.create(
+                    inspection=inspection,
+                    photo_file=photo_file,
+                    caption=f"Correction photo {idx + 1}",
+                    uploaded_by_id=request.data.get('uploaded_by')
+                )
+                
+                # ✅ FIX: Build full URL properly
+                full_url = request.build_absolute_uri(correction_photo.photo_file.url)
+                photo_urls.append(full_url)
+            
+            # Update inspection with correction data
+            inspection.correction_notes = correction_notes
+            inspection.correction_completed_at = timezone.now()
+            inspection.correction_status = 'SUBMITTED'
+            inspection.correction_photos = photo_urls  # Store full URLs
+            inspection.save()
+            
+            # Send notification email
+            try:
+                from .email_notification_service import email_service
+                email_service.notify_correction_submitted(inspection)
+            except Exception as e:
+                print(f"Failed to send notification: {e}")
+            
+            return Response({
+                'status': 'success',
+                'message': 'Corrections submitted successfully',
+                'inspection_id': inspection.inspection_id,
+                'correction_status': inspection.correction_status,
+                'photo_count': len(photo_urls),
+                'photo_urls': photo_urls
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def complete_with_checklist(self, request, pk=None):
+        """
+        Complete inspection and auto-generate defect flags
+        
+        Request body:
+        {
+            "checklist_items": [
+                {
+                    "item_name": "Electrical wiring",
+                    "item_category": "Safety",
+                    "status": "Fail",
+                    "notes": "Exposed wiring found",
+                    "photos": ["photo1.jpg", "photo2.jpg"]
+                }
+            ],
+            "inspection_result": "Fail",
+            "findings": "Multiple safety violations",
+            "location_coordinates": "14.5995,120.9842"
+        }
+        """
+        inspection = self.get_object()
+        
+        # Update inspection
+        inspection.is_completed = True
+        inspection.inspection_date = timezone.now().date()
+        inspection.inspection_result = request.data.get('inspection_result', 'Fail')
+        inspection.findings = request.data.get('findings', '')
+        inspection.location_coordinates = request.data.get('location_coordinates', '')
+        inspection.save()
+        
+        # Create checklist items
+        checklist_data = request.data.get('checklist_items', [])
+        failed_items = []
+        
+        for item_data in checklist_data:
+            item = InspectionChecklistItem.objects.create(
+                inspection=inspection,
+                item_name=item_data['item_name'],
+                item_category=item_data.get('item_category', ''),
+                status=item_data['status'],
+                notes=item_data.get('notes', ''),
+                photos=item_data.get('photos', []),
+                checked_at=timezone.now(),
+                checked_by=request.user
+            )
+            
+            if item.status == 'Fail':
+                failed_items.append(item)
+        
+        # Auto-generate flag if there are failures
+        if failed_items:
+            flag = InspectionFlag.objects.create(
+                inspection=inspection,
+                flag_type='FAILED_ITEMS',
+                item_count=len(failed_items),
+                requires_action=True,
+                status='PENDING_QI_REVIEW'
+            )
+            
+            # Generate AI suggestions
+            suggestions = self._generate_ai_suggestions(failed_items)
+            flag.ai_suggestions = {'suggestions': suggestions}
+            flag.save()
+            
+            return Response({
+                'status': 'completed',
+                'flag_generated': True,
+                'flag_id': flag.id,
+                'failed_items_count': len(failed_items),
+                'message': '⚠️ Inspection completed with failures. Flag created for QI review.'
+            })
+        
+        return Response({
+            'status': 'completed',
+            'flag_generated': False,
+            'message': '✅ Inspection completed successfully with no failures.'
+        })
+    
+    def _generate_ai_suggestions(self, failed_items):
+        """AI logic to suggest defect groupings"""
+        suggestions = []
+        
+        # Group by category
+        categories = {}
+        for item in failed_items:
+            cat = item.item_category or 'General'
+            if cat not in categories:
+                categories[cat] = []
+            categories[cat].append(item)
+        
+        # Create suggestions
+        for category, items in categories.items():
+            # Determine severity
+            severity = self._determine_severity(items)
+            
+            # Generate description
+            item_names = [item.item_name for item in items]
+            description = self._generate_description(category, item_names)
+            
+            suggestions.append({
+                'suggested_defect_type': f"{category} Non-Compliance",
+                'suggested_severity': severity,
+                'suggested_description': description,
+                'related_item_ids': [item.id for item in items],
+                'confidence_score': self._calculate_confidence(items),
+                'reasoning': f"Grouped {len(items)} related failures in {category} category"
+            })
+        
+        return suggestions
+    
+    def _determine_severity(self, items):
+        """Rule-based severity determination"""
+        combined_text = ' '.join([item.item_name + ' ' + item.notes for item in items]).lower()
+        
+        critical_keywords = ['safety', 'structural', 'electrical', 'fire', 'collapse', 'hazard']
+        major_keywords = ['code', 'violation', 'non-compliance', 'regulation', 'standard']
+        
+        if any(keyword in combined_text for keyword in critical_keywords):
+            return 'CRITICAL'
+        elif any(keyword in combined_text for keyword in major_keywords):
+            return 'MAJOR'
+        else:
+            return 'MINOR'
+    
+    def _generate_description(self, category, item_names):
+        """Generate human-readable description"""
+        if len(item_names) == 1:
+            return f"Issue found: {item_names[0]}"
+        elif len(item_names) <= 3:
+            return f"Multiple {category.lower()} issues: {', '.join(item_names)}"
+        else:
+            return f"Multiple {category.lower()} issues including: {', '.join(item_names[:3])} and {len(item_names)-3} more"
+    
+    def _calculate_confidence(self, items):
+        """Calculate AI confidence score"""
+        # More items in same category = higher confidence
+        if len(items) >= 5:
+            return 0.95
+        elif len(items) >= 3:
+            return 0.85
+        elif len(items) == 2:
+            return 0.75
+        else:
+            return 0.65
+    
+    @action(detail=True, methods=['post'], url_path='archive-documents') 
+    def archive_documents(self, request, pk=None):
+        """
+        Custom action to archive all documents related to an inspection.
+        
+        POST /api/v1/qi-inspections/{id}/archive-documents/
+        
+        Body:
+        {
+            "archived_by": user_id,
+            "archive_date": "2025-01-28T10:00:00Z",
+            "retention_period": 10  # years
+        }
+        """
+        try:
+            inspection = self.get_object()
+            
+            # Get request data
+            archived_by = request.data.get('archived_by')
+            archive_date = request.data.get('archive_date', timezone.now().isoformat())
+            retention_period = request.data.get('retention_period', 10)
+            
+            # Calculate retention expiry date
+            archive_datetime = timezone.now()
+            expiry_date = archive_datetime + timedelta(days=365 * retention_period)
+            
+            # Get all related documents for this inspection
+            archived_documents = []
+            
+            # 1. Archive inspection photos
+            if hasattr(inspection, 'inspection_photos'):
+                photos = inspection.inspection_photos.all()
+                for photo in photos:
+                    photo.is_archived = True
+                    photo.archived_at = archive_datetime
+                    photo.archived_by_id = archived_by
+                    photo.archive_expiry_date = expiry_date
+                    photo.save()
+                    archived_documents.append({
+                        'type': 'photo',
+                        'id': photo.id,
+                        'filename': photo.photo.name if photo.photo else 'N/A'
+                    })
+            
+            # 2. Archive inspection reports/PDFs
+            if hasattr(inspection, 'inspection_reports'):
+                reports = inspection.inspection_reports.all()
+                for report in reports:
+                    report.is_archived = True
+                    report.archived_at = archive_datetime
+                    report.archived_by_id = archived_by
+                    report.archive_expiry_date = expiry_date
+                    report.save()
+                    archived_documents.append({
+                        'type': 'report',
+                        'id': report.id,
+                        'filename': report.report_file.name if report.report_file else 'N/A'
+                    })
+            
+            # 3. Archive inspection attachments
+            if hasattr(inspection, 'attachments'):
+                attachments = inspection.attachments.all()
+                for attachment in attachments:
+                    attachment.is_archived = True
+                    attachment.archived_at = archive_datetime
+                    attachment.archived_by_id = archived_by
+                    attachment.archive_expiry_date = expiry_date
+                    attachment.save()
+                    archived_documents.append({
+                        'type': 'attachment',
+                        'id': attachment.id,
+                        'filename': attachment.file.name if attachment.file else 'N/A'
+                    })
+            
+            # 4. Update inspection record
+            inspection.documents_archived = True
+            inspection.documents_archived_at = archive_datetime
+            inspection.documents_archived_by_id = archived_by
+            inspection.archive_retention_years = retention_period
+            inspection.archive_expiry_date = expiry_date
+            inspection.save()
+            
+            # 5. Create archive log entry (optional)
+            try:
+                ArchiveLog.objects.create(
+                    inspection=inspection,
+                    archived_by_id=archived_by,
+                    archive_date=archive_datetime,
+                    retention_period_years=retention_period,
+                    expiry_date=expiry_date,
+                    document_count=len(archived_documents),
+                    document_details=json.dumps(archived_documents)
+                )
+            except Exception as log_error:
+                # Log creation failed but archiving succeeded
+                print(f"Archive log creation failed: {log_error}")
+            
+            return Response({
+                'success': True,
+                'message': 'Documents archived successfully',
+                'inspection_id': inspection.inspection_id,
+                'archived_count': len(archived_documents),
+                'archived_documents': archived_documents,
+                'retention_period_years': retention_period,
+                'archive_date': archive_datetime.isoformat(),
+                'expiry_date': expiry_date.isoformat()
+            }, status=status.HTTP_200_OK)
+            
+        except QIInspection.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Inspection not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e),
+                'detail': 'An error occurred while archiving documents'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
     @action(detail=False, methods=['get'])
     def pending(self, request):
@@ -1423,58 +1787,750 @@ def check_overdue_documents(request):
 # ============================================
 # BILLING MANAGEMENT VIEWSETS
 # ============================================
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from django.http import HttpResponse
+from django.db import transaction
+from django.utils import timezone
+from django.core.mail import EmailMessage
+from django.conf import settings
+from datetime import datetime
+import os
+import tempfile
+import traceback
+import logging
+
+# ReportLab imports for PDF generation
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image
+from reportlab.pdfgen import canvas
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+
+logger = logging.getLogger(__name__)
+
+from .models import Invoice, Penalty, Project, Vendor, User
+from .serializers import InvoiceSerializer
+
 
 class InvoiceViewSet(viewsets.ModelViewSet):
-    queryset = Invoice.objects.select_related(
-        'project', 'vendor', 'created_by', 'approved_by'
-    ).prefetch_related('payments').all()
+    """
+    ViewSet for Invoice operations with PDF generation and email functionality
+    """
+    queryset = Invoice.objects.all().select_related('project', 'vendor', 'created_by').order_by('-created_at')
     serializer_class = InvoiceSerializer
+    filterset_fields = {
+        'payment_status': ['exact'],
+        'approved_by': ['isnull'],
+    }
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['vendor', 'project', 'payment_status']
-    search_fields = ['invoice_number']
-    ordering_fields = ['invoice_date', 'due_date', 'invoice_amount']
-
-    @action(detail=False, methods=['get'])
-    def overdue(self, request):
-        """Get overdue invoices"""
-        overdue = self.queryset.filter(
-            payment_status__in=['Unpaid', 'Partially Paid'],
-            due_date__lt=date.today()
-        )
-        serializer = self.get_serializer(overdue, many=True)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['get'])
-    def summary(self, request):
-        """Get invoice summary statistics"""
-        summary = self.queryset.aggregate(
-            total_invoices=Count('id'),
-            total_amount=Sum('invoice_amount'),
-            total_penalties=Sum('penalty_amount'),
-            total_net=Sum('net_amount'),
-            paid=Sum('net_amount', filter=Q(payment_status='Paid')),
-            outstanding=Sum('net_amount', filter=~Q(payment_status='Paid'))
-        )
-        return Response(summary)
-
+    
+    def get_queryset(self):
+        """Filter invoices based on query parameters"""
+        queryset = super().get_queryset()
+        
+        # Filter by status
+        status_param = self.request.query_params.get('status', None)
+        if status_param:
+            queryset = queryset.filter(payment_status=status_param)
+        
+        # Filter by vendor
+        vendor = self.request.query_params.get('vendor', None)
+        if vendor:
+            queryset = queryset.filter(vendor_id=vendor)
+        
+        # Filter by project
+        project = self.request.query_params.get('project', None)
+        if project:
+            queryset = queryset.filter(project_id=project)
+        
+        # Date range filter
+        start_date = self.request.query_params.get('start_date', None)
+        end_date = self.request.query_params.get('end_date', None)
+        if start_date and end_date:
+            queryset = queryset.filter(invoice_date__range=[start_date, end_date])
+        
+        return queryset
+    
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        """Create invoice with automatic calculations and project status update"""
+        try:
+            data = request.data.copy()
+            
+            # Set created_by
+            if hasattr(request.user, 'user_id'):
+                data['created_by'] = request.user.user_id
+            
+            # Calculate net amount
+            invoice_amount = float(data.get('invoice_amount', 0))
+            penalty_amount = float(data.get('penalty_amount', 0))
+            data['net_amount'] = str(invoice_amount - penalty_amount)
+            
+            serializer = self.get_serializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            
+            # Update project status to 8 (Invoiced/Billed)
+            project_id = data.get('project')
+            if project_id:
+                try:
+                    project = Project.objects.get(project_id=project_id)
+                    project.status_id = 8  # Set to "Invoiced" status
+                    project.save()
+                    logger.info(f"Updated project {project.project_code} status to Invoiced (8)")
+                except Project.DoesNotExist:
+                    logger.warning(f"Project {project_id} not found for status update")
+            
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+            
+        except Exception as e:
+            logger.error(f"Error creating invoice: {e}")
+            logger.error(traceback.format_exc())
+            return Response(
+                {'error': str(e), 'detail': 'Failed to create invoice'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        """Update invoice with recalculation"""
+        try:
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+            data = request.data.copy()
+            
+            # Recalculate net amount if amounts changed
+            if 'invoice_amount' in data or 'penalty_amount' in data:
+                invoice_amount = float(data.get('invoice_amount', instance.invoice_amount))
+                penalty_amount = float(data.get('penalty_amount', instance.penalty_amount))
+                data['net_amount'] = str(invoice_amount - penalty_amount)
+            
+            serializer = self.get_serializer(instance, data=data, partial=partial)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            
+            return Response(serializer.data)
+            
+        except Exception as e:
+            logger.error(f"Error updating invoice: {e}")
+            logger.error(traceback.format_exc())
+            return Response(
+                {'error': str(e), 'detail': 'Failed to update invoice'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def _create_invoice_pdf(self, invoice):
+        """
+        Create a professional invoice PDF using ReportLab
+        """
+        try:
+            logger.info(f"Creating PDF for invoice {invoice.invoice_number}")
+            
+            # Get related data
+            vendor = invoice.vendor
+            project = invoice.project
+            
+            # Get penalties
+            penalties = Penalty.objects.filter(
+                project=project,
+                penalty_status='Issued'
+            ).select_related('penalty_rule')
+            
+            # Create temporary file
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+            temp_path = temp_file.name
+            temp_file.close()
+            
+            # Create PDF document
+            doc = SimpleDocTemplate(
+                temp_path,
+                pagesize=letter,
+                rightMargin=0.75*inch,
+                leftMargin=0.75*inch,
+                topMargin=0.75*inch,
+                bottomMargin=0.75*inch
+            )
+            
+            # Container for the 'Flowable' objects
+            elements = []
+            
+            # Define styles
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=24,
+                textColor=colors.HexColor('#1976d2'),
+                spaceAfter=30,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            
+            heading_style = ParagraphStyle(
+                'CustomHeading',
+                parent=styles['Heading2'],
+                fontSize=14,
+                textColor=colors.HexColor('#1976d2'),
+                spaceAfter=12,
+                spaceBefore=12,
+                fontName='Helvetica-Bold'
+            )
+            
+            normal_style = styles['Normal']
+            
+            # Title
+            title = Paragraph("INVOICE", title_style)
+            elements.append(title)
+            elements.append(Spacer(1, 0.2*inch))
+            
+            # Invoice details table
+            invoice_info = [
+                ['Invoice Number:', invoice.invoice_number],
+                ['Invoice Date:', invoice.invoice_date.strftime('%B %d, %Y')],
+                ['Due Date:', invoice.due_date.strftime('%B %d, %Y')],
+                ['Status:', invoice.payment_status]
+            ]
+            
+            invoice_table = Table(invoice_info, colWidths=[2*inch, 3*inch])
+            invoice_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#555555')),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            elements.append(invoice_table)
+            elements.append(Spacer(1, 0.3*inch))
+            
+            # Vendor information
+            elements.append(Paragraph("Bill To:", heading_style))
+            vendor_info = f"""
+            <b>{vendor.vendor_name}</b><br/>
+            {vendor.company_name or ''}<br/>
+            {vendor.address or ''}<br/>
+            Tax ID: {vendor.tax_id or 'N/A'}<br/>
+            Contact: {vendor.email or 'N/A'}
+            """
+            elements.append(Paragraph(vendor_info, normal_style))
+            elements.append(Spacer(1, 0.2*inch))
+            
+            # Project information
+            elements.append(Paragraph("Project Details:", heading_style))
+            project_info = f"""
+            <b>Project Code:</b> {project.project_code}<br/>
+            <b>Project Name:</b> {project.project_name}
+            """
+            elements.append(Paragraph(project_info, normal_style))
+            elements.append(Spacer(1, 0.3*inch))
+            
+            # Invoice items table
+            elements.append(Paragraph("Invoice Items", heading_style))
+            
+            items_data = [
+                ['Description', 'Quantity', 'Unit Price', 'Amount'],
+                ['Project Contract Value', '1', f'₱{float(invoice.invoice_amount):,.2f}', 
+                 f'₱{float(invoice.invoice_amount):,.2f}']
+            ]
+            
+            items_table = Table(items_data, colWidths=[3*inch, 1*inch, 1.5*inch, 1.5*inch])
+            items_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1976d2')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 11),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 10),
+                ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
+                ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ]))
+            elements.append(items_table)
+            elements.append(Spacer(1, 0.2*inch))
+            
+            # Penalties if any
+            if penalties.exists():
+                elements.append(Paragraph("Applied Penalties", heading_style))
+                
+                penalty_data = [['Penalty Description', 'Amount']]
+                for penalty in penalties:
+                    penalty_data.append([
+                        penalty.penalty_rule.rule_name,
+                        f'₱{float(penalty.penalty_amount):,.2f}'
+                    ])
+                
+                penalty_table = Table(penalty_data, colWidths=[5*inch, 2*inch])
+                penalty_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#d32f2f')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 11),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#ffebee')),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 10),
+                ]))
+                elements.append(penalty_table)
+                elements.append(Spacer(1, 0.2*inch))
+            
+            # Totals
+            totals_data = [
+                ['Subtotal:', f'₱{float(invoice.invoice_amount):,.2f}'],
+                ['Penalties:', f'- ₱{float(invoice.penalty_amount):,.2f}'],
+                ['', ''],
+                ['Net Amount:', f'₱{float(invoice.net_amount):,.2f}']
+            ]
+            
+            totals_table = Table(totals_data, colWidths=[5.5*inch, 1.5*inch])
+            totals_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+                ('FONTNAME', (0, 0), (0, 2), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 3), (0, 3), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 3), (-1, 3), 14),
+                ('TEXTCOLOR', (1, 1), (1, 1), colors.HexColor('#d32f2f')),
+                ('LINEABOVE', (0, 2), (-1, 2), 1, colors.black),
+                ('LINEABOVE', (0, 3), (-1, 3), 2, colors.black),
+                ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+                ('FONTSIZE', (1, 0), (1, 2), 10),
+            ]))
+            elements.append(totals_table)
+            elements.append(Spacer(1, 0.3*inch))
+            
+            # Payment terms
+            elements.append(Paragraph("Payment Terms", heading_style))
+            payment_info = f"""
+            <b>Payment Status:</b> {invoice.payment_status}<br/>
+            <b>Due Date:</b> {invoice.due_date.strftime('%B %d, %Y')}
+            """
+            elements.append(Paragraph(payment_info, normal_style))
+            
+            # Notes
+            if invoice.notes:
+                elements.append(Spacer(1, 0.2*inch))
+                elements.append(Paragraph("Notes", heading_style))
+                elements.append(Paragraph(invoice.notes, normal_style))
+            
+            elements.append(Spacer(1, 0.4*inch))
+            
+            # Footer
+            footer_style = ParagraphStyle(
+                'Footer',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#666666'),
+                alignment=TA_CENTER,
+                fontName='Helvetica-Oblique'
+            )
+            elements.append(Paragraph("Thank you for your business!", footer_style))
+            
+            # Build PDF
+            doc.build(elements)
+            logger.info(f"PDF created successfully at {temp_path}")
+            
+            return temp_path
+            
+        except Exception as e:
+            logger.error(f"Error in _create_invoice_pdf: {e}")
+            logger.error(traceback.format_exc())
+            raise Exception(f'PDF creation failed: {str(e)}')
+    
+    def _create_receipt_pdf(self, invoice):
+        """
+        Create a professional receipt PDF
+        """
+        try:
+            logger.info(f"Creating receipt PDF for invoice {invoice.invoice_number}")
+            
+            vendor = invoice.vendor
+            
+            # Create temporary file
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+            temp_path = temp_file.name
+            temp_file.close()
+            
+            # Create PDF document
+            doc = SimpleDocTemplate(
+                temp_path,
+                pagesize=letter,
+                rightMargin=inch,
+                leftMargin=inch,
+                topMargin=inch,
+                bottomMargin=inch
+            )
+            
+            elements = []
+            styles = getSampleStyleSheet()
+            
+            # Title
+            title_style = ParagraphStyle(
+                'ReceiptTitle',
+                parent=styles['Heading1'],
+                fontSize=28,
+                textColor=colors.HexColor('#2e7d32'),
+                spaceAfter=30,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            
+            elements.append(Paragraph("PAYMENT RECEIPT", title_style))
+            elements.append(Spacer(1, 0.3*inch))
+            
+            # Receipt box
+            receipt_style = ParagraphStyle(
+                'ReceiptInfo',
+                parent=styles['Normal'],
+                fontSize=12,
+                alignment=TA_CENTER,
+                spaceAfter=6
+            )
+            
+            receipt_number = f"REC-{invoice.invoice_number}"
+            elements.append(Paragraph(f"<b>Receipt Number:</b> {receipt_number}", receipt_style))
+            elements.append(Spacer(1, 0.4*inch))
+            
+            # Receipt details
+            normal_style = ParagraphStyle(
+                'ReceiptNormal',
+                parent=styles['Normal'],
+                fontSize=12,
+                spaceAfter=10,
+                leading=18
+            )
+            
+            receipt_info = f"""
+            <b>Received from:</b> {vendor.vendor_name}<br/>
+            <b>Company:</b> {vendor.company_name or 'N/A'}<br/>
+            <br/>
+            <b>Amount Received:</b> <font size="16" color="#2e7d32">₱{float(invoice.net_amount):,.2f}</font><br/>
+            <br/>
+            <b>Payment Date:</b> {invoice.payment_date.strftime('%B %d, %Y') if invoice.payment_date else 'N/A'}<br/>
+            <b>Payment Reference:</b> {invoice.payment_reference or 'N/A'}<br/>
+            <b>Invoice Number:</b> {invoice.invoice_number}<br/>
+            """
+            
+            elements.append(Paragraph(receipt_info, normal_style))
+            elements.append(Spacer(1, 0.5*inch))
+            
+            # Signature box
+            sig_table = Table([
+                ['_' * 40],
+                ['Authorized Signature']
+            ], colWidths=[4*inch])
+            sig_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 1), (0, 1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (0, 1), 10),
+                ('TOPPADDING', (0, 1), (0, 1), 10),
+            ]))
+            elements.append(sig_table)
+            
+            elements.append(Spacer(1, 0.5*inch))
+            
+            # Footer
+            footer_style = ParagraphStyle(
+                'ReceiptFooter',
+                parent=styles['Normal'],
+                fontSize=11,
+                textColor=colors.HexColor('#2e7d32'),
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            elements.append(Paragraph("Thank you for your payment!", footer_style))
+            
+            # Build PDF
+            doc.build(elements)
+            logger.info(f"Receipt PDF created successfully at {temp_path}")
+            
+            return temp_path
+            
+        except Exception as e:
+            logger.error(f"Error in _create_receipt_pdf: {e}")
+            logger.error(traceback.format_exc())
+            raise Exception(f'Receipt PDF creation failed: {str(e)}')
+    
     @action(detail=True, methods=['post'])
-    def mark_paid(self, request, pk=None):
-        """Mark invoice as paid"""
-        invoice = self.get_object()
-        invoice.payment_status = 'Paid'
-        invoice.payment_date = date.today()
-        invoice.save()
-        return Response({'status': 'invoice marked as paid'})
+    def generate_document(self, request, pk=None):
+        """
+        Generate invoice document in PDF format
+        """
+        logger.info(f"=== generate_document called for invoice {pk} ===")
+        
+        try:
+            # Get invoice
+            invoice = self.get_object()
+            logger.info(f"Invoice found: {invoice.invoice_number}")
+            
+            # Create PDF
+            logger.info("Creating PDF document")
+            pdf_path = self._create_invoice_pdf(invoice)
+            logger.info("PDF created successfully")
+            
+            # Read file content
+            with open(pdf_path, 'rb') as f:
+                file_content = f.read()
+            
+            file_size = len(file_content)
+            logger.info(f"PDF size: {file_size} bytes")
+            
+            # Clean up temp file
+            try:
+                os.unlink(pdf_path)
+                logger.info("Temp file cleaned up")
+            except Exception as e:
+                logger.warning(f"Could not delete temp file: {e}")
+            
+            # Create response
+            response = HttpResponse(
+                file_content,
+                content_type='application/pdf'
+            )
+            response['Content-Disposition'] = f'attachment; filename="Invoice_{invoice.invoice_number}.pdf"'
+            response['Content-Length'] = file_size
+            
+            logger.info("=== generate_document completed successfully ===")
+            return response
+            
+        except Invoice.DoesNotExist:
+            logger.error(f"Invoice {pk} not found")
+            return Response(
+                {'error': f'Invoice with ID {pk} not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error in generate_document: {e}")
+            logger.error(traceback.format_exc())
+            return Response(
+                {
+                    'error': 'PDF generation failed',
+                    'detail': str(e),
+                    'type': type(e).__name__
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def generate_receipt(self, request, pk=None):
+        """Generate payment receipt in PDF format"""
+        logger.info(f"=== generate_receipt called for invoice {pk} ===")
+        
+        try:
+            invoice = self.get_object()
+            
+            if invoice.payment_status != 'Paid':
+                return Response(
+                    {'error': 'Cannot generate receipt for unpaid invoice'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Create receipt PDF
+            pdf_path = self._create_receipt_pdf(invoice)
+            
+            # Read file content
+            with open(pdf_path, 'rb') as f:
+                file_content = f.read()
+            
+            # Clean up
+            os.unlink(pdf_path)
+            
+            # Create response
+            response = HttpResponse(
+                file_content,
+                content_type='application/pdf'
+            )
+            response['Content-Disposition'] = f'attachment; filename="Receipt_{invoice.invoice_number}.pdf"'
+            
+            logger.info("=== generate_receipt completed successfully ===")
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error in generate_receipt: {e}")
+            logger.error(traceback.format_exc())
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def send_email(self, request, pk=None):
+        """Send invoice via email with PDF attachment"""
+        logger.info(f"=== send_email called for invoice {pk} ===")
+        
+        try:
+            invoice = self.get_object()
+            vendor = invoice.vendor
+            
+            if not vendor.email:
+                return Response(
+                    {'error': 'Vendor email not found'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Generate PDF
+            pdf_path = self._create_invoice_pdf(invoice)
+            
+            # Create email
+            subject = f'Invoice {invoice.invoice_number} - {invoice.project.project_name}'
+            
+            message = f"""
+Dear {vendor.vendor_name},
 
+Please find attached invoice {invoice.invoice_number} for project {invoice.project.project_name}.
 
+Invoice Details:
+- Invoice Number: {invoice.invoice_number}
+- Invoice Date: {invoice.invoice_date.strftime('%B %d, %Y')}
+- Due Date: {invoice.due_date.strftime('%B %d, %Y')}
+- Invoice Amount: ₱{float(invoice.invoice_amount):,.2f}
+- Penalty Amount: ₱{float(invoice.penalty_amount):,.2f}
+- Net Amount Due: ₱{float(invoice.net_amount):,.2f}
+
+Please process payment by the due date.
+
+Thank you for your business.
+
+Best regards,
+Billing Department
+            """
+            
+            email = EmailMessage(
+                subject=subject,
+                body=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[vendor.email],
+            )
+            
+            # Attach PDF
+            with open(pdf_path, 'rb') as f:
+                email.attach(
+                    f'Invoice_{invoice.invoice_number}.pdf',
+                    f.read(),
+                    'application/pdf'
+                )
+            
+            # Send email
+            email.send()
+            
+            # Clean up
+            os.unlink(pdf_path)
+            
+            logger.info(f"Email sent successfully to: {vendor.email}")
+            
+            return Response({
+                'message': f'Invoice sent successfully to {vendor.email}',
+                'recipient': vendor.email
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in send_email: {e}")
+            logger.error(traceback.format_exc())
+            return Response(
+                {
+                    'error': 'Failed to send email',
+                    'detail': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Approve invoice"""
+        try:
+            invoice = self.get_object()
+            
+            if hasattr(request.user, 'user_id'):
+                invoice.approved_by_id = request.user.user_id
+                invoice.approval_date = timezone.now()
+                invoice.save()
+            
+            serializer = self.get_serializer(invoice)
+            return Response(serializer.data)
+            
+        except Exception as e:
+            logger.error(f"Error in approve: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """Get invoice statistics"""
+        try:
+            from django.db.models import Sum, Count, Q
+            
+            stats = {
+                'total_invoices': Invoice.objects.count(),
+                'total_amount': float(Invoice.objects.aggregate(Sum('invoice_amount'))['invoice_amount__sum'] or 0),
+                'total_penalties': float(Invoice.objects.aggregate(Sum('penalty_amount'))['penalty_amount__sum'] or 0),
+                'total_net': float(Invoice.objects.aggregate(Sum('net_amount'))['net_amount__sum'] or 0),
+                'by_status': {
+                    'unpaid': Invoice.objects.filter(payment_status='Unpaid').count(),
+                    'partially_paid': Invoice.objects.filter(payment_status='Partially Paid').count(),
+                    'paid': Invoice.objects.filter(payment_status='Paid').count(),
+                    'overdue': Invoice.objects.filter(payment_status='Overdue').count(),
+                },
+                'total_paid': float(Invoice.objects.filter(payment_status='Paid').aggregate(Sum('net_amount'))['net_amount__sum'] or 0),
+                'total_pending': float(Invoice.objects.filter(
+                    Q(payment_status='Unpaid') | Q(payment_status='Partially Paid')
+                ).aggregate(Sum('net_amount'))['net_amount__sum'] or 0),
+            }
+            
+            return Response(stats)
+            
+        except Exception as e:
+            logger.error(f"Error in statistics: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
+            
+            
 class PaymentViewSet(viewsets.ModelViewSet):
-    queryset = Payment.objects.select_related('invoice', 'processed_by').all()
+    """
+    ViewSet for Payment tracking
+    """
+    queryset = Payment.objects.all().select_related('invoice', 'processed_by').order_by('-payment_date')
     serializer_class = PaymentSerializer
-    permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['invoice', 'payment_method', 'processed_by']
-    ordering_fields = ['payment_date', 'payment_amount']
+    permission_classes = [IsAuthenticated]
+    
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        """Create payment and update invoice status"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        payment = serializer.save(processed_by=request.user)
+        invoice = payment.invoice
+        
+        # Calculate total payments
+        total_paid = Payment.objects.filter(invoice=invoice).aggregate(
+            Sum('payment_amount')
+        )['payment_amount__sum'] or 0
+        
+        # Update invoice status
+        net_amount = float(invoice.net_amount)
+        if total_paid >= net_amount:
+            invoice.payment_status = 'Paid'
+            invoice.payment_date = payment.payment_date
+        elif total_paid > 0:
+            invoice.payment_status = 'Partially Paid'
+        
+        invoice.save()
+        
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 # ============================================
@@ -7012,3 +8068,1280 @@ def sla_post_save(sender, instance, created, **kwargs):
     # Notify when SLA is breached
     if instance.is_breached and instance.status == 'Breached':
         email_service.notify_sla_breach(instance)
+        
+        
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from django.db.models import Q, Count
+from django.utils import timezone
+from datetime import date, timedelta
+from .models import (
+    InspectionFlag,
+    InspectionChecklistItem,
+    DefectReport,
+    DefectCorrectionHistory,
+    QIInspection
+)
+from .serializers import (
+    InspectionFlagSerializer,
+    InspectionChecklistItemSerializer,
+    DefectReportSerializer,
+    DefectReportCreateSerializer,
+    DefectCorrectionHistorySerializer,
+    AIDefectSuggestionSerializer
+)
+
+
+# ==================== INSPECTION CHECKLIST VIEWSET ====================
+class InspectionChecklistItemViewSet(viewsets.ModelViewSet):
+    """Manage inspection checklist items"""
+    queryset = InspectionChecklistItem.objects.all()
+    serializer_class = InspectionChecklistItemSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        inspection_id = self.request.query_params.get('inspection')
+        status_filter = self.request.query_params.get('status')
+        
+        if inspection_id:
+            queryset = queryset.filter(inspection_id=inspection_id)
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        return queryset
+    
+    @action(detail=False, methods=['post'])
+    def bulk_update(self, request):
+        """Bulk update checklist items (for QI mobile app)"""
+        items_data = request.data.get('items', [])
+        
+        updated = []
+        for item_data in items_data:
+            try:
+                item = InspectionChecklistItem.objects.get(id=item_data['id'])
+                item.status = item_data.get('status', item.status)
+                item.notes = item_data.get('notes', item.notes)
+                item.photos = item_data.get('photos', item.photos)
+                item.checked_at = timezone.now()
+                item.checked_by = request.user
+                item.save()
+                updated.append(item.id)
+            except InspectionChecklistItem.DoesNotExist:
+                continue
+        
+        return Response({
+            'updated_count': len(updated),
+            'updated_ids': updated
+        })
+
+
+# ==================== INSPECTION FLAG VIEWSET ====================
+class InspectionFlagViewSet(viewsets.ModelViewSet):
+    """Manage inspection flags (system-generated alerts)"""
+    queryset = InspectionFlag.objects.all()
+    serializer_class = InspectionFlagSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        status_filter = self.request.query_params.get('status')
+        inspection_id = self.request.query_params.get('inspection')
+        qi_id = self.request.query_params.get('qi')
+        
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if inspection_id:
+            queryset = queryset.filter(inspection_id=inspection_id)
+        if qi_id:
+            queryset = queryset.filter(inspection__assigned_qi_id=qi_id)
+        
+        return queryset.select_related('inspection', 'reviewed_by')
+    
+    @action(detail=False, methods=['get'])
+    def pending_review(self, request):
+        """Get all flags pending QI review"""
+        qi_id = request.query_params.get('qi_id')
+        
+        flags = self.queryset.filter(
+            status='PENDING_QI_REVIEW',
+            requires_action=True
+        )
+        
+        if qi_id:
+            flags = flags.filter(inspection__assigned_qi_id=qi_id)
+        
+        serializer = self.get_serializer(flags, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def generate_ai_suggestions(self, request, pk=None):
+        """Generate AI suggestions for defect grouping"""
+        flag = self.get_object()
+        
+        # Get failed items
+        failed_items = InspectionChecklistItem.objects.filter(
+            inspection=flag.inspection,
+            status='Fail'
+        )
+        
+        # AI logic to group and suggest defects
+        suggestions = self._generate_defect_suggestions(failed_items)
+        
+        # Save suggestions to flag
+        flag.ai_suggestions = {'suggestions': suggestions}
+        flag.save()
+        
+        return Response({
+            'suggestions': suggestions,
+            'total_suggestions': len(suggestions)
+        })
+    
+    def _generate_defect_suggestions(self, failed_items):
+        """
+        AI/Rule-based logic to group failed items into suggested defects
+        This is simplified - in production, use ML models
+        """
+        suggestions = []
+        
+        # Group by category
+        categories = {}
+        for item in failed_items:
+            cat = item.item_category or 'General'
+            if cat not in categories:
+                categories[cat] = []
+            categories[cat].append(item)
+        
+        # Create suggestions for each category
+        for category, items in categories.items():
+            item_names = [item.item_name for item in items]
+            
+            # Determine severity based on keywords
+            severity = 'MINOR'
+            critical_keywords = ['safety', 'structural', 'electrical', 'fire']
+            major_keywords = ['code', 'violation', 'non-compliance']
+            
+            combined_text = ' '.join(item_names).lower()
+            if any(keyword in combined_text for keyword in critical_keywords):
+                severity = 'CRITICAL'
+            elif any(keyword in combined_text for keyword in major_keywords):
+                severity = 'MAJOR'
+            
+            suggestions.append({
+                'suggested_defect_type': f"{category} Non-Compliance",
+                'suggested_severity': severity,
+                'suggested_description': f"Multiple {category.lower()} issues found: {', '.join(item_names[:3])}{'...' if len(item_names) > 3 else ''}",
+                'related_item_ids': [item.id for item in items],
+                'confidence_score': 0.85 if len(items) > 2 else 0.65,
+                'reasoning': f"Grouped {len(items)} related failures in {category} category"
+            })
+        
+        return suggestions
+    
+    @action(detail=True, methods=['patch'])
+    def dismiss(self, request, pk=None):
+        """QI dismisses flag without creating defects"""
+        flag = self.get_object()
+        
+        reason = request.data.get('reason', '')
+        
+        flag.status = 'DISMISSED'
+        flag.reviewed_at = timezone.now()
+        flag.reviewed_by = request.user
+        flag.ai_suggestions['dismissal_reason'] = reason
+        flag.save()
+        
+        return Response({'status': 'dismissed'})
+
+
+# ==================== DEFECT REPORT VIEWSET ====================
+class DefectReportViewSet(viewsets.ModelViewSet):
+    """Manage formal defect reports"""
+    queryset = DefectReport.objects.all()
+    permission_classes = [IsAuthenticated]
+    search_fields = ['created_by']
+    filterset_fields = ['created_by']
+    
+    @action(detail=False, methods=['post'])
+    def finalize_from_flag(self, request):
+        """
+        QI finalizes defect reports from inspection flag
+        This is the HYBRID approach - QI reviews AI suggestions and creates formal defects
+        """
+        flag_id = request.data.get('flag_id')
+        defects_data = request.data.get('defects', [])
+        qi_signature = request.data.get('qi_signature')
+        
+        if not qi_signature:
+            return Response(
+                {'error': 'QI signature required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            flag = InspectionFlag.objects.get(id=flag_id)
+        except InspectionFlag.DoesNotExist:
+            return Response(
+                {'error': 'Flag not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        created_defects = []
+        
+        for defect_data in defects_data:
+            # Calculate due date (7 days default)
+            due_date = date.today() + timedelta(days=7)
+            if defect_data.get('severity') == 'CRITICAL':
+                due_date = date.today() + timedelta(days=3)
+            
+            defect = DefectReport.objects.create(
+                inspection=flag.inspection,
+                project=flag.inspection.project,
+                defect_type=defect_data['defect_type'],
+                defect_category=defect_data.get('defect_category', ''),
+                severity=defect_data['severity'],
+                description=defect_data['description'],
+                related_checklist_items=defect_data.get('related_checklist_items', []),
+                photos=defect_data.get('photos', []),
+                location_gps=defect_data.get('location_gps', ''),
+                qi_notes=defect_data.get('qi_notes', ''),
+                qi_signature=qi_signature,
+                created_by=request.user,
+                correction_due_date=due_date,
+                correction_status='OPEN'
+            )
+            created_defects.append(defect)
+            
+            # 🔥 ADD THIS SECTION HERE - Audit trail for AI modifications 🔥
+            
+            # Check if this was an AI-generated suggestion and log any modifications
+            if defect_data.get('is_ai_generated'):
+                # Find the original AI suggestion that matches this defect
+                original_suggestion = None
+                if flag.ai_suggestions and 'suggestions' in flag.ai_suggestions:
+                    for suggestion in flag.ai_suggestions['suggestions']:
+                        # Match by related checklist items
+                        if set(suggestion.get('related_item_ids', [])) == set(defect.related_checklist_items):
+                            original_suggestion = suggestion
+                            break
+                
+                if original_suggestion:
+                    changes = []
+                    
+                    # Check what the QI changed from AI suggestions
+                    if original_suggestion.get('suggested_defect_type') != defect.defect_type:
+                        changes.append(
+                            f"Type changed from '{original_suggestion.get('suggested_defect_type')}' to '{defect.defect_type}'"
+                        )
+                    
+                    if original_suggestion.get('suggested_severity') != defect.severity:
+                        changes.append(
+                            f"Severity changed from {original_suggestion.get('suggested_severity')} to {defect.severity}"
+                        )
+                    
+                    if original_suggestion.get('suggested_description') != defect.description:
+                        changes.append("Description modified by QI")
+                    
+                    # Create history entry with changes
+                    if changes:
+                        DefectCorrectionHistory.objects.create(
+                            defect=defect,
+                            action='SUBMITTED',
+                            action_by=request.user,
+                            notes=f"🤖 AI suggestion reviewed and modified. Changes: {'; '.join(changes)}"
+                        )
+                    else:
+                        # QI accepted AI suggestion without changes
+                        DefectCorrectionHistory.objects.create(
+                            defect=defect,
+                            action='SUBMITTED',
+                            action_by=request.user,
+                            notes=f"🤖 AI suggestion accepted without modifications (Confidence: {original_suggestion.get('confidence_score', 0)*100:.0f}%)"
+                        )
+                else:
+                    # Marked as AI-generated but no matching suggestion found
+                    DefectCorrectionHistory.objects.create(
+                        defect=defect,
+                        action='SUBMITTED',
+                        action_by=request.user,
+                        notes="🤖 Based on AI suggestions but significantly modified by QI"
+                    )
+            else:
+                # Manually created defect (not from AI suggestion)
+                DefectCorrectionHistory.objects.create(
+                    defect=defect,
+                    action='SUBMITTED',
+                    action_by=request.user,
+                    notes='✍️ Manually created defect by QI (not from AI suggestions)'
+                )
+            
+            # 🔥 END OF AUDIT TRAIL SECTION 🔥
+        
+        # Mark flag as resolved
+        flag.status = 'RESOLVED'
+        flag.reviewed_at = timezone.now()
+        flag.reviewed_by = request.user
+        flag.save()
+        
+        # Send notifications to vendor
+        from .email_notification_service import email_service
+        for defect in created_defects:
+            try:
+                email_service.notify_defect_created(defect)
+            except Exception as e:
+                print(f"Failed to send notification: {e}")
+        
+        serializer = DefectReportSerializer(created_defects, many=True)
+        return Response({
+            'created_count': len(created_defects),
+            'defects': serializer.data
+        }, status=status.HTTP_201_CREATED)
+    
+    def get_serializer_class(self):
+        if self.action in ['create', 'finalize_from_flag']:
+            return DefectReportCreateSerializer
+        return DefectReportSerializer
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        status_filter = self.request.query_params.get('correction_status')
+        severity = self.request.query_params.get('severity')
+        project_id = self.request.query_params.get('project')
+        vendor_id = self.request.query_params.get('vendor')
+        qi_id = self.request.query_params.get('qi')
+        
+        if status_filter:
+            queryset = queryset.filter(correction_status=status_filter)
+        if severity:
+            queryset = queryset.filter(severity=severity)
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+        if vendor_id:
+            queryset = queryset.filter(project__vendor_id=vendor_id)
+        if qi_id:
+            queryset = queryset.filter(created_by_id=qi_id)
+        
+        return queryset.select_related(
+            'inspection',
+            'project',
+            'created_by',
+            'reviewed_by'
+        ).prefetch_related('correction_history')
+    
+    @action(detail=False, methods=['post'])
+    def finalize_from_flag(self, request):
+        """
+        QI finalizes defect reports from inspection flag
+        This is the HYBRID approach - QI reviews AI suggestions and creates formal defects
+        """
+        flag_id = request.data.get('flag_id')
+        defects_data = request.data.get('defects', [])
+        qi_signature = request.data.get('qi_signature')
+        
+        if not qi_signature:
+            return Response(
+                {'error': 'QI signature required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            flag = InspectionFlag.objects.get(id=flag_id)
+        except InspectionFlag.DoesNotExist:
+            return Response(
+                {'error': 'Flag not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        created_defects = []
+        
+        for defect_data in defects_data:
+            # Calculate due date (7 days default)
+            due_date = date.today() + timedelta(days=7)
+            if defect_data.get('severity') == 'CRITICAL':
+                due_date = date.today() + timedelta(days=3)
+            
+            defect = DefectReport.objects.create(
+                inspection=flag.inspection,
+                project=flag.inspection.project,
+                defect_type=defect_data['defect_type'],
+                defect_category=defect_data.get('defect_category', ''),
+                severity=defect_data['severity'],
+                description=defect_data['description'],
+                related_checklist_items=defect_data.get('related_checklist_items', []),
+                photos=defect_data.get('photos', []),
+                location_gps=defect_data.get('location_gps', ''),
+                qi_notes=defect_data.get('qi_notes', ''),
+                qi_signature=qi_signature,
+                created_by=request.user,
+                correction_due_date=due_date,
+                correction_status='OPEN'
+            )
+            created_defects.append(defect)
+            
+            # Create history entry
+            DefectCorrectionHistory.objects.create(
+                defect=defect,
+                action='SUBMITTED',
+                action_by=request.user,
+                notes='Initial defect report created'
+            )
+        
+        # Mark flag as resolved
+        flag.status = 'RESOLVED'
+        flag.reviewed_at = timezone.now()
+        flag.reviewed_by = request.user
+        flag.save()
+        
+        # Send notifications to vendor
+        from .email_notification_service import email_service
+        for defect in created_defects:
+            try:
+                email_service.notify_defect_created(defect)
+            except Exception as e:
+                print(f"Failed to send notification: {e}")
+        
+        serializer = DefectReportSerializer(created_defects, many=True)
+        return Response({
+            'created_count': len(created_defects),
+            'defects': serializer.data
+        }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['post'], url_path='submit_corrections')
+    def submit_corrections(self, request, pk=None):
+        """
+        Handle vendor correction submissions with file uploads
+        """
+        try:
+            inspection = self.get_object()
+            
+            # Check if already submitted
+            if inspection.correction_status in ['SUBMITTED', 'APPROVED']:
+                return Response({
+                    'error': 'Corrections already submitted for this inspection',
+                    'status': inspection.correction_status
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get correction notes
+            correction_notes = request.data.get('correction_notes', '')
+            
+            if not correction_notes:
+                return Response(
+                    {'error': 'Correction notes are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update inspection with correction data
+            inspection.correction_notes = correction_notes
+            inspection.correction_completed_at = timezone.now()
+            inspection.correction_status = 'SUBMITTED'
+            
+            # Handle uploaded photos
+            uploaded_files = request.FILES.getlist('corrective_photos')
+            photo_paths = []
+            
+            for idx, photo_file in enumerate(uploaded_files):
+                # Create photo record
+                correction_photo = QIInspectionCorrectionPhoto.objects.create(
+                    inspection=inspection,
+                    photo_file=photo_file,
+                    caption=f"Correction photo {idx + 1}",
+                    uploaded_by_id=request.data.get('uploaded_by')
+                )
+                
+                # Store the relative path
+                photo_paths.append(correction_photo.photo_file.url)
+            
+            # Save photo paths to JSON field
+            inspection.correction_photos = photo_paths
+            inspection.save()
+            
+            # Send notification email
+            try:
+                from .email_notification_service import email_service
+                email_service.notify_correction_submitted(inspection)
+            except Exception as e:
+                print(f"Failed to send notification: {e}")
+            
+            # Return success with photo URLs
+            return Response({
+                'status': 'success',
+                'message': 'Corrections submitted successfully',
+                'inspection_id': inspection.inspection_id,
+                'correction_status': inspection.correction_status,
+                'photo_count': len(photo_paths),
+                'photo_urls': photo_paths
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def approve_correction(self, request, pk=None):
+        """
+        Supervisor approves correction and updates project status to 7 (Approved)
+        """
+        defect = self.get_object()
+        
+        if defect.correction_status != 'SUBMITTED':
+            return Response(
+                {'error': 'No correction submitted'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        review_notes = request.data.get('review_notes', '')
+        reviewed_by = request.data.get('reviewed_by')
+        
+        if not review_notes.strip():
+            return Response(
+                {'error': 'Review notes are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Update defect status
+            defect.correction_status = 'APPROVED'
+            defect.reviewed_by_id = reviewed_by
+            defect.reviewed_at = timezone.now()
+            defect.review_notes = review_notes
+            defect.save()
+            
+            # 🔥 UPDATE PROJECT STATUS TO 7 (APPROVED)
+            if defect.project:
+                # Get the ProjectStatus object with ID 7
+                try:
+                    approved_status = ProjectStatus.objects.get(status_id=7)
+                    old_status_id = defect.project.status.status_id if defect.project.status else None
+                    
+                    # Update project status using the ForeignKey relationship
+                    defect.project.status = approved_status
+                    defect.project.save()
+                    
+                    # Log the status change
+                    ChangeLog.objects.create(
+                        table_name='projects',
+                        record_id=defect.project.project_id,
+                        change_type='UPDATE',
+                        field_name='status_id',
+                        old_value=str(old_status_id) if old_status_id else 'None',
+                        new_value='7',
+                        changed_by_id=reviewed_by,
+                        change_reason=f'Project approved after defect correction approval - Defect #{defect.defect_id}'
+                    )
+                except ProjectStatus.DoesNotExist:
+                    # If status 7 doesn't exist, log error but don't fail the approval
+                    print(f"⚠️ Warning: ProjectStatus with ID 7 not found")
+                except Exception as status_error:
+                    # Log the error but don't fail the approval
+                    print(f"⚠️ Error updating project status: {status_error}")
+            
+            # Create defect correction history
+            DefectCorrectionHistory.objects.create(
+                defect=defect,
+                action='APPROVED',
+                action_by_id=reviewed_by,
+                notes=review_notes
+            )
+            
+            # Send notification email to vendor
+            try:
+                from .email_notification_service import email_service
+                email_service.notify_correction_approved(defect)
+            except Exception as e:
+                print(f"Failed to send notification: {e}")
+            
+            # Prepare response with updated project info
+            serializer = DefectReportSerializer(defect)
+            
+            return Response({
+                'status': 'approved',
+                'message': 'Correction approved successfully. Project status updated to Approved.',
+                'defect': serializer.data,
+                'project_status_updated': True,
+                'new_project_status': 7
+            })
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+
+
+
+
+
+
+    @action(detail=True, methods=['post'])
+    def reject_correction(self, request, pk=None):
+        """
+        Supervisor rejects correction
+        Auto-escalates to Team Leader after 3 failed attempts
+        """
+        defect = self.get_object()
+        
+        if defect.correction_status != 'SUBMITTED':
+            return Response(
+                {'error': 'No correction submitted'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        review_notes = request.data.get('review_notes', '')
+        reviewed_by = request.data.get('reviewed_by')
+        
+        if not review_notes.strip():
+            return Response(
+                {'error': 'Review notes are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Increment failure count
+            defect.failure_count += 1
+            defect.correction_status = 'REJECTED'
+            defect.reviewed_by_id = reviewed_by
+            defect.reviewed_at = timezone.now()
+            defect.review_notes = review_notes
+            
+            # Create history
+            DefectCorrectionHistory.objects.create(
+                defect=defect,
+                action='REJECTED',
+                action_by_id=reviewed_by,
+                notes=review_notes
+            )
+            
+            # Check for auto-escalation (3 failures = escalate)
+            escalated = False
+            if defect.failure_count >= 3 and not defect.is_escalated:
+                defect.is_escalated = True
+                defect.escalated_at = timezone.now()
+                defect.escalation_reason = f"Automatically escalated after {defect.failure_count} failed correction attempts"
+                escalated = True
+                
+                # Notify management
+                try:
+                    from .email_notification_service import email_service
+                    email_service.notify_defect_escalation(defect)
+                except Exception as e:
+                    print(f"Failed to send escalation notification: {e}")
+            else:
+                # Notify vendor of rejection
+                try:
+                    from .email_notification_service import email_service
+                    email_service.notify_correction_rejected(defect)
+                except Exception as e:
+                    print(f"Failed to send notification: {e}")
+            
+            defect.save()
+            
+            serializer = DefectReportSerializer(defect)
+            
+            return Response({
+                'status': 'rejected',
+                'message': 'Correction rejected',
+                'defect': serializer.data,
+                'failure_count': defect.failure_count,
+                'escalated': escalated,
+                'escalation_message': f'⚠️ Defect automatically escalated to Team Leader after {defect.failure_count} failed attempts' if escalated else None
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+    @action(detail=True, methods=['post'])
+    def escalate(self, request, pk=None):
+        """
+        Manually escalate defect to Team Leader
+        """
+        defect = self.get_object()
+        
+        escalation_reason = request.data.get('escalation_reason', '')
+        escalated_by = request.data.get('escalated_by')
+        
+        if not escalation_reason.strip():
+            return Response(
+                {'error': 'Escalation reason is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if defect.is_escalated:
+            return Response(
+                {'error': 'Defect is already escalated'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            defect.is_escalated = True
+            defect.escalated_at = timezone.now()
+            defect.escalation_reason = escalation_reason
+            defect.save()
+            
+            # Create history entry
+            DefectCorrectionHistory.objects.create(
+                defect=defect,
+                action='RESUBMITTED',  # Or create a new 'ESCALATED' action type
+                action_by_id=escalated_by,
+                notes=f"Manually escalated: {escalation_reason}"
+            )
+            
+            # Send notification to management
+            try:
+                from .email_notification_service import email_service
+                email_service.notify_defect_escalation(defect)
+            except Exception as e:
+                print(f"Failed to send notification: {e}")
+            
+            serializer = DefectReportSerializer(defect)
+            
+            return Response({
+                'status': 'escalated',
+                'message': 'Defect escalated to Team Leader successfully',
+                'defect': serializer.data
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+    @action(detail=False, methods=['get'])
+    def dashboard_stats(self, request):
+        """Get defect dashboard statistics"""
+        
+        stats = {
+            'total_defects': DefectReport.objects.count(),
+            'open': DefectReport.objects.filter(correction_status='OPEN').count(),
+            'pending': DefectReport.objects.filter(correction_status='PENDING').count(),
+            'submitted': DefectReport.objects.filter(correction_status='SUBMITTED').count(),
+            'approved': DefectReport.objects.filter(correction_status='APPROVED').count(),
+            'rejected': DefectReport.objects.filter(correction_status='REJECTED').count(),
+            'escalated': DefectReport.objects.filter(is_escalated=True).count(),
+            'overdue': DefectReport.objects.filter(
+                correction_due_date__lt=date.today(),
+                correction_status__in=['OPEN', 'PENDING', 'REJECTED']
+            ).count(),
+            'by_severity': {
+                'critical': DefectReport.objects.filter(severity='CRITICAL').count(),
+                'major': DefectReport.objects.filter(severity='MAJOR').count(),
+                'minor': DefectReport.objects.filter(severity='MINOR').count(),
+            }
+        }
+        
+        return Response(stats)
+    
+    @action(detail=False, methods=['get'])
+    def my_defects(self, request):
+        """Get defects for current user (vendor)"""
+        user = request.user
+        
+        # Get vendor projects
+        from .models import Project
+        vendor_projects = Project.objects.filter(vendor__user=user)
+        
+        defects = DefectReport.objects.filter(
+            project__in=vendor_projects
+        ).exclude(correction_status='CLOSED')
+        
+        serializer = self.get_serializer(defects, many=True)
+        return Response(serializer.data)
+    
+
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from .models import QIInspectionPhoto
+from .serializers import QIInspectionPhotoSerializer
+
+class QIInspectionPhotoViewSet(viewsets.ModelViewSet):
+    queryset = QIInspectionPhoto.objects.all()
+    serializer_class = QIInspectionPhotoSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        inspection_id = self.request.query_params.get('inspection_id', None)
+        if inspection_id:
+            queryset = queryset.filter(inspection_id=inspection_id)
+        return queryset.order_by('-uploaded_at')
+    
+    
+
+
+class QIInspectionCorrectionPhotoViewSet(viewsets.ModelViewSet):
+    queryset = QIInspectionCorrectionPhoto.objects.all()
+    serializer_class = QIInspectionCorrectionPhotoSerializer
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        inspection_id = self.request.query_params.get('inspection_id')
+        if inspection_id:
+            queryset = queryset.filter(inspection_id=inspection_id)
+        return queryset.order_by('-uploaded_at')
+    
+    
+
+# FIXED VERSION OF PaymentReceiptViewSet
+# This fixes the "AnonymousUser" error when creating payment receipts
+
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from django.db import transaction, models
+from django.utils import timezone
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class PaymentReceiptViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for payment receipt management
+    - Vendors can upload receipts
+    - Supervisors can approve/reject receipts
+    
+    FIXED: Properly handles AnonymousUser when using AllowAny permission
+    """
+    queryset = PaymentReceipt.objects.all().select_related(
+        'invoice', 
+        'uploaded_by', 
+        'reviewed_by'
+    ).order_by('-uploaded_at')
+    serializer_class = PaymentReceiptSerializer
+    permission_classes = [AllowAny]  # Change to IsAuthenticated in production
+    
+    def get_queryset(self):
+        """Filter receipts based on query parameters"""
+        queryset = super().get_queryset()
+        
+        # Filter by invoice
+        invoice_id = self.request.query_params.get('invoice', None)
+        if invoice_id:
+            queryset = queryset.filter(invoice_id=invoice_id)
+        
+        # Filter by status
+        status_param = self.request.query_params.get('status', None)
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        
+        # Filter by vendor (through invoice)
+        vendor_id = self.request.query_params.get('vendor', None)
+        if vendor_id:
+            queryset = queryset.filter(invoice__vendor_id=vendor_id)
+        
+        return queryset
+    
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        """Create payment receipt - FIXED to handle AnonymousUser"""
+        try:
+            logger.info(f"Creating payment receipt: {request.data}")
+            
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            
+            # FIXED: Only set uploaded_by if user is authenticated
+            # This prevents the "AnonymousUser" error when using AllowAny
+            if hasattr(request, 'user') and request.user.is_authenticated:
+                receipt = serializer.save(uploaded_by=request.user)
+                logger.info(f"Receipt uploaded by user: {request.user.username}")
+            else:
+                # Save without uploaded_by (will be NULL in database)
+                receipt = serializer.save()
+                logger.warning("Receipt created without authenticated user")
+            
+            logger.info(f"Payment receipt {receipt.receipt_id} created successfully")
+            
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+            
+        except Exception as e:
+            logger.error(f"Error creating payment receipt: {e}")
+            return Response(
+                {
+                    'error': 'Failed to create payment receipt',
+                    'detail': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Approve payment receipt and update invoice status"""
+        try:
+            receipt = self.get_object()
+            
+            if receipt.status != 'PENDING':
+                return Response(
+                    {'error': 'Only pending receipts can be approved'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update receipt status
+            receipt.status = 'APPROVED'
+            # FIXED: Handle authenticated user check
+            if hasattr(request, 'user') and request.user.is_authenticated:
+                receipt.reviewed_by = request.user
+            receipt.reviewed_at = timezone.now()
+            receipt.review_notes = request.data.get('review_notes', '')
+            receipt.save()
+            
+            # Update invoice
+            invoice = receipt.invoice
+            
+            # Calculate total approved payments
+            total_approved = PaymentReceipt.objects.filter(
+                invoice=invoice,
+                status='APPROVED'
+            ).aggregate(
+                total=models.Sum('payment_amount')
+            )['total'] or 0
+            
+            # Update invoice status
+            net_amount = float(invoice.net_amount)
+            if total_approved >= net_amount:
+                invoice.payment_status = 'Paid'
+                invoice.payment_date = receipt.payment_date
+                invoice.payment_reference = receipt.receipt_number
+            elif total_approved > 0:
+                invoice.payment_status = 'Partially Paid'
+            
+            invoice.save()
+            
+            logger.info(f"Receipt {receipt.receipt_id} approved. Invoice {invoice.invoice_number} status: {invoice.payment_status}")
+            
+            serializer = self.get_serializer(receipt)
+            return Response({
+                'message': 'Receipt approved successfully',
+                'receipt': serializer.data,
+                'invoice_status': invoice.payment_status
+            })
+            
+        except Exception as e:
+            logger.error(f"Error approving receipt: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """Reject payment receipt"""
+        try:
+            receipt = self.get_object()
+            
+            if receipt.status != 'PENDING':
+                return Response(
+                    {'error': 'Only pending receipts can be rejected'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            review_notes = request.data.get('review_notes', '')
+            if not review_notes:
+                return Response(
+                    {'error': 'Review notes are required for rejection'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update receipt status
+            receipt.status = 'REJECTED'
+            # FIXED: Handle authenticated user check
+            if hasattr(request, 'user') and request.user.is_authenticated:
+                receipt.reviewed_by = request.user
+            receipt.reviewed_at = timezone.now()
+            receipt.review_notes = review_notes
+            receipt.save()
+            
+            logger.info(f"Receipt {receipt.receipt_id} rejected")
+            
+            serializer = self.get_serializer(receipt)
+            return Response({
+                'message': 'Receipt rejected',
+                'receipt': serializer.data
+            })
+            
+        except Exception as e:
+            logger.error(f"Error rejecting receipt: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'])
+    def pending_count(self, request):
+        """Get count of pending receipts"""
+        try:
+            count = PaymentReceipt.objects.filter(status='PENDING').count()
+            return Response({'pending_count': count})
+        except Exception as e:
+            logger.error(f"Error getting pending count: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """Get payment receipt statistics"""
+        try:
+            from django.db.models import Sum, Count
+            
+            stats = {
+                'total_receipts': PaymentReceipt.objects.count(),
+                'pending': PaymentReceipt.objects.filter(status='PENDING').count(),
+                'approved': PaymentReceipt.objects.filter(status='APPROVED').count(),
+                'rejected': PaymentReceipt.objects.filter(status='REJECTED').count(),
+                'total_amount_approved': float(
+                    PaymentReceipt.objects.filter(status='APPROVED').aggregate(
+                        Sum('payment_amount')
+                    )['payment_amount__sum'] or 0
+                ),
+                'total_amount_pending': float(
+                    PaymentReceipt.objects.filter(status='PENDING').aggregate(
+                        Sum('payment_amount')
+                    )['payment_amount__sum'] or 0
+                ),
+            }
+            
+            return Response(stats)
+            
+        except Exception as e:
+            logger.error(f"Error getting statistics: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# ============================================
+# ALTERNATIVE: Use authentication instead
+# ============================================
+
+
+class PaymentReceiptViewSetAuthenticated(viewsets.ModelViewSet):
+    """
+    ALTERNATIVE VERSION: Requires authentication
+    This is the recommended approach for production
+    """
+    queryset = PaymentReceipt.objects.all().select_related(
+        'invoice', 
+        'uploaded_by', 
+        'reviewed_by'
+    ).order_by('-uploaded_at')
+    serializer_class = PaymentReceiptSerializer
+    permission_classes = [IsAuthenticated]  # Require authentication
+    
+    def get_queryset(self):
+        """Filter receipts based on query parameters"""
+        queryset = super().get_queryset()
+        
+        # Filter by invoice
+        invoice_id = self.request.query_params.get('invoice', None)
+        if invoice_id:
+            queryset = queryset.filter(invoice_id=invoice_id)
+        
+        # Filter by status
+        status_param = self.request.query_params.get('status', None)
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        
+        # Filter by vendor (through invoice)
+        vendor_id = self.request.query_params.get('vendor', None)
+        if vendor_id:
+            queryset = queryset.filter(invoice__vendor_id=vendor_id)
+        
+        return queryset
+    
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        """Create payment receipt - user must be authenticated"""
+        try:
+            logger.info(f"Creating payment receipt by user: {request.user.username}")
+            
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            
+            # Save with authenticated user (no need to check, IsAuthenticated ensures it)
+            receipt = serializer.save(uploaded_by=request.user)
+            
+            logger.info(f"Payment receipt {receipt.receipt_id} created successfully")
+            
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+            
+        except Exception as e:
+            logger.error(f"Error creating payment receipt: {e}")
+            return Response(
+                {
+                    'error': 'Failed to create payment receipt',
+                    'detail': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Approve payment receipt and update invoice status"""
+        try:
+            receipt = self.get_object()
+            
+            if receipt.status != 'PENDING':
+                return Response(
+                    {'error': 'Only pending receipts can be approved'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update receipt status
+            receipt.status = 'APPROVED'
+            receipt.reviewed_by = request.user if hasattr(request, 'user') else None
+            receipt.reviewed_at = timezone.now()
+            receipt.review_notes = request.data.get('review_notes', '')
+            receipt.save()
+            
+            # Update invoice
+            invoice = receipt.invoice
+            
+            # Calculate total approved payments
+            total_approved = PaymentReceipt.objects.filter(
+                invoice=invoice,
+                status='APPROVED'
+            ).aggregate(
+                total=models.Sum('payment_amount')
+            )['total'] or 0
+            
+            # Update invoice status
+            net_amount = float(invoice.net_amount)
+            if total_approved >= net_amount:
+                invoice.payment_status = 'Paid'
+                invoice.payment_date = receipt.payment_date
+                invoice.payment_reference = receipt.receipt_number
+            elif total_approved > 0:
+                invoice.payment_status = 'Partially Paid'
+            
+            invoice.save()
+            
+            logger.info(f"Receipt {receipt.receipt_id} approved. Invoice {invoice.invoice_number} status: {invoice.payment_status}")
+            
+            serializer = self.get_serializer(receipt)
+            return Response({
+                'message': 'Receipt approved successfully',
+                'receipt': serializer.data,
+                'invoice_status': invoice.payment_status
+            })
+            
+        except Exception as e:
+            logger.error(f"Error approving receipt: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """Reject payment receipt"""
+        try:
+            receipt = self.get_object()
+            
+            if receipt.status != 'PENDING':
+                return Response(
+                    {'error': 'Only pending receipts can be rejected'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            review_notes = request.data.get('review_notes', '')
+            if not review_notes:
+                return Response(
+                    {'error': 'Review notes are required for rejection'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update receipt status
+            receipt.status = 'REJECTED'
+            receipt.reviewed_by = request.user if hasattr(request, 'user') else None
+            receipt.reviewed_at = timezone.now()
+            receipt.review_notes = review_notes
+            receipt.save()
+            
+            logger.info(f"Receipt {receipt.receipt_id} rejected")
+            
+            serializer = self.get_serializer(receipt)
+            return Response({
+                'message': 'Receipt rejected',
+                'receipt': serializer.data
+            })
+            
+        except Exception as e:
+            logger.error(f"Error rejecting receipt: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'])
+    def pending_count(self, request):
+        """Get count of pending receipts"""
+        try:
+            count = PaymentReceipt.objects.filter(status='PENDING').count()
+            return Response({'pending_count': count})
+        except Exception as e:
+            logger.error(f"Error getting pending count: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """Get payment receipt statistics"""
+        try:
+            from django.db.models import Sum, Count
+            
+            stats = {
+                'total_receipts': PaymentReceipt.objects.count(),
+                'pending': PaymentReceipt.objects.filter(status='PENDING').count(),
+                'approved': PaymentReceipt.objects.filter(status='APPROVED').count(),
+                'rejected': PaymentReceipt.objects.filter(status='REJECTED').count(),
+                'total_amount_approved': float(
+                    PaymentReceipt.objects.filter(status='APPROVED').aggregate(
+                        Sum('payment_amount')
+                    )['payment_amount__sum'] or 0
+                ),
+                'total_amount_pending': float(
+                    PaymentReceipt.objects.filter(status='PENDING').aggregate(
+                        Sum('payment_amount')
+                    )['payment_amount__sum'] or 0
+                ),
+            }
+            
+            return Response(stats)
+            
+        except Exception as e:
+            logger.error(f"Error getting statistics: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -8,7 +8,7 @@ function ClerkNotificationsPage() {
   return (
     <>
       <Head>
-        <title>Notifications - Clerk Portal</title>
+        <title>Prebilling - Clerk Portal</title>
       </Head>
       <Container maxWidth="lg">
         <Grid
