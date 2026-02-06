@@ -2759,6 +2759,7 @@ export function SystemAdminSidebarMenu() {
                 </Button>
               </NextLink>
             </ListItem>
+          
             <ListItem component="div">
               <NextLink href="/admin/calendar" passHref>
                 <Button
@@ -2811,6 +2812,19 @@ export function SystemAdminSidebarMenu() {
                   startIcon={<DescriptionTwoToneIcon />}
                 >
                   Work Orders
+                </Button>
+              </NextLink>
+            </ListItem>
+              <ListItem component="div">
+              <NextLink href="/admin/metrics" passHref>
+                <Button
+                  className={currentRoute === '/admin/metrics' ? 'active' : ''}
+                  disableRipple
+                  component="a"
+                  onClick={closeSidebar}
+                  startIcon={<AutoGraphIcon />}
+                >
+                  Work Order Metrics
                 </Button>
               </NextLink>
             </ListItem>
@@ -3121,62 +3135,6 @@ export function SystemAdminSidebarMenu() {
                   startIcon={<SecurityTwoToneIcon />}
                 >
                   Roles
-                </Button>
-              </NextLink>
-            </ListItem>
-
-            <ListItem component="div">
-              <NextLink href="/admin/security" passHref>
-                <Button
-                  className={currentRoute === '/admin/security' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<SecurityTwoToneIcon />}
-                >
-                  Security
-                </Button>
-              </NextLink>
-            </ListItem>
-
-            <ListItem component="div">
-              <NextLink href="/admin/sla-penalty-config" passHref>
-                <Button
-                  className={currentRoute === '/admin/sla-penalty-config' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<TimerTwoToneIcon />}
-                >
-                  SLA Penalty Config
-                </Button>
-              </NextLink>
-            </ListItem>
-
-            <ListItem component="div">
-              <NextLink href="/admin/supply-centre" passHref>
-                <Button
-                  className={currentRoute === '/admin/supply-centre' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<StoreTwoToneIcon />}
-                >
-                  Supply Centre
-                </Button>
-              </NextLink>
-            </ListItem>
-
-            <ListItem component="div">
-              <NextLink href="/admin/system-settings" passHref>
-                <Button
-                  className={currentRoute === '/admin/system-settings' ? 'active' : ''}
-                  disableRipple
-                  component="a"
-                  onClick={closeSidebar}
-                  startIcon={<SettingsTwoToneIcon />}
-                >
-                  System Settings
                 </Button>
               </NextLink>
             </ListItem>

@@ -9,12 +9,12 @@ const LogoWrapper = styled(Link)(() => ({
   width: 'fit-content',
   height: 'fit-content',
   transition: 'all 0.3s ease',
-  
+
   '&:hover': {
     textDecoration: 'none',
     transform: 'scale(1.05)',
   },
-  
+
   '&:active': {
     transform: 'scale(0.98)',
   },
@@ -26,7 +26,7 @@ const LogoImageWrapper = styled(Box)(() => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  
+
   img: {
     width: '100%',
     height: '100%',
@@ -36,8 +36,17 @@ const LogoImageWrapper = styled(Box)(() => ({
 }));
 
 function Logo() {
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();          // stop router navigation
+    window.location.reload();    // reload SAME page
+  };
+
   return (
-    <LogoWrapper href="/" aria-label="Go to homepage">
+    <LogoWrapper
+      href="#"
+      aria-label="Reload page"
+      onClick={handleClick}
+    >
       <LogoImageWrapper>
         <img src="/1200x630wa.png" alt="Nettbank Logo" />
       </LogoImageWrapper>

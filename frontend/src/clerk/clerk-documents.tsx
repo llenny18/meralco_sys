@@ -726,7 +726,7 @@ export default function ClerkDocumentValidation() {
                         border: '1px solid #e0e0e0'
                       }}>
                         <a
-                          href={`http://127.0.0.1:8000${doc.file}`}
+                          href={`${doc.file}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
@@ -747,7 +747,7 @@ export default function ClerkDocumentValidation() {
                           👁️ View
                         </a>
                         <a
-                          href={`http://127.0.0.1:8000${doc.file}`}
+                          href={`${doc.file}`}
                           download={doc.document_name || doc.file.split('/').pop()}
                           style={{
                             flex: 1,

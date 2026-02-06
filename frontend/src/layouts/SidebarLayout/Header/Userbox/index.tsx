@@ -84,6 +84,7 @@ const UserBoxDescription = styled(Typography)(
 
 function HeaderUserbox() {
   const [storedRole, setStoredRole] = useState<string | null>(null);
+  const [fullName, setFullName] = useState<string | null>(null);
   const [storedEmail, setStoredEmail] = useState<string | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
@@ -107,11 +108,12 @@ function HeaderUserbox() {
     const email = localStorage.getItem("email");
     const userData = JSON.parse(localStorage.getItem("user") || '{}');
 
-    setStoredRole(role ? `${userData.full_name}` : null);
+    setFullName(userData.full_name || null);
+    setStoredRole(userData.role_name || role);
     setStoredEmail(email);
   }, []);
   const user = {
-    name: storedEmail,
+    name: fullName || 'User',
     avatar: 'https://cdn-icons-png.flaticon.com/512/9187/9187532.png',
     jobtitle: storedRole
   };
@@ -133,9 +135,9 @@ function HeaderUserbox() {
         <Avatar variant="rounded" alt={user.name} src={user.avatar} />
         <Hidden mdDown>
           <UserBoxText>
-            <UserBoxLabel variant="body1">{user.name}</UserBoxLabel>
+            <UserBoxLabel variant="body1">Name: {user.name}</UserBoxLabel>
             <UserBoxDescription variant="body2">
-              {user.jobtitle}
+             Role: {user.jobtitle}
             </UserBoxDescription>
           </UserBoxText>
         </Hidden>

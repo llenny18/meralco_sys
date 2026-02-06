@@ -1021,7 +1021,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['vendor', 'sector', 'status', 'priority', 'risk_score', 
-                        'is_delayed', 'assigned_engineer', 'assigned_qi']
+                        'is_delayed', 'assigned_engineer', 'assigned_qi', 'project_id']
     search_fields = ['project_code', 'project_name', 'project_location']
     ordering_fields = ['project_code', 'start_date', 'completion_date', 'created_at']
 
@@ -2801,30 +2801,32 @@ from django.http import HttpResponse
 
 class WorkOrderViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Work Order management
+    Complete ViewSet for Work Order management
     
-    Provides CRUD operations and various custom endpoints for:
+    Features:
+    - Full CRUD operations
+    - Excel import/export with improved column mapping
     - Dashboard statistics
-    - Filtering and searching
-    - Excel export/import
     - Timeline tracking
     - Performance metrics
+    - Filtering and search
     """
     queryset = WorkOrder.objects.all()
     serializer_class = WorkOrderSerializer
+    permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+
     
-    # Filtering options
+    # Enhanced filtering options
     filterset_fields = {
         'status': ['exact', 'in'],
-        'project_id': ['exact'],
         'vendor_id': ['exact'],
         'supervisor_full_name': ['exact', 'in'],
         'vip': ['exact'],
         'municipality': ['exact', 'in'],
         'assigned': ['exact', 'in'],
-        'ccti_exclusion': ['exact'],
-        'apt_exclusion': ['exact'],
+        'for_ccti_exclusion': ['exact'],
+        'for_apt_exclusion': ['exact'],
         'actual_field_status': ['exact', 'in'],
         'date_received_jacket_ps': ['gte', 'lte', 'exact'],
         'date_comp': ['gte', 'lte', 'exact'],
@@ -2833,21 +2835,21 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     
     # Search functionality
     search_fields = [
-        'project_id', 
-        'vendor_id', 
-        'wo_no', 
-        'description', 
-        'location', 
+        'wo_no',
+        'description',
+        'location',
         'municipality',
         'area_of_responsibility',
         'assigned',
-        'supervisor_full_name'
+        'supervisor_full_name',
+        'vendor_remarks',
+        'c1_remarks'
     ]
     
     # Ordering options
     ordering_fields = [
-        'date_received_jacket_ps', 
-        'date_comp', 
+        'date_received_jacket_ps',
+        'date_comp',
         'days_comp',
         'created_at',
         'wo_no',
@@ -2866,28 +2868,96 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         return WorkOrderSerializer
     
     def get_queryset(self):
-        """
-        Optionally restricts the returned work orders,
-        by filtering against query parameters in the URL.
-        """
-        queryset = WorkOrder.objects.all()
+        """Enhanced queryset with additional filters"""
+        queryset = super().get_queryset()
+        params = self.request.query_params
+
+        # ----------------------
+        # Project ID filter (multiple allowed) - CUSTOM HANDLING
+        # ----------------------
+        project_ids_list = params.getlist('project_id')
+        print(f"🔢 Raw project_ids_list: {project_ids_list}")
         
-        # Filter by date range if provided
-        start_date = self.request.query_params.get('start_date', None)
-        end_date = self.request.query_params.get('end_date', None)
+        project_ids = []
         
+        if project_ids_list:
+            for pid in project_ids_list:
+                if ',' in str(pid):
+                    project_ids.extend([p.strip() for p in str(pid).split(',')])
+                else:
+                    project_ids.append(str(pid).strip())
+        
+        print(f"🧹 After processing: {project_ids}")
+        
+        if project_ids:
+            try:
+                project_ids = [int(pid) for pid in project_ids if str(pid).strip().isdigit()]
+                print(f"🔍 Filtering by project IDs: {project_ids}")
+                
+                from meralcoapp.models import Project
+                existing_projects = Project.objects.filter(project_id__in=project_ids).values_list('project_id', flat=True)
+                print(f"✅ Existing projects in DB: {list(existing_projects)}")
+                
+                queryset = queryset.filter(project_id__in=project_ids)
+                print(f"✅ Found {queryset.count()} work orders matching project IDs")
+                
+                if queryset.count() == 0:
+                    all_project_ids = queryset.model.objects.values_list('project_id', flat=True).distinct()
+                    print(f"⚠️ Available project_ids in work orders: {list(all_project_ids)[:20]}")
+                    
+            except ValueError as e:
+                print(f"❌ Error converting project IDs: {e}")
+        else:
+            print("⚠️ No valid project IDs provided")
+
+        # ----------------------
+        # Date range filter - CUSTOM HANDLING
+        # ----------------------
+        start_date = params.get('start_date')
+        end_date = params.get('end_date')
         if start_date:
             queryset = queryset.filter(date_received_jacket_ps__gte=start_date)
         if end_date:
             queryset = queryset.filter(date_received_jacket_ps__lte=end_date)
-        
-        # Filter overdue work orders
-        is_overdue = self.request.query_params.get('is_overdue', None)
+
+        # ----------------------
+        # Overdue filter - CUSTOM HANDLING
+        # ----------------------
+        is_overdue = params.get('is_overdue')
         if is_overdue == 'true':
-            queryset = queryset.filter(days_comp__gt=60)  # Adjust threshold as needed
+            queryset = queryset.filter(
+                Q(days_comp__gt=60) |
+                Q(date_received_jacket_ps__lt=timezone.now().date() - timedelta(days=90), date_comp__isnull=True)
+            )
+
+        # ----------------------
+        # VIP filter - CUSTOM HANDLING (different param name)
+        # ----------------------
+        vip_only = params.get('vip_only')
+        if vip_only == 'true':
+            queryset = queryset.filter(vip=True)
+
+        # ❌ REMOVE THESE - LET DRF HANDLE THEM:
+        # municipality, assigned, status are in filterset_fields
         
-        return queryset
-    
+        # ----------------------
+        # Search filter - CUSTOM HANDLING
+        # ----------------------
+        search_query = params.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(wo_no__icontains=search_query) |
+                Q(description__icontains=search_query) |
+                Q(location__icontains=search_query) |
+                Q(area_of_responsibility__icontains=search_query)
+            )
+
+        final_queryset = queryset
+        print(f"📊 FINAL QUERYSET COUNT: {final_queryset.count()}")
+        print(f"📊 FIRST ITEM: {final_queryset.first()}")
+        
+        return final_queryset
+
     # ============================================================
     # DASHBOARD & STATISTICS ENDPOINTS
     # ============================================================
@@ -2897,12 +2967,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """
         GET /api/work-orders/dashboard_stats/
         
-        Returns comprehensive dashboard statistics including:
-        - Total count and status breakdown
-        - VIP projects
-        - Overdue work orders
-        - Average completion time
-        - Recent work orders
+        Comprehensive dashboard statistics
         """
         queryset = self.filter_queryset(self.get_queryset())
         total_count = queryset.count()
@@ -2915,26 +2980,27 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         # VIP count
         vip_count = queryset.filter(vip=True).count()
         
-        # Overdue count (work orders taking more than 60 days)
-        overdue_count = queryset.filter(days_comp__gt=60).count()
+        # Overdue count
+        overdue_count = queryset.filter(
+            Q(days_comp__gt=60) | 
+            Q(date_received_jacket_ps__lt=timezone.now().date() - timedelta(days=90), date_comp__isnull=True)
+        ).count()
         
         # Average completion time
         avg_completion = queryset.filter(
             days_comp__isnull=False
-        ).aggregate(
-            avg_days=Avg('days_comp')
-        )
+        ).aggregate(avg_days=Avg('days_comp'))
         
-        # Completion rate (work orders with date_comp filled)
+        # Completion rate
         completed_count = queryset.filter(date_comp__isnull=False).count()
         completion_rate = (completed_count / total_count * 100) if total_count > 0 else 0
         
-        # By municipality
+        # By municipality (top 10)
         by_municipality = queryset.values('municipality').annotate(
             count=Count('id')
         ).order_by('-count')[:10]
         
-        # By assigned crew/person
+        # By assigned crew (top 10)
         by_assigned = queryset.values('assigned').annotate(
             count=Count('id')
         ).order_by('-count')[:10]
@@ -2947,7 +3013,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             'status_breakdown': list(status_breakdown),
             'vip_count': vip_count,
             'overdue_count': overdue_count,
-            'overdue_percentage': (overdue_count / total_count * 100) if total_count > 0 else 0,
+            'overdue_percentage': round((overdue_count / total_count * 100) if total_count > 0 else 0, 2),
             'avg_completion_days': round(avg_completion['avg_days'], 2) if avg_completion['avg_days'] else 0,
             'completion_rate': round(completion_rate, 2),
             'by_municipality': list(by_municipality),
@@ -2960,11 +3026,9 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """
         GET /api/work-orders/performance_metrics/
         
-        Returns performance metrics and KPIs
+        Detailed performance metrics and KPIs
         """
         queryset = self.filter_queryset(self.get_queryset())
-        
-        # Completion metrics
         completed = queryset.filter(date_comp__isnull=False)
         total = queryset.count()
         
@@ -2972,33 +3036,35 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             'total_work_orders': total,
             'completed': completed.count(),
             'in_progress': queryset.filter(date_comp__isnull=True).count(),
-            'completion_rate': (completed.count() / total * 100) if total > 0 else 0,
+            'completion_rate': round((completed.count() / total * 100) if total > 0 else 0, 2),
             
             # Time-based metrics
-            'avg_wmtrl_to_fcomp': completed.aggregate(
-                avg=Avg('days_wmtrl_to_fcomp')
-            )['avg'] or 0,
-            'avg_sched_to_fcomp': completed.aggregate(
+            'avg_wmtrl_to_fcomp': round(completed.aggregate(
+                avg=Avg('days_wmtrl_to_fcomp_apt')
+            )['avg'] or 0, 2),
+            'avg_sched_to_fcomp': round(completed.aggregate(
                 avg=Avg('days_sched_to_fcomp')
-            )['avg'] or 0,
-            'avg_total_days': completed.aggregate(
+            )['avg'] or 0, 2),
+            'avg_total_days': round(completed.aggregate(
                 avg=Avg('days_comp')
-            )['avg'] or 0,
+            )['avg'] or 0, 2),
             
             # Index metrics
-            'avg_index_wmtrl_to_fcomp': completed.aggregate(
-                avg=Avg('computed_index_wmtrl_to_fcomp')
-            )['avg'] or 0,
-            'avg_index_comp': completed.aggregate(
+            'avg_ccti': round(completed.aggregate(
+                avg=Avg('computed_index_wmtrl_to_fcomp_ccti')
+            )['avg'] or 0, 2),
+            'avg_comp_index': round(completed.aggregate(
                 avg=Avg('computed_index_comp')
-            )['avg'] or 0,
+            )['avg'] or 0, 2),
             
             # Exclusions
-            'ccti_exclusions': queryset.filter(ccti_exclusion=True).count(),
-            'apt_exclusions': queryset.filter(apt_exclusion=True).count(),
+            'ccti_exclusions': queryset.filter(for_ccti_exclusion=True).count(),
+            'apt_exclusions': queryset.filter(for_apt_exclusion=True).count(),
             
-            # VIP
+            # Special categories
             'vip_projects': queryset.filter(vip=True).count(),
+            'with_backjob': queryset.filter(with_back_job=True).count(),
+            'encoded_in_eam': queryset.filter(encoded_in_eam=True).count(),
         }
         
         return Response(metrics)
@@ -3008,10 +3074,9 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """
         GET /api/work-orders/monthly_trends/
         
-        Returns monthly trends for work order creation and completion
+        Monthly trends for work order creation and completion
         """
-        # Get date range from query params (default: last 12 months)
-        end_date = datetime.now()
+        end_date = timezone.now().date()
         start_date = end_date - timedelta(days=365)
         
         queryset = self.filter_queryset(self.get_queryset())
@@ -3022,7 +3087,8 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         ).annotate(
             month=TruncMonth('date_received_jacket_ps')
         ).values('month').annotate(
-            count=Count('id')
+            count=Count('id'),
+            vip_count=Count('id', filter=Q(vip=True))
         ).order_by('month')
         
         # Work orders completed by month
@@ -3031,7 +3097,8 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         ).annotate(
             month=TruncMonth('date_comp')
         ).values('month').annotate(
-            count=Count('id')
+            count=Count('id'),
+            avg_days=Avg('days_comp')
         ).order_by('month')
         
         return Response({
@@ -3048,16 +3115,17 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """
         GET /api/work-orders/by_municipality/
         
-        Get work orders grouped by municipality with statistics
+        Group work orders by municipality with statistics
         """
-        municipality_stats = self.filter_queryset(self.get_queryset()).values(
-            'municipality'
-        ).annotate(
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        municipality_stats = queryset.values('municipality').annotate(
             total_wo=Count('id'),
             completed=Count('id', filter=Q(date_comp__isnull=False)),
             vip_count=Count('id', filter=Q(vip=True)),
             avg_completion_days=Avg('days_comp'),
-            overdue=Count('id', filter=Q(days_comp__gt=60))
+            overdue=Count('id', filter=Q(days_comp__gt=60)),
+            with_backjob=Count('id', filter=Q(with_back_job=True))
         ).order_by('-total_wo')
         
         return Response(list(municipality_stats))
@@ -3067,11 +3135,11 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """
         GET /api/work-orders/by_assigned/
         
-        Get work orders grouped by assigned crew/person
+        Group work orders by assigned crew/person
         """
-        assigned_stats = self.filter_queryset(self.get_queryset()).values(
-            'assigned'
-        ).annotate(
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        assigned_stats = queryset.values('assigned').annotate(
             total_wo=Count('id'),
             completed=Count('id', filter=Q(date_comp__isnull=False)),
             in_progress=Count('id', filter=Q(date_comp__isnull=True)),
@@ -3086,14 +3154,15 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """
         GET /api/work-orders/by_status/
         
-        Get detailed statistics for each status
+        Detailed statistics for each status
         """
-        status_stats = self.filter_queryset(self.get_queryset()).values(
-            'status'
-        ).annotate(
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        status_stats = queryset.values('status').annotate(
             count=Count('id'),
             vip_count=Count('id', filter=Q(vip=True)),
-            avg_days=Avg('days_comp')
+            avg_days=Avg('days_comp'),
+            with_exclusion=Count('id', filter=Q(for_ccti_exclusion=True) | Q(for_apt_exclusion=True))
         ).order_by('-count')
         
         return Response(list(status_stats))
@@ -3103,13 +3172,16 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """
         GET /api/work-orders/overdue_projects/
         
-        Get all overdue projects (taking more than 60 days)
+        Get all overdue work orders
         """
-        overdue = self.filter_queryset(self.get_queryset()).filter(
-            days_comp__gt=60
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        overdue = queryset.filter(
+            Q(days_comp__gt=60) | 
+            Q(date_received_jacket_ps__lt=timezone.now().date() - timedelta(days=90), date_comp__isnull=True)
         ).order_by('-days_comp')
         
-        serializer = self.get_serializer(overdue, many=True)
+        serializer = WorkOrderListSerializer(overdue, many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
@@ -3117,13 +3189,12 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """
         GET /api/work-orders/vip_projects/
         
-        Get all VIP projects
+        Get all VIP work orders
         """
-        vip = self.filter_queryset(self.get_queryset()).filter(
-            vip=True
-        ).order_by('-date_received_jacket_ps')
+        queryset = self.filter_queryset(self.get_queryset())
+        vip = queryset.filter(vip=True).order_by('-date_received_jacket_ps')
         
-        serializer = self.get_serializer(vip, many=True)
+        serializer = WorkOrderListSerializer(vip, many=True)
         return Response(serializer.data)
     
     # ============================================================
@@ -3135,7 +3206,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """
         GET /api/work-orders/{id}/timeline/
         
-        Get detailed timeline for a specific work order
+        Detailed timeline for specific work order
         """
         work_order = self.get_object()
         serializer = WorkOrderTimelineSerializer(work_order)
@@ -3146,22 +3217,21 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """
         POST /api/work-orders/{id}/update_milestone/
         
-        Update a specific milestone date
+        Update specific milestone date
         
-        Request body:
-        {
-            "milestone": "date_wmtrl",
-            "date": "2026-01-15"
-        }
+        Body: {"milestone": "date_wmtrl", "date": "2026-01-15"}
         """
         work_order = self.get_object()
         milestone = request.data.get('milestone')
         date_value = request.data.get('date')
         
+        # List of valid date milestones
         allowed_milestones = [
+            'date_received_jacket_ps', 'date_received_awarding_wo',
             'date_wmtrl', 'date_sched', 'date_received_by_vc',
             'actual_date_completed_on_site', 'date_fcomp', 'date_comp',
-            'date_received_by_contractor', 'date_corrected'
+            'date_received_by_contractor', 'date_corrected', 'date_audit',
+            'date_material_balancing', 'date_printed_pole_tag'
         ]
         
         if milestone not in allowed_milestones:
@@ -3173,9 +3243,11 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         try:
             setattr(work_order, milestone, date_value)
             work_order.save()
+            
+            serializer = WorkOrderSerializer(work_order)
             return Response({
                 'message': f'{milestone} updated successfully',
-                'work_order': WorkOrderSerializer(work_order).data
+                'work_order': serializer.data
             })
         except Exception as e:
             return Response(
@@ -3184,42 +3256,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             )
     
     # ============================================================
-    # DOCUMENT MANAGEMENT ENDPOINTS
-    # ============================================================
-    
-    @action(detail=True, methods=['post'])
-    def upload_document(self, request, pk=None):
-        """
-        POST /api/work-orders/{id}/upload_document/
-        
-        Upload a document for this work order
-        """
-        work_order = self.get_object()
-        
-        # You'll need to create WorkOrderDocument model first
-        serializer = WorkOrderDocumentSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(
-                work_order=work_order,
-                uploaded_by=request.user
-            )
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['get'])
-    def documents(self, request, pk=None):
-        """
-        GET /api/work-orders/{id}/documents/
-        
-        Get all documents for this work order
-        """
-        work_order = self.get_object()
-        documents = work_order.documents.all()  # Related name from WorkOrderDocument
-        serializer = WorkOrderDocumentSerializer(documents, many=True)
-        return Response(serializer.data)
-    
-    # ============================================================
-    # EXCEL IMPORT/EXPORT ENDPOINTS
+    # EXCEL IMPORT/EXPORT ENDPOINTS - IMPROVED
     # ============================================================
     
     @action(detail=False, methods=['get'])
@@ -3227,46 +3264,149 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """
         GET /api/work-orders/export_excel/
         
-        Export work orders to Excel format matching your C1 sheet structure
+        Export work orders to Excel with improved column mapping
         """
         queryset = self.filter_queryset(self.get_queryset())
         
-        # Create DataFrame from queryset
+        # Prepare data with exact column names matching the model
         data = []
         for wo in queryset:
             data.append({
+                # Basic Info
                 'WO No': wo.wo_no,
+                'Vendor ID': wo.vendor_id,
+                'Project ID': wo.project_id,
+                'VIP': 'Yes' if wo.vip else 'No',
+                'Description': wo.description or '',
+                'Location': wo.location or '',
+                'Municipality': wo.municipality or '',
+                'Area of Responsibility': wo.area_of_responsibility or '',
+                
+                # Dates - Receipt
                 'Date Received Jacket (PS)': wo.date_received_jacket_ps,
                 'Date Received Awarding WO': wo.date_received_awarding_wo,
-                'VIP': 'Yes' if wo.vip else 'No',
-                'Description': wo.description,
-                'Location': wo.location,
-                'Municipality': wo.municipality,
-                'Area of Responsibility': wo.area_of_responsibility,
-                'Vendor Remarks': wo.vendor_remarks,
-                'C1 Remarks': wo.c1_remarks,
-                'Assigned': wo.assigned,
-                'Status': wo.status,
+                
+                # Dates - Work Progress
                 'Date WMTRL': wo.date_wmtrl,
                 'Date Sched': wo.date_sched,
                 'Date Received by VC': wo.date_received_by_vc,
                 'Actual Date Completed on Site': wo.actual_date_completed_on_site,
                 'Date FCOMP': wo.date_fcomp,
                 'Date COMP': wo.date_comp,
-                'Days WMTRL to FCOMP': wo.days_wmtrl_to_fcomp,
+                
+                # Durations (APT/SPT)
+                'Days WMTRL to FCOMP (APT)': wo.days_wmtrl_to_fcomp_apt,
                 'Days Sched to FCOMP': wo.days_sched_to_fcomp,
                 'Days COMP': wo.days_comp,
-                'Computed Index WMTRL to FCOMP': wo.computed_index_wmtrl_to_fcomp,
-                'Computed Index COMP': wo.computed_index_comp,
-                'Exclusion Reason': wo.exclusion_reason,
-                'CCTI Exclusion': 'Yes' if wo.ccti_exclusion else 'No',
-                'APT Exclusion': 'Yes' if wo.apt_exclusion else 'No',
+                'Date Needed (0.75) WMTRL to FCOMP': wo.date_needed_wmtrl_to_fcomp_075,
+                'Date Needed (0.95) FCOMP': wo.date_needed_fcomp_095,
+                'Date Needed (50 days) WMTRL to FCOMP': wo.date_needed_wmtrl_to_fcomp_50,
+                'Computed Index WMTRL to FCOMP (CCTI)': float(wo.computed_index_wmtrl_to_fcomp_ccti) if wo.computed_index_wmtrl_to_fcomp_ccti else None,
+                'Computed Index COMP': float(wo.computed_index_comp) if wo.computed_index_comp else None,
+                
+                # SPT Values
+                'SPT M': wo.spt_m,
+                'SPT L': wo.spt_l,
+                'Duration 0.75 Days': wo.duration_075_days,
+                'Duration 0.95 Days': wo.duration_095_days,
+                'Target Days': wo.target_days,
+                'SPT M for COMP': wo.spt_m_for_comp,
+                'Duration COMP Days': wo.duration_comp_days,
+                'Target Days COMP': wo.target_days_comp,
+                'Date Needed to COMP': wo.date_needed_to_comp,
+                'Ageing Days Since FCOMP': wo.ageing_days_since_fcomp,
+                
+                # Remarks & Status
+                'Vendor Remarks': wo.vendor_remarks or '',
+                'C1 Remarks': wo.c1_remarks or '',
+                'Assigned': wo.assigned or '',
+                'Status': wo.status or '',
+                
+                # Exclusions
+                'Exclusion Reason': wo.exclusion_reason or '',
+                'For CCTI Exclusion': 'Yes' if wo.for_ccti_exclusion else 'No',
+                'Encoded in EAM': 'Yes' if wo.encoded_in_eam else 'No',
+                'Validated by DCSAM': 'Yes' if wo.validated_by_dcsam else 'No',
+                'For APT Exclusion': 'Yes' if wo.for_apt_exclusion else 'No',
+                'Exclusion Start Date': wo.exclusion_start_date,
+                'Exclusion Duration (Days)': wo.exclusion_duration_days,
+                'Exclusion End Date': wo.exclusion_end_date,
+                
+                # COC
+                'Remarks Follow Up By': wo.remarks_follow_up_by or '',
+                'Remarks 2': wo.remarks_2 or '',
+                'Date Needed Submit COC': wo.date_needed_submit_coc,
+                'Ageing Submission COC': wo.ageing_submission_coc,
+                'Date Completed from COC': wo.date_completed_from_coc,
+                'Actual Received COC': wo.actual_received_coc,
+                
+                # Audit / Backjob
+                'Date Audit': wo.date_audit,
+                'Audit By': wo.audit_by or '',
+                'With Back Job': 'Yes' if wo.with_back_job else 'No',
+                'Backjob Tagged in EAM': 'Yes' if wo.backjob_tagged_eam else 'No',
+                
+                # Contractor / Correction
                 'Date Received by Contractor': wo.date_received_by_contractor,
                 'Date Corrected': wo.date_corrected,
-                'Actual Field Status': wo.actual_field_status,
-                'Supervisor Full Name': wo.supervisor_full_name,
+                'Date Material Balancing': wo.date_material_balancing,
+                'Material Balancing By': wo.material_balancing_by or '',
+                'Yes/No Flag': 'Yes' if wo.yes_no_flag else 'No',
+                'Emailed to Meter': 'Yes' if wo.emailed_to_meter else 'No',
+                'DT Correction Method': wo.dt_correction_method or '',
+                'TLN': wo.tln or '',
+                'With Pole Replacement': 'Yes' if wo.with_pole_replacement else 'No',
+                'Actual Field Status': wo.actual_field_status or '',
+                'Remarks 3': wo.remarks_3 or '',
+                'ABF Printed By': wo.abf_printed_by or '',
+                'Date Printed Pole Tag Form': wo.date_printed_pole_tag_form,
+                'Pole TLN Tags': wo.pole_tln_tags or '',
+                
+                # APT / CCTI with Exclusion
+                'Exclusion Days (APT)': wo.exclusion_days_apt,
+                'APT with Exclusion': wo.apt_with_exclusion,
+                'Exclusion Days (CCTI)': wo.exclusion_days_ccti,
+                'Duration CCTI with Exclusion': wo.duration_ccti_with_exclusion,
+                'CCTI with Exclusion': float(wo.ccti_with_exclusion) if wo.ccti_with_exclusion else None,
+                
+                # Performance
+                'E2E PRDI': float(wo.e2e_prdi) if wo.e2e_prdi else None,
+                'Current CCTI with Exclusion': float(wo.current_ccti_with_exclusion) if wo.current_ccti_with_exclusion else None,
+                'Current CCTI': float(wo.current_ccti) if wo.current_ccti else None,
+                'Final CCTI Less Than FCOMP': float(wo.final_ccti_less_than_fcomp) if wo.final_ccti_less_than_fcomp else None,
+                'PRDI': wo.prdi or '',
+                'Days Ageing': wo.days_ageing,
+                'Rev/Non-Rev': wo.rev_non_rev or '',
+                'Age Bracket': wo.age_bracket or '',
+                
+                # NTC
+                'NTC Date Created': wo.ntc_date_created,
+                'NTC Amount': float(wo.ntc_amount) if wo.ntc_amount else None,
+                'NTC': wo.ntc or '',
+                'NTC Date Received by Contractor': wo.ntc_date_received_by_contractor,
+                'NTC Date Completed': wo.ntc_date_completed,
+                'NTC Running Days': wo.ntc_running_days,
+                
+                # NOV / Debit
+                'NOV Debit Memo Date Created': wo.nov_debit_memo_date_created,
+                'NOV Amount': float(wo.nov_amount) if wo.nov_amount else None,
+                'NOV Date Received by Contractor': wo.nov_date_received_by_contractor,
+                
+                # Supervisor
+                'Ext': wo.ext or '',
+                'Updated Supv': 'Yes' if wo.updated_supv else 'No',
+                'Supv Name': wo.supv_name or '',
+                'Status as of 2025-04-04': wo.status_as_of_2025_04_04 or '',
+                'Diff Days WMTRL to Sched (2025)': wo.diff_days_wmtrl_to_sched_2025,
+                'Filter Flag': wo.filter_flag or '',
+                'Supervisor Full Name': wo.supervisor_full_name or '',
+                
+                # Timestamps
+                'Created At': wo.created_at,
+                'Updated At': wo.updated_at,
             })
         
+        # Create DataFrame
         df = pd.DataFrame(data)
         
         # Create Excel file in memory
@@ -3274,14 +3414,18 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, sheet_name='Work Orders', index=False)
             
-            # Auto-adjust column widths
+            # ✅ FIX: Proper column width adjustment using openpyxl's get_column_letter
+            from openpyxl.utils import get_column_letter
+            
             worksheet = writer.sheets['Work Orders']
-            for idx, col in enumerate(df.columns):
+            for idx, col in enumerate(df.columns, start=1):
                 max_length = max(
                     df[col].astype(str).apply(len).max(),
                     len(col)
                 )
-                worksheet.column_dimensions[chr(65 + idx)].width = min(max_length + 2, 50)
+                # Use openpyxl's built-in function to get proper column letter
+                col_letter = get_column_letter(idx)
+                worksheet.column_dimensions[col_letter].width = min(max_length + 2, 50)
         
         output.seek(0)
         
@@ -3290,18 +3434,19 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             output.read(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = f'attachment; filename=work_orders_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename=work_orders_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
         
         return response
     
+    
+
     @action(detail=False, methods=['post'])
     def import_excel(self, request):
         """
         POST /api/work-orders/import_excel/
         
-        Import work orders from Excel file
-        
-        Expected format: Same as C1 sheet structure
+        Import work orders from Excel file with complete column mapping
+        Automatically assigns vendor_id from authenticated user
         """
         if 'file' not in request.FILES:
             return Response(
@@ -3310,76 +3455,466 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             )
         
         file = request.FILES['file']
+        vendor_id = None
+        
+        if request.user and request.user.is_authenticated:
+            # ✅ GET VENDOR_ID FROM AUTHENTICATED USER
+            if hasattr(request.user, 'vendor_id'):
+                vendor_id = request.user.vendor_id
+            elif hasattr(request.user, 'user_id'):
+                # Try to get vendor_id from User model
+                vendor_id = request.user.user_id
+            
+            if not vendor_id:
+                return Response(
+                    {'error': 'Unable to determine vendor ID from authenticated user'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            logger.info(f"📥 Import started by vendor: {vendor_id}")
         
         try:
             # Read Excel file
             df = pd.read_excel(file)
             
+            logger.info(f"Excel columns found: {df.columns.tolist()}")
+            
             imported = 0
+            updated = 0
             errors = []
+            
+            # COMPLETE Column mapping (Excel column name -> Model field name)
+            column_mapping = {
+                # Basic Info
+                'WO No': 'wo_no',
+                'VIP': 'vip',
+                'Description': 'description',
+                'Location': 'location',
+                'Municipality': 'municipality',
+                'Area of Responsibility': 'area_of_responsibility',
+                
+                # NOTE: Removed 'Vendor ID' from mapping - will be auto-assigned
+                'Project ID': 'project_id',
+                
+                # Dates - Receipt
+                'Date Received Jacket (PS)': 'date_received_jacket_ps',
+                'Date Received Awarding WO': 'date_received_awarding_wo',
+                
+                # Dates - Work Progress
+                'Date WMTRL': 'date_wmtrl',
+                'Date Sched': 'date_sched',
+                'Date Received by VC': 'date_received_by_vc',
+                'Actual Date Completed on Site': 'actual_date_completed_on_site',
+                'Date FCOMP': 'date_fcomp',
+                'Date COMP': 'date_comp',
+                
+                # Durations (APT/SPT)
+                'Days WMTRL to FCOMP (APT)': 'days_wmtrl_to_fcomp_apt',
+                'Days Sched to FCOMP': 'days_sched_to_fcomp',
+                'Days COMP': 'days_comp',
+                'Date Needed (0.75) WMTRL to FCOMP': 'date_needed_wmtrl_to_fcomp_075',
+                'Date Needed (0.95) FCOMP': 'date_needed_fcomp_095',
+                'Date Needed (50 days) WMTRL to FCOMP': 'date_needed_wmtrl_to_fcomp_50',
+                'Computed Index WMTRL to FCOMP (CCTI)': 'computed_index_wmtrl_to_fcomp_ccti',
+                'Computed Index COMP': 'computed_index_comp',
+                
+                # SPT Values
+                'SPT M': 'spt_m',
+                'SPT L': 'spt_l',
+                'Duration 0.75 Days': 'duration_075_days',
+                'Duration 0.95 Days': 'duration_095_days',
+                'Target Days': 'target_days',
+                'SPT M for COMP': 'spt_m_for_comp',
+                'Duration COMP Days': 'duration_comp_days',
+                'Target Days COMP': 'target_days_comp',
+                'Date Needed to COMP': 'date_needed_to_comp',
+                'Ageing Days Since FCOMP': 'ageing_days_since_fcomp',
+                
+                # Remarks & Status
+                'Vendor Remarks': 'vendor_remarks',
+                'C1 Remarks': 'c1_remarks',
+                'Assigned': 'assigned',
+                'Status': 'status',
+                
+                # Exclusions
+                'Exclusion Reason': 'exclusion_reason',
+                'For CCTI Exclusion': 'for_ccti_exclusion',
+                'Encoded in EAM': 'encoded_in_eam',
+                'Validated by DCSAM': 'validated_by_dcsam',
+                'For APT Exclusion': 'for_apt_exclusion',
+                'Exclusion Start Date': 'exclusion_start_date',
+                'Exclusion Duration (Days)': 'exclusion_duration_days',
+                'Exclusion End Date': 'exclusion_end_date',
+                
+                # COC
+                'Remarks Follow Up By': 'remarks_follow_up_by',
+                'Remarks 2': 'remarks_2',
+                'Date Needed Submit COC': 'date_needed_submit_coc',
+                'Ageing Submission COC': 'ageing_submission_coc',
+                'Date Completed from COC': 'date_completed_from_coc',
+                'Actual Received COC': 'actual_received_coc',
+                
+                # Audit / Backjob
+                'Date Audit': 'date_audit',
+                'Audit By': 'audit_by',
+                'With Back Job': 'with_back_job',
+                'Backjob Tagged in EAM': 'backjob_tagged_eam',
+                
+                # Contractor / Correction
+                'Date Received by Contractor': 'date_received_by_contractor',
+                'Date Corrected': 'date_corrected',
+                'Date Material Balancing': 'date_material_balancing',
+                'Material Balancing By': 'material_balancing_by',
+                'Yes/No Flag': 'yes_no_flag',
+                'Emailed to Meter': 'emailed_to_meter',
+                'DT Correction Method': 'dt_correction_method',
+                'TLN': 'tln',
+                'With Pole Replacement': 'with_pole_replacement',
+                'Actual Field Status': 'actual_field_status',
+                'Remarks 3': 'remarks_3',
+                'ABF Printed By': 'abf_printed_by',
+                'Date Printed Pole Tag Form': 'date_printed_pole_tag_form',
+                'Pole TLN Tags': 'pole_tln_tags',
+                
+                # APT / CCTI with Exclusion
+                'Exclusion Days (APT)': 'exclusion_days_apt',
+                'APT with Exclusion': 'apt_with_exclusion',
+                'Exclusion Days (CCTI)': 'exclusion_days_ccti',
+                'Duration CCTI with Exclusion': 'duration_ccti_with_exclusion',
+                'CCTI with Exclusion': 'ccti_with_exclusion',
+                
+                # Performance
+                'E2E PRDI': 'e2e_prdi',
+                'Current CCTI with Exclusion': 'current_ccti_with_exclusion',
+                'Current CCTI': 'current_ccti',
+                'Final CCTI Less Than FCOMP': 'final_ccti_less_than_fcomp',
+                'PRDI': 'prdi',
+                'Days Ageing': 'days_ageing',
+                'Rev/Non-Rev': 'rev_non_rev',
+                'Age Bracket': 'age_bracket',
+                
+                # NTC
+                'NTC Date Created': 'ntc_date_created',
+                'NTC Amount': 'ntc_amount',
+                'NTC': 'ntc',
+                'NTC Date Received by Contractor': 'ntc_date_received_by_contractor',
+                'NTC Date Completed': 'ntc_date_completed',
+                'NTC Running Days': 'ntc_running_days',
+                
+                # NOV / Debit
+                'NOV Debit Memo Date Created': 'nov_debit_memo_date_created',
+                'NOV Amount': 'nov_amount',
+                'NOV Date Received by Contractor': 'nov_date_received_by_contractor',
+                
+                # Supervisor
+                'Ext': 'ext',
+                'Updated Supv': 'updated_supv',
+                'Supv Name': 'supv_name',
+                'Status as of 2025-04-04': 'status_as_of_2025_04_04',
+                'Diff Days WMTRL to Sched (2025)': 'diff_days_wmtrl_to_sched_2025',
+                'Filter Flag': 'filter_flag',
+                'Supervisor Full Name': 'supervisor_full_name',
+            }
             
             for index, row in df.iterrows():
                 try:
-                    # Map Excel columns to model fields
-                    work_order_data = {
-                        'wo_no': row.get('WO No'),
-                        'date_received_jacket_ps': pd.to_datetime(row.get('Date Received Jacket (PS)'), errors='coerce'),
-                        'date_received_awarding_wo': pd.to_datetime(row.get('Date Received Awarding WO'), errors='coerce'),
-                        'vip': row.get('VIP', '').lower() == 'yes',
-                        'description': row.get('Description', ''),
-                        'location': row.get('Location', ''),
-                        'municipality': row.get('Municipality', ''),
-                        'area_of_responsibility': row.get('Area of Responsibility', ''),
-                        'vendor_remarks': row.get('Vendor Remarks', ''),
-                        'c1_remarks': row.get('C1 Remarks', ''),
-                        'assigned': row.get('Assigned', ''),
-                        'status': row.get('Status', ''),
-                        'date_wmtrl': pd.to_datetime(row.get('Date WMTRL'), errors='coerce'),
-                        'date_sched': pd.to_datetime(row.get('Date Sched'), errors='coerce'),
-                        'date_received_by_vc': pd.to_datetime(row.get('Date Received by VC'), errors='coerce'),
-                        'actual_date_completed_on_site': pd.to_datetime(row.get('Actual Date Completed on Site'), errors='coerce'),
-                        'date_fcomp': pd.to_datetime(row.get('Date FCOMP'), errors='coerce'),
-                        'date_comp': pd.to_datetime(row.get('Date COMP'), errors='coerce'),
-                        'exclusion_reason': row.get('Exclusion Reason', ''),
-                        'ccti_exclusion': row.get('CCTI Exclusion', '').lower() == 'yes',
-                        'apt_exclusion': row.get('APT Exclusion', '').lower() == 'yes',
-                        'date_received_by_contractor': pd.to_datetime(row.get('Date Received by Contractor'), errors='coerce'),
-                        'date_corrected': pd.to_datetime(row.get('Date Corrected'), errors='coerce'),
-                        'actual_field_status': row.get('Actual Field Status', ''),
-                        'supervisor_full_name': row.get('Supervisor Full Name', ''),
-                        }
-                # Remove NaT values
-                    work_order_data = {k: v for k, v in work_order_data.items() if not pd.isna(v)}
+                    # Skip rows without WO number
+                    if pd.isna(row.get('WO No')):
+                        continue
                     
+                    work_order_data = {}
+                    
+                    # Map columns
+                    for excel_col, model_field in column_mapping.items():
+                        if excel_col in df.columns:
+                            value = row.get(excel_col)
+                            
+                            # Skip NaN values
+                            if pd.isna(value):
+                                continue
+                            
+                            # Convert Yes/No to boolean
+                            if isinstance(value, str) and value.lower() in ['yes', 'no']:
+                                value = value.lower() == 'yes'
+                            
+                            # Convert dates
+                            if 'date' in model_field.lower() and value:
+                                try:
+                                    value = pd.to_datetime(value).date()
+                                except:
+                                    value = None
+                            
+                            work_order_data[model_field] = value
+                    
+                    # ✅ AUTOMATICALLY ASSIGN VENDOR_ID
+                    if vendor_id:
+                        work_order_data['vendor_id'] = vendor_id
+                        
+                        logger.info(f"Row {index + 2}: Assigning vendor_id={vendor_id} to WO {work_order_data.get('wo_no')}")
+                        
                     # Create or update work order
-                    WorkOrder.objects.update_or_create(
-                        wo_no=work_order_data['wo_no'],
-                        defaults=work_order_data
-                    )
-                    imported += 1
-                    
+                    wo_no = work_order_data.get('wo_no')
+                    if wo_no:
+                        obj, created = WorkOrder.objects.update_or_create(
+                            wo_no=wo_no,
+                            defaults=work_order_data
+                        )
+                        
+                        if created:
+                            imported += 1
+                            logger.info(f"✅ Created WO {wo_no} with vendor_id={vendor_id}")
+                        else:
+                            updated += 1
+                            logger.info(f"✅ Updated WO {wo_no} with vendor_id={vendor_id}")
+                
                 except Exception as e:
                     errors.append({
-                        'row': index + 2,  # +2 because Excel rows start at 1 and header is row 1
+                        'row': index + 2,
+                        'wo_no': row.get('WO No', 'Unknown'),
                         'error': str(e)
                     })
+                    logger.error(f"Error importing row {index + 2}: {e}")
             
             return Response({
-                'message': f'Successfully imported {imported} work orders',
+                'message': f'Successfully processed {imported + updated} work orders for vendor {vendor_id}',
+                'vendor_id': vendor_id,
                 'imported': imported,
-                'errors': errors
+                'updated': updated,
+                'errors': errors,
+                'error_count': len(errors)
             })
-            
+        
         except Exception as e:
+            logger.error(f"Excel import failed: {e}")
             return Response(
                 {'error': f'Failed to process file: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+
+    @action(detail=False, methods=['get'])
+    def download_template(self, request):
+        """
+        GET /api/work-orders/download_template/
+        
+        Download Excel template with ALL columns for importing work orders
+        """
+        # Create empty DataFrame with ALL columns matching the export format
+        template_data = {
+            # Basic Info
+            'WO No': [],
+            'VIP': [],
+            'Description': [],
+            'Location': [],
+            'Municipality': [],
+            'Area of Responsibility': [],
+            
+            # Dates - Receipt
+            'Date Received Jacket (PS)': [],
+            'Date Received Awarding WO': [],
+            
+            # Dates - Work Progress
+            'Date WMTRL': [],
+            'Date Sched': [],
+            'Date Received by VC': [],
+            'Actual Date Completed on Site': [],
+            'Date FCOMP': [],
+            'Date COMP': [],
+            
+            # Durations (APT/SPT)
+            'Days WMTRL to FCOMP (APT)': [],
+            'Days Sched to FCOMP': [],
+            'Days COMP': [],
+            'Date Needed (0.75) WMTRL to FCOMP': [],
+            'Date Needed (0.95) FCOMP': [],
+            'Date Needed (50 days) WMTRL to FCOMP': [],
+            'Computed Index WMTRL to FCOMP (CCTI)': [],
+            'Computed Index COMP': [],
+            
+            # SPT Values
+            'SPT M': [],
+            'SPT L': [],
+            'Duration 0.75 Days': [],
+            'Duration 0.95 Days': [],
+            'Target Days': [],
+            'SPT M for COMP': [],
+            'Duration COMP Days': [],
+            'Target Days COMP': [],
+            'Date Needed to COMP': [],
+            'Ageing Days Since FCOMP': [],
+            
+            # Remarks & Status
+            'Vendor Remarks': [],
+            'C1 Remarks': [],
+            'Assigned': [],
+            'Status': [],
+            
+            # Exclusions
+            'Exclusion Reason': [],
+            'For CCTI Exclusion': [],
+            'Encoded in EAM': [],
+            'Validated by DCSAM': [],
+            'For APT Exclusion': [],
+            'Exclusion Start Date': [],
+            'Exclusion Duration (Days)': [],
+            'Exclusion End Date': [],
+            
+            # COC
+            'Remarks Follow Up By': [],
+            'Remarks 2': [],
+            'Date Needed Submit COC': [],
+            'Ageing Submission COC': [],
+            'Date Completed from COC': [],
+            'Actual Received COC': [],
+            
+            # Audit / Backjob
+            'Date Audit': [],
+            'Audit By': [],
+            'With Back Job': [],
+            'Backjob Tagged in EAM': [],
+            
+            # Contractor / Correction
+            'Date Received by Contractor': [],
+            'Date Corrected': [],
+            'Date Material Balancing': [],
+            'Material Balancing By': [],
+            'Yes/No Flag': [],
+            'Emailed to Meter': [],
+            'DT Correction Method': [],
+            'TLN': [],
+            'With Pole Replacement': [],
+            'Actual Field Status': [],
+            'Remarks 3': [],
+            'ABF Printed By': [],
+            'Date Printed Pole Tag Form': [],
+            'Pole TLN Tags': [],
+            
+            # APT / CCTI with Exclusion
+            'Exclusion Days (APT)': [],
+            'APT with Exclusion': [],
+            'Exclusion Days (CCTI)': [],
+            'Duration CCTI with Exclusion': [],
+            'CCTI with Exclusion': [],
+            
+            # Performance
+            'E2E PRDI': [],
+            'Current CCTI with Exclusion': [],
+            'Current CCTI': [],
+            'Final CCTI Less Than FCOMP': [],
+            'PRDI': [],
+            'Days Ageing': [],
+            'Rev/Non-Rev': [],
+            'Age Bracket': [],
+            
+            # NTC
+            'NTC Date Created': [],
+            'NTC Amount': [],
+            'NTC': [],
+            'NTC Date Received by Contractor': [],
+            'NTC Date Completed': [],
+            'NTC Running Days': [],
+            
+            # NOV / Debit
+            'NOV Debit Memo Date Created': [],
+            'NOV Amount': [],
+            'NOV Date Received by Contractor': [],
+            
+            # Supervisor
+            'Ext': [],
+            'Updated Supv': [],
+            'Supv Name': [],
+            'Status as of 2025-04-04': [],
+            'Diff Days WMTRL to Sched (2025)': [],
+            'Filter Flag': [],
+            'Supervisor Full Name': [],
+        }
+        
+        df = pd.DataFrame(template_data)
+        
+        # Create Excel file
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Template', index=False)
+            
+            # Add instructions sheet with detailed guidance
+            instructions = pd.DataFrame({
+                'Field': [
+                    'WO No',
+                    'Vendor ID / Project ID',
+                    'VIP',
+                    'Dates',
+                    'Boolean Fields',
+                    'Numbers',
+                    'Text Fields',
+                ],
+                'Instructions': [
+                    'REQUIRED - Must be unique. This is the primary identifier.',
+                    'Should be valid IDs from the system. Leave blank if not available.',
+                    'Use "Yes" or "No" for VIP and all boolean fields (Exclusions, Flags, etc.)',
+                    'Use YYYY-MM-DD format (e.g., 2026-02-06) for all date fields.',
+                    'Use "Yes" or "No" for: VIP, For CCTI Exclusion, For APT Exclusion, With Back Job, Encoded in EAM, etc.',
+                    'Use numbers without commas. Decimals allowed for amounts and indices.',
+                    'Description, Location, Remarks, etc. can contain any text. Leave empty if not available.',
+                ]
+            })
+            instructions.to_excel(writer, sheet_name='Instructions', index=False)
+            
+            # Auto-adjust column widths for both sheets
+            for sheet_name in writer.sheets:
+                worksheet = writer.sheets[sheet_name]
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
+        
+        output.seek(0)
+        
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename=work_orders_template.xlsx'
+        
+        return response
+    
     # ============================================================
     # BULK OPERATIONS
     # ============================================================
+    
+    def list(self, request, *args, **kwargs):
+        """Override list to debug and handle filtering properly"""
+        # Get the queryset (already filtered by get_queryset)
+        queryset = self.get_queryset()
+        
+        print(f"🎯 LIST METHOD - Initial queryset count: {queryset.count()}")
+        print(f"🎯 First item: {queryset.first()}")
+        
+        # Apply additional filters (search, ordering) but NOT project_id again
+        # Since project_id is not in filterset_fields, this should be safe
+        queryset = self.filter_queryset(queryset)
+        
+        print(f"🎯 After filter_queryset count: {queryset.count()}")
+        
+        # Let DRF handle pagination
+        page = self.paginate_queryset(queryset)
+        
+        print(f"🎯 After pagination: {len(page) if page else 'None'}")
+        
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            print(f"🎯 Serialized data length: {len(serializer.data)}")
+            return self.get_paginated_response(serializer.data)
 
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+            
     @action(detail=False, methods=['post'])
     def bulk_update_status(self, request):
         """
@@ -3387,11 +3922,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         
         Update status for multiple work orders
         
-        Request body:
-        {
-            "work_order_ids": [1, 2, 3],
-            "status": "COMPLETED"
-        }
+        Body: {"work_order_ids": [1, 2, 3], "status": "COMPLETED"}
         """
         work_order_ids = request.data.get('work_order_ids', [])
         new_status = request.data.get('status')
@@ -3410,7 +3941,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             'message': f'Updated {updated} work orders',
             'updated_count': updated
         })
-
+    
     @action(detail=False, methods=['delete'])
     def bulk_delete(self, request):
         """
@@ -3418,10 +3949,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         
         Delete multiple work orders
         
-        Request body:
-        {
-            "work_order_ids": [1, 2, 3]
-        }
+        Body: {"work_order_ids": [1, 2, 3]}
         """
         work_order_ids = request.data.get('work_order_ids', [])
         
@@ -3439,37 +3967,9 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             'message': f'Deleted {deleted_count} work orders',
             'deleted_count': deleted_count
         })
-        
-       
-    @action(detail=False, methods=['get'])
-    def download_template(self, request):
-        """
-        Download Excel template for importing work orders
-        """
-        try:
-            template_path = Path(settings.BASE_DIR) / 'meralcoapp' / 'templates' / 'excel' / 'work_orders_template.xlsx'
-            
-            if not template_path.exists():
-                return Response({'error': 'Template file not found'}, status=404)
-            
-            # Open file safely
-            file_handle = open(template_path, 'rb')
-            response = FileResponse(
-                file_handle,
-                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
-            response['Content-Disposition'] = 'attachment; filename="work_orders_template.xlsx"'
-            
-            return response
-            
-        except Exception as e:
-            return Response({'error': str(e)}, status=500)
-            
-        except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=500
-            )
+
+
+
 
 class WorkOrderDocumentViewSet(viewsets.ModelViewSet):
     queryset = WorkOrderDocument.objects.all()

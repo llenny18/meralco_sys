@@ -670,30 +670,6 @@ const QIMobileInspection = () => {
                                     </div>
                                 </div>
 
-                                <button
-                                    onClick={() => startInspection(wo)}
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px',
-                                        backgroundColor: '#2563eb',
-                                        color: '#ffffff',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        fontWeight: '600',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '8px',
-                                        fontSize: '15px',
-                                        transition: 'background-color 0.2s'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1d4ed8'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
-                                >
-                                    <FileText size={18} />
-                                    Start Inspection
-                                </button>
                             </div>
                         ))}
                     </div>

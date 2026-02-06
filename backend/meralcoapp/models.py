@@ -1134,13 +1134,16 @@ class SystemSetting(models.Model):
 
 class WorkOrder(models.Model):
     id = models.AutoField(primary_key=True)
-
+    
+    # Relations
+    vendor_id = models.IntegerField(null=True, blank=True)
     project_id = models.IntegerField(null=True, blank=True)
+    
     # Basic Info
     date_received_jacket_ps = models.DateField(null=True, blank=True)
     date_received_awarding_wo = models.DateField(null=True, blank=True)
     vip = models.BooleanField(default=False)
-    wo_no = models.CharField(max_length=50, unique=True)  # NOT NULL in DB
+    wo_no = models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True)
     location = models.CharField(max_length=255, blank=True)
     municipality = models.CharField(max_length=255, blank=True)
@@ -1160,55 +1163,56 @@ class WorkOrder(models.Model):
     date_fcomp = models.DateField(null=True, blank=True)
     date_comp = models.DateField(null=True, blank=True)
     
-    # Durations (APT / SPT)
-    days_wmtrl_to_fcomp = models.IntegerField(null=True, blank=True)
+    # Durations (APT / SPT) - CORRECTED NAMES
+    days_wmtrl_to_fcomp_apt = models.IntegerField(null=True, blank=True)  # FIXED
     days_sched_to_fcomp = models.IntegerField(null=True, blank=True)
     days_comp = models.IntegerField(null=True, blank=True)
-    date_needed_075_wmtrl_to_fcomp = models.DateField(null=True, blank=True)
-    date_needed_095_fcomp = models.DateField(null=True, blank=True)
-    date_needed_50days_wmtrl_to_fcomp = models.DateField(null=True, blank=True)
-    computed_index_wmtrl_to_fcomp = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    date_needed_wmtrl_to_fcomp_075 = models.DateField(null=True, blank=True)  # FIXED
+    date_needed_fcomp_095 = models.DateField(null=True, blank=True)  # FIXED
+    date_needed_wmtrl_to_fcomp_50 = models.DateField(null=True, blank=True)  # FIXED
+    computed_index_wmtrl_to_fcomp_ccti = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)  # FIXED
     computed_index_comp = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     spt_m = models.IntegerField(null=True, blank=True)
     spt_l = models.IntegerField(null=True, blank=True)
     duration_075_days = models.IntegerField(null=True, blank=True)
     duration_095_days = models.IntegerField(null=True, blank=True)
     target_days = models.IntegerField(null=True, blank=True)
-    spt_m_comp = models.IntegerField(null=True, blank=True)
+    spt_m_for_comp = models.IntegerField(null=True, blank=True)  # FIXED
     duration_comp_days = models.IntegerField(null=True, blank=True)
     target_days_comp = models.IntegerField(null=True, blank=True)
     date_needed_to_comp = models.DateField(null=True, blank=True)
     ageing_days_since_fcomp = models.IntegerField(null=True, blank=True)
     
-    # Exclusions
+    # Exclusions - CORRECTED NAMES
     exclusion_reason = models.TextField(blank=True)
-    ccti_exclusion = models.BooleanField(default=False)
+    for_ccti_exclusion = models.BooleanField(default=False)  # FIXED
     encoded_in_eam = models.BooleanField(default=False)
     validated_by_dcsam = models.BooleanField(default=False)
-    apt_exclusion = models.BooleanField(default=False)
+    for_apt_exclusion = models.BooleanField(default=False)  # FIXED
     exclusion_start_date = models.DateField(null=True, blank=True)
-    exclusion_duration = models.IntegerField(null=True, blank=True)
+    exclusion_duration_days = models.IntegerField(null=True, blank=True)  # FIXED
     exclusion_end_date = models.DateField(null=True, blank=True)
     
-    # COC
-    remarks_follow_up = models.TextField(blank=True)
+    # COC - CORRECTED NAMES
+    remarks_follow_up_by = models.TextField(blank=True)  # FIXED
     remarks_2 = models.TextField(blank=True)
     date_needed_submit_coc = models.DateField(null=True, blank=True)
     ageing_submission_coc = models.IntegerField(null=True, blank=True)
     date_completed_from_coc = models.DateField(null=True, blank=True)
     actual_received_coc = models.DateField(null=True, blank=True)
     
-    # Audit / Backjob
+    # Audit / Backjob - CORRECTED NAMES
     date_audit = models.DateField(null=True, blank=True)
     audit_by = models.CharField(max_length=255, blank=True)
-    with_backjob = models.BooleanField(default=False)
-    backjob_tagged_in_eam = models.BooleanField(default=False)
+    with_back_job = models.BooleanField(default=False)  # FIXED
+    backjob_tagged_eam = models.BooleanField(default=False)  # FIXED
     
     # Contractor / Correction
     date_received_by_contractor = models.DateField(null=True, blank=True)
     date_corrected = models.DateField(null=True, blank=True)
     date_material_balancing = models.DateField(null=True, blank=True)
     material_balancing_by = models.CharField(max_length=255, blank=True)
+    yes_no_flag = models.BooleanField(default=False)  # NEW - ADDED
     emailed_to_meter = models.BooleanField(default=False)
     dt_correction_method = models.CharField(max_length=255, blank=True)
     tln = models.CharField(max_length=100, blank=True)
@@ -1216,54 +1220,54 @@ class WorkOrder(models.Model):
     actual_field_status = models.CharField(max_length=255, blank=True)
     remarks_3 = models.TextField(blank=True)
     abf_printed_by = models.CharField(max_length=255, blank=True)
-    date_printed_pole_tag = models.DateField(null=True, blank=True)
+    date_printed_pole_tag_form = models.DateField(null=True, blank=True)  # FIXED
     pole_tln_tags = models.TextField(blank=True)
     
-    # APT / CCTI with Exclusion
-    apt_days_exclusion = models.IntegerField(null=True, blank=True)
+    # APT / CCTI with Exclusion - CORRECTED NAMES
+    exclusion_days_apt = models.IntegerField(null=True, blank=True)  # FIXED
     apt_with_exclusion = models.IntegerField(null=True, blank=True)
-    ccti_days_exclusion = models.IntegerField(null=True, blank=True)
+    exclusion_days_ccti = models.IntegerField(null=True, blank=True)  # FIXED
     duration_ccti_with_exclusion = models.IntegerField(null=True, blank=True)
     ccti_with_exclusion = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     
-    # Performance
-    e2e_prdi = models.IntegerField(null=True, blank=True)
+    # Performance - CORRECTED TYPES & NAMES
+    e2e_prdi = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)  # FIXED TYPE
     current_ccti_with_exclusion = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     current_ccti = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
-    final_ccti = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
-    prdi = models.IntegerField(null=True, blank=True)
+    final_ccti_less_than_fcomp = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)  # FIXED
+    prdi = models.TextField(blank=True)  # FIXED TYPE
     days_ageing = models.IntegerField(null=True, blank=True)
-    rev_nonrev = models.CharField(max_length=50, blank=True)
+    rev_non_rev = models.CharField(max_length=50, blank=True)
     age_bracket = models.CharField(max_length=100, blank=True)
     
-    # NTC
+    # NTC - CORRECTED NAMES
     ntc_date_created = models.DateField(null=True, blank=True)
-    ntc_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    ntc_reference = models.CharField(max_length=100, blank=True)
+    ntc_amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    ntc = models.TextField(blank=True)  # FIXED
     ntc_date_received_by_contractor = models.DateField(null=True, blank=True)
     ntc_date_completed = models.DateField(null=True, blank=True)
     ntc_running_days = models.IntegerField(null=True, blank=True)
     
-    # NOV / Debit
-    nov_debit_date_created = models.DateField(null=True, blank=True)
-    nov_debit_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    nov_debit_date_received_by_contractor = models.DateField(null=True, blank=True)
+    # NOV / Debit - CORRECTED NAMES
+    nov_debit_memo_date_created = models.DateField(null=True, blank=True)  # FIXED
+    nov_amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)  # FIXED
+    nov_date_received_by_contractor = models.DateField(null=True, blank=True)
     
-    # Supervisor
+    # Supervisor - CORRECTED NAMES
     ext = models.CharField(max_length=50, blank=True)
     updated_supv = models.BooleanField(default=False)
-    supv_name = models.CharField(max_length=255, blank=True)
-    status_040425 = models.CharField(max_length=100, blank=True)
-    diff_days_wmtrl_to_sched = models.IntegerField(null=True, blank=True)
+    supv_name = models.TextField(blank=True)
+    status_as_of_2025_04_04 = models.CharField(max_length=100, blank=True)  # FIXED
+    diff_days_wmtrl_to_sched_2025 = models.IntegerField(null=True, blank=True)  # FIXED
+    filter_flag = models.TextField(blank=True)  # NEW - ADDED
     supervisor_full_name = models.CharField(max_length=255, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    vendor_id = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        db_table = "work_order"
-        managed = False  # Important: Don't let Django manage this table
+        db_table = "workorders"  # FIXED - matches PostgreSQL table name
+        managed = False
 
     def __str__(self):
         return self.wo_no

@@ -101,12 +101,12 @@ function UsersTable() {
 
   return (
     <>
-      <Head><title>Users - System Administration</title></Head>
+      <Head><title>Roles - System Administration</title></Head>
       <PageTitleWrapper>
         <Grid container justifyContent="space-between" alignItems="center">
           <Grid item>
             <Typography variant="h3" component="h3" gutterBottom>👥 Users</Typography>
-            <Typography variant="subtitle2">Manage system users and their information</Typography>
+            <Typography variant="subtitle2">Manage system roles</Typography>
           </Grid>
         </Grid>
       </PageTitleWrapper>

@@ -271,22 +271,46 @@ const ProjectCalendarDashboard: React.FC = () => {
                 }
             });
 
-            // Fetch Payments
-            const payments = await fetchData(`${API_BASE_URL}/payments/`);
-            payments.forEach((payment: any) => {
-                if (payment.payment_date) {
-                    allEvents.push({
-                        id: `payment-${payment.id}`,
-                        date: payment.payment_date,
-                        type: 'payment',
-                        title: `Payment: ${payment.invoice?.invoice_number || 'Payment'}`,
-                        description: `Amount: $${payment.payment_amount}`,
-                        priority: 'Low',
-                        status: 'Completed',
-                        vendor_name: payment.invoice?.vendor?.vendor_name
+             const authToken = localStorage.getItem('auth_token');
+
+            const fetchPayments = async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/payments/`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Token ${authToken}`, // <-- add token here
+                        },
                     });
+
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch payments: ${response.statusText}`);
+                    }
+
+                    const payments = await response.json();
+
+                    payments.results.forEach((payment: any) => {
+                        if (payment.payment_date) {
+                            allEvents.push({
+                                id: `payment-${payment.id}`,
+                                date: payment.payment_date,
+                                type: 'payment',
+                                title: `Payment: ${payment.invoice?.invoice_number || 'Payment'}`,
+                                description: `Amount: $${payment.payment_amount}`,
+                                priority: 'Low',
+                                status: 'Completed',
+                                vendor_name: payment.invoice?.vendor?.vendor_name
+                            });
+                        }
+                    });
+                } catch (error) {
+                    console.error(error);
                 }
-            });
+            };
+
+            fetchPayments();
+
+            
 
             // Fetch Document Compliance
             const docCompliance = await fetchData(`${API_BASE_URL}/document-compliance/`);

@@ -1,62 +1,15 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import *
-
-from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
-from .models import User, UserRole, UserSession
-
-# Add to serializers.py
-
-class QIInspectionCorrectionPhotoSerializer(serializers.ModelSerializer):
-    photo_url = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = QIInspectionCorrectionPhoto
-        fields = [
-            'photo_id',
-            'inspection',
-            'photo_file',
-            'photo_url',
-            'caption',
-            'uploaded_by',
-            'uploaded_at'
-        ]
-        read_only_fields = ['photo_id', 'uploaded_at']
-    
-    def get_photo_url(self, obj):
-        if obj.photo_file:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.photo_file.url)
-        return None
+from django.db.models import Sum
+from datetime import date, datetime
+from .models import *
 
 
-class QIInspectionCorrectionSerializer(serializers.Serializer):
-    """Serializer for submitting corrections"""
-    correction_notes = serializers.CharField(required=True)
-    corrective_photos = serializers.ListField(
-        child=serializers.ImageField(),
-        required=False,
-        allow_empty=True
-    )
-
-
-class DelayPredictionSerializer(serializers.Serializer):
-    status = serializers.CharField()
-    priority = serializers.CharField()
-    risk_score = serializers.CharField()
-    days_since_start = serializers.IntegerField()
-    contract_value = serializers.FloatField()
-    compliance_score = serializers.FloatField()
-
-class PenaltyPredictionSerializer(serializers.Serializer):
-    violation_type = serializers.CharField()
-    delay_days = serializers.IntegerField()
-
-class ChatRequestSerializer(serializers.Serializer):
-    question = serializers.CharField(max_length=500)
+# ============================================
+# AUTHENTICATION SERIALIZERS
+# ============================================
 
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
@@ -69,7 +22,6 @@ class LoginSerializer(serializers.Serializer):
         user_type = attrs.get('user_type')
 
         if username and password:
-            # Authenticate user
             user = authenticate(username=username, password=password)
             
             if not user:
@@ -78,7 +30,6 @@ class LoginSerializer(serializers.Serializer):
             if not user.is_active:
                 raise serializers.ValidationError('User account is disabled.')
             
-            # Check if user role matches the selected user type
             if user.role and user.role.role_name != user_type:
                 raise serializers.ValidationError('User type mismatch.')
             
@@ -137,7 +88,6 @@ class RegisterUserSerializer(serializers.ModelSerializer):
         if len(attrs['password']) < 6:
             raise serializers.ValidationError("Password must be at least 6 characters long.")
         
-        # Check if role exists
         role_name = attrs.pop('role_name')
         try:
             role = UserRole.objects.get(role_name=role_name)
@@ -187,7 +137,6 @@ class RolePermissionSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-from django.contrib.auth.hashers import make_password
 class UserSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='role.role_name', read_only=True)
     full_name = serializers.SerializerMethodField()
@@ -195,7 +144,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['user_id', 'username', 'email', 'first_name', 'last_name', 'full_name',
-                  'role', 'role_name', 'phone_number','password', 'is_active', 'last_login',
+                  'role', 'role_name', 'phone_number', 'password', 'is_active', 'last_login',
                   'created_at', 'updated_at']
         extra_kwargs = {
             'password': {'write_only': True},
@@ -212,21 +161,17 @@ class UserSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
     
     def update(self, instance, validated_data):
-        # Hash password if it's being updated
         if 'password' in validated_data:
             validated_data['password'] = make_password(validated_data['password'])
         
-        # Remove ALL datetime fields to prevent timezone issues
         validated_data.pop('last_login', None)
         validated_data.pop('created_at', None)
         validated_data.pop('updated_at', None)
         validated_data.pop('date_joined', None)
         
-        # Update only the allowed fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
-        # Don't let Django try to save datetime fields - keep originals
         instance.save(update_fields=list(validated_data.keys()))
         
         return instance
@@ -282,6 +227,12 @@ class VendorListSerializer(serializers.ModelSerializer):
                   'compliance_score', 'is_active', 'is_blacklisted']
 
 
+class VendorBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vendor
+        fields = ['vendor_id', 'vendor_code', 'vendor_name', 'email', 'phone_number']
+
+
 # ============================================
 # PROJECT MANAGEMENT SERIALIZERS
 # ============================================
@@ -334,8 +285,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     wo_supervisor_name = serializers.CharField(source='wo_supervisor.get_full_name', read_only=True)
     milestones = ProjectMilestoneSerializer(many=True, read_only=True)
     team_members = ProjectTeamSerializer(many=True, read_only=True)
-    contract_value = serializers.DecimalField(max_digits=15, decimal_places=2)
-     
+    
     class Meta:
         model = Project
         fields = '__all__'
@@ -352,6 +302,36 @@ class ProjectListSerializer(serializers.ModelSerializer):
         fields = ['project_id', 'project_code', 'project_name', 'vendor', 'vendor_name',
                   'status', 'status_name', 'status_color', 'start_date', 'contract_value', 
                   'completion_date', 'is_delayed', 'delay_days', 'priority', 'risk_score']
+
+
+class ProjectValidationListSerializer(serializers.ModelSerializer):
+    """Serializer for projects awaiting document validation"""
+    vendor_info = VendorBasicSerializer(source='vendor', read_only=True)
+    document_count = serializers.SerializerMethodField()
+    pending_documents = serializers.SerializerMethodField()
+    approved_documents = serializers.SerializerMethodField()
+    rejected_documents = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Project
+        fields = [
+            'project_id', 'project_code', 'project_name', 'project_location',
+            'completion_date', 'vendor_info', 'document_count',
+            'pending_documents', 'approved_documents', 'rejected_documents',
+            'status'
+        ]
+    
+    def get_document_count(self, obj):
+        return obj.documents.count()
+    
+    def get_pending_documents(self, obj):
+        return obj.documents.filter(approval_status='Pending').count()
+    
+    def get_approved_documents(self, obj):
+        return obj.documents.filter(approval_status='Approved').count()
+    
+    def get_rejected_documents(self, obj):
+        return obj.documents.filter(approval_status='Rejected').count()
 
 
 # ============================================
@@ -411,6 +391,43 @@ class ProjectDocumentSerializer(serializers.ModelSerializer):
         return None
 
 
+class ProjectDocumentListSerializer(serializers.ModelSerializer):
+    """Serializer for listing documents with validation info"""
+    doc_type_name = serializers.CharField(source='doc_type.doc_type_name', read_only=True)
+    uploaded_by_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ProjectDocument
+        fields = [
+            'document_id', 'document_name', 'doc_type', 'doc_type_name',
+            'file_size', 'file_type', 'upload_date', 'approval_status',
+            'approval_date', 'rejection_reason', 'uploaded_by_name',
+            'document_path', 'notes'
+        ]
+    
+    def get_uploaded_by_name(self, obj):
+        if obj.uploaded_by:
+            return obj.uploaded_by.get_full_name()
+        return None
+
+
+class ProjectDocumentValidationSerializer(serializers.ModelSerializer):
+    """Serializer for validating/updating documents"""
+    
+    class Meta:
+        model = ProjectDocument
+        fields = ['approval_status', 'approval_date', 'rejection_reason', 'approved_by']
+        read_only_fields = ['approved_by']
+    
+    def update(self, instance, validated_data):
+        if 'approval_status' in validated_data:
+            request = self.context.get('request')
+            if request and request.user:
+                validated_data['approved_by'] = request.user
+        
+        return super().update(instance, validated_data)
+
+
 class DocumentComplianceSerializer(serializers.ModelSerializer):
     project_code = serializers.CharField(source='project.project_code', read_only=True)
     doc_type_name = serializers.CharField(source='doc_type.doc_type_name', read_only=True)
@@ -419,6 +436,14 @@ class DocumentComplianceSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentCompliance
         fields = '__all__'
+
+
+class DocumentValidationStatsSerializer(serializers.Serializer):
+    """Serializer for validation statistics"""
+    pending_validation = serializers.IntegerField()
+    validated_today = serializers.IntegerField()
+    issues_found = serializers.IntegerField()
+    total_documents = serializers.IntegerField()
 
 
 # ============================================
@@ -447,7 +472,6 @@ class SLATrackingSerializer(serializers.ModelSerializer):
     
     def get_days_remaining(self, obj):
         if obj.completion_date is None and obj.due_date:
-            from datetime import date
             remaining = (obj.due_date - date.today()).days
             return remaining
         return None
@@ -461,6 +485,47 @@ class InspectionTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = InspectionType
         fields = '__all__'
+
+
+class QIInspectionPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QIInspectionPhoto
+        fields = '__all__'
+        read_only_fields = ('photo_id', 'uploaded_at', 'created_at')
+
+
+class QIInspectionCorrectionPhotoSerializer(serializers.ModelSerializer):
+    photo_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = QIInspectionCorrectionPhoto
+        fields = [
+            'photo_id',
+            'inspection',
+            'photo_file',
+            'photo_url',
+            'caption',
+            'uploaded_by',
+            'uploaded_at'
+        ]
+        read_only_fields = ['photo_id', 'uploaded_at']
+    
+    def get_photo_url(self, obj):
+        if obj.photo_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.photo_file.url)
+        return None
+
+
+class QIInspectionCorrectionSerializer(serializers.Serializer):
+    """Serializer for submitting corrections"""
+    correction_notes = serializers.CharField(required=True)
+    corrective_photos = serializers.ListField(
+        child=serializers.ImageField(),
+        required=False,
+        allow_empty=True
+    )
 
 
 class QIInspectionSerializer(serializers.ModelSerializer):
@@ -477,7 +542,6 @@ class QIInspectionSerializer(serializers.ModelSerializer):
     
     def get_is_overdue(self, obj):
         if not obj.is_completed and obj.scheduled_date:
-            from datetime import date
             return obj.scheduled_date < date.today()
         return False
 
@@ -511,6 +575,241 @@ class QIPerformanceSerializer(serializers.ModelSerializer):
         return 0
 
 
+class QIWeeklyAccomplishmentSerializer(serializers.ModelSerializer):
+    qi_name = serializers.CharField(source='qi_user.get_full_name', read_only=True)
+    
+    class Meta:
+        model = QIWeeklyAccomplishment
+        fields = '__all__'
+        read_only_fields = ['total_inspections', 'target_met', 'created_at', 'updated_at']
+
+
+class QIMonthlyAccomplishmentSerializer(serializers.ModelSerializer):
+    qi_name = serializers.CharField(source='qi_user.get_full_name', read_only=True)
+    month_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = QIMonthlyAccomplishment
+        fields = '__all__'
+        read_only_fields = ['total_inspections', 'target_met', 
+                           'achievement_percentage', 'created_at', 'updated_at']
+    
+    def get_month_display(self, obj):
+        return obj.month.strftime('%B %Y')
+
+
+# ============================================
+# INSPECTION CHECKLIST & FLAGS SERIALIZERS
+# ============================================
+
+class InspectionChecklistItemSerializer(serializers.ModelSerializer):
+    checked_by_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = InspectionChecklistItem
+        fields = [
+            'id',
+            'inspection',
+            'item_name',
+            'item_category',
+            'item_order',
+            'status',
+            'notes',
+            'photos',
+            'checked_at',
+            'checked_by',
+            'checked_by_name',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_checked_by_name(self, obj):
+        if obj.checked_by:
+            return f"{obj.checked_by.first_name} {obj.checked_by.last_name}".strip() or obj.checked_by.username
+        return None
+
+
+class InspectionFlagSerializer(serializers.ModelSerializer):
+    inspection_code = serializers.CharField(source='inspection.inspection_id', read_only=True)
+    project_code = serializers.CharField(source='inspection.project.project_code', read_only=True)
+    reviewed_by_name = serializers.SerializerMethodField()
+    failed_items = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = InspectionFlag
+        fields = [
+            'id',
+            'inspection',
+            'inspection_code',
+            'project_code',
+            'flag_type',
+            'item_count',
+            'requires_action',
+            'status',
+            'ai_suggestions',
+            'created_at',
+            'reviewed_at',
+            'reviewed_by',
+            'reviewed_by_name',
+            'failed_items'
+        ]
+        read_only_fields = ['created_at']
+    
+    def get_reviewed_by_name(self, obj):
+        if obj.reviewed_by:
+            return f"{obj.reviewed_by.first_name} {obj.reviewed_by.last_name}".strip() or obj.reviewed_by.username
+        return None
+    
+    def get_failed_items(self, obj):
+        """Get the actual failed checklist items"""
+        items = InspectionChecklistItem.objects.filter(
+            inspection=obj.inspection,
+            status='FAIL'
+        )
+        return InspectionChecklistItemSerializer(items, many=True).data
+
+
+# ============================================
+# DEFECT REPORT SERIALIZERS
+# ============================================
+
+class DefectCorrectionHistorySerializer(serializers.ModelSerializer):
+    action_by_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = DefectCorrectionHistory
+        fields = [
+            'id',
+            'defect',
+            'action',
+            'action_by',
+            'action_by_name',
+            'action_at',
+            'notes',
+            'photos'
+        ]
+    
+    def get_action_by_name(self, obj):
+        if obj.action_by:
+            return f"{obj.action_by.first_name} {obj.action_by.last_name}".strip() or obj.action_by.username
+        return None
+
+
+class DefectReportSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+    reviewed_by_name = serializers.SerializerMethodField()
+    correction_submitted_by_name = serializers.SerializerMethodField()
+    project_code = serializers.CharField(source='project.project_code', read_only=True)
+    vendor_name = serializers.CharField(source='project.vendor.vendor_name', read_only=True)
+    inspection_date = serializers.DateField(source='inspection.inspection_date', read_only=True)
+    correction_history = DefectCorrectionHistorySerializer(many=True, read_only=True)
+    days_overdue = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = DefectReport
+        fields = [
+            'defect_id',
+            'inspection',
+            'project',
+            'project_code',
+            'vendor_name',
+            'inspection_date',
+            'defect_type',
+            'defect_category',
+            'severity',
+            'description',
+            'related_checklist_items',
+            'photos',
+            'location_gps',
+            'qi_notes',
+            'qi_signature',
+            'created_by',
+            'created_by_name',
+            'created_at',
+            'correction_status',
+            'correction_due_date',
+            'correction_photos',
+            'correction_notes',
+            'correction_submitted_at',
+            'correction_submitted_by',
+            'correction_submitted_by_name',
+            'failure_count',
+            'reviewed_by',
+            'reviewed_by_name',
+            'reviewed_at',
+            'review_notes',
+            'is_escalated',
+            'escalated_at',
+            'escalation_reason',
+            'correction_history',
+            'days_overdue'
+        ]
+        read_only_fields = ['defect_id', 'created_at', 'failure_count']
+    
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return f"{obj.created_by.first_name} {obj.created_by.last_name}".strip() or obj.created_by.username
+        return None
+    
+    def get_reviewed_by_name(self, obj):
+        if obj.reviewed_by:
+            return f"{obj.reviewed_by.first_name} {obj.reviewed_by.last_name}".strip() or obj.reviewed_by.username
+        return None
+    
+    def get_correction_submitted_by_name(self, obj):
+        if obj.correction_submitted_by:
+            return f"{obj.correction_submitted_by.first_name} {obj.correction_submitted_by.last_name}".strip() or obj.correction_submitted_by.username
+        return None
+    
+    def get_days_overdue(self, obj):
+        if obj.correction_due_date and obj.correction_status not in ['APPROVED', 'CLOSED']:
+            delta = date.today() - obj.correction_due_date
+            return delta.days if delta.days > 0 else 0
+        return 0
+
+
+class DefectReportCreateSerializer(serializers.ModelSerializer):
+    """Serializer for QI to create defect reports"""
+    
+    class Meta:
+        model = DefectReport
+        fields = [
+            'inspection',
+            'project',
+            'defect_type',
+            'defect_category',
+            'severity',
+            'description',
+            'related_checklist_items',
+            'photos',
+            'location_gps',
+            'qi_notes',
+            'qi_signature',
+            'correction_due_date'
+        ]
+    
+    def validate_qi_signature(self, value):
+        if not value:
+            raise serializers.ValidationError("QI signature is required for legal validity")
+        return value
+    
+    def create(self, validated_data):
+        validated_data['created_by'] = self.context['request'].user
+        validated_data['correction_status'] = 'OPEN'
+        return super().create(validated_data)
+
+
+class AIDefectSuggestionSerializer(serializers.Serializer):
+    """Serializer for AI-generated defect grouping suggestions"""
+    suggested_defect_type = serializers.CharField()
+    suggested_severity = serializers.CharField()
+    suggested_description = serializers.CharField()
+    related_item_ids = serializers.ListField(child=serializers.IntegerField())
+    confidence_score = serializers.FloatField()
+    reasoning = serializers.CharField()
+
+
 # ============================================
 # PENALTY MANAGEMENT SERIALIZERS
 # ============================================
@@ -537,7 +836,7 @@ class PenaltySerializer(serializers.ModelSerializer):
 
 
 # ============================================
-# BILLING MANAGEMENT SERIALIZERS
+# BILLING & PAYMENT SERIALIZERS
 # ============================================
 
 class PaymentSerializer(serializers.ModelSerializer):
@@ -546,13 +845,40 @@ class PaymentSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Payment
-        fields = '__all__'
-
-
-# serializers.py - Add these to your existing serializers
-
-from rest_framework import serializers
-from .models import Invoice, Payment, Project, Vendor, User
+        fields = [
+            'invoice',
+            'invoice_number',
+            'payment_amount',
+            'payment_date',
+            'payment_method',
+            'payment_reference',
+            'notes',
+            'processed_by',
+            'processed_by_name',
+            'created_at',
+        ]
+        read_only_fields = ['created_at', 'processed_by']
+    
+    def validate(self, data):
+        if data['payment_amount'] <= 0:
+            raise serializers.ValidationError(
+                "Payment amount must be greater than zero"
+            )
+        
+        invoice = data['invoice']
+        existing_payments = Payment.objects.filter(invoice=invoice).aggregate(
+            Sum('payment_amount')
+        )['payment_amount__sum'] or 0
+        
+        total_after_payment = existing_payments + float(data['payment_amount'])
+        net_amount = float(invoice.net_amount)
+        
+        if total_after_payment > net_amount:
+            raise serializers.ValidationError(
+                f"Total payment (₱{total_after_payment:,.2f}) exceeds net amount (₱{net_amount:,.2f})"
+            )
+        
+        return data
 
 
 class InvoiceSerializer(serializers.ModelSerializer):
@@ -564,8 +890,6 @@ class InvoiceSerializer(serializers.ModelSerializer):
     vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
     created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
     approved_by_name = serializers.CharField(source='approved_by.get_full_name', read_only=True)
-    
-    # Calculated fields
     days_until_due = serializers.SerializerMethodField()
     is_overdue = serializers.SerializerMethodField()
     
@@ -602,9 +926,6 @@ class InvoiceSerializer(serializers.ModelSerializer):
         read_only_fields = ['invoice_id', 'created_at', 'updated_at']
     
     def get_days_until_due(self, obj):
-        """Calculate days until due date"""
-        from datetime import datetime, date
-        
         if obj.payment_status == 'Paid':
             return 0
         
@@ -618,24 +939,18 @@ class InvoiceSerializer(serializers.ModelSerializer):
         return delta
     
     def get_is_overdue(self, obj):
-        """Check if invoice is overdue"""
-        from datetime import date
-        
         if obj.payment_status == 'Paid':
             return False
         
         return obj.due_date < date.today()
     
     def validate(self, data):
-        """Validate invoice data"""
-        # Ensure due date is after invoice date
         if 'invoice_date' in data and 'due_date' in data:
             if data['due_date'] < data['invoice_date']:
                 raise serializers.ValidationError(
                     "Due date must be after invoice date"
                 )
         
-        # Validate amounts
         if 'invoice_amount' in data:
             if float(data['invoice_amount']) < 0:
                 raise serializers.ValidationError(
@@ -647,65 +962,6 @@ class InvoiceSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     "Penalty amount cannot be negative"
                 )
-        
-        # Calculate net amount
-        if 'invoice_amount' in data or 'penalty_amount' in data:
-            invoice_amt = float(data.get('invoice_amount', 0))
-            penalty_amt = float(data.get('penalty_amount', 0))
-            
-            if penalty_amt > invoice_amt:
-                raise serializers.ValidationError(
-                    "Penalty amount cannot exceed invoice amount"
-                )
-        
-        return data
-
-
-class PaymentSerializer(serializers.ModelSerializer):
-    """Serializer for Payment model"""
-    
-    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
-    processed_by_name = serializers.CharField(source='processed_by.get_full_name', read_only=True)
-    
-    class Meta:
-        model = Payment
-        fields = [
-            'invoice',
-            'invoice_number',
-            'payment_amount',
-            'payment_date',
-            'payment_method',
-            'payment_reference',
-            'notes',
-            'processed_by',
-            'processed_by_name',
-            'created_at',
-        ]
-        read_only_fields = ['created_at', 'processed_by']
-    
-    def validate(self, data):
-        """Validate payment data"""
-        # Check payment amount
-        if data['payment_amount'] <= 0:
-            raise serializers.ValidationError(
-                "Payment amount must be greater than zero"
-            )
-        
-        # Check if payment exceeds invoice net amount
-        invoice = data['invoice']
-        from django.db.models import Sum
-        
-        existing_payments = Payment.objects.filter(invoice=invoice).aggregate(
-            Sum('payment_amount')
-        )['payment_amount__sum'] or 0
-        
-        total_after_payment = existing_payments + float(data['payment_amount'])
-        net_amount = float(invoice.net_amount)
-        
-        if total_after_payment > net_amount:
-            raise serializers.ValidationError(
-                f"Total payment (₱{total_after_payment:,.2f}) exceeds net amount (₱{net_amount:,.2f})"
-            )
         
         return data
 
@@ -727,8 +983,6 @@ class InvoiceDetailSerializer(InvoiceSerializer):
         ]
     
     def get_penalties(self, obj):
-        """Get penalties associated with this invoice's project"""
-        from .models import Penalty
         penalties = Penalty.objects.filter(
             project=obj.project,
             penalty_status='Issued'
@@ -742,16 +996,10 @@ class InvoiceDetailSerializer(InvoiceSerializer):
         } for p in penalties]
     
     def get_total_paid(self, obj):
-        """Calculate total amount paid"""
-        from django.db.models import Sum
-        
         total = obj.payments.aggregate(Sum('payment_amount'))['payment_amount__sum']
         return str(total or 0)
     
     def get_balance(self, obj):
-        """Calculate remaining balance"""
-        from django.db.models import Sum
-        
         total_paid = obj.payments.aggregate(
             Sum('payment_amount')
         )['payment_amount__sum'] or 0
@@ -782,10 +1030,8 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
         ]
     
     def create(self, validated_data):
-        """Create invoice with items"""
         items = validated_data.pop('items', [])
         
-        # Calculate amounts from items if provided
         if items:
             total = sum(
                 item.get('quantity', 1) * item.get('unit_price', 0) 
@@ -793,14 +1039,12 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
             )
             validated_data['invoice_amount'] = str(total)
         
-        # Calculate net amount
         invoice_amt = float(validated_data.get('invoice_amount', 0))
         penalty_amt = float(validated_data.get('penalty_amount', 0))
         validated_data['net_amount'] = str(invoice_amt - penalty_amt)
         
         invoice = super().create(validated_data)
         
-        # Store items in notes if needed (or create separate InvoiceItem model)
         if items:
             items_text = "\n".join([
                 f"- {item.get('description', 'N/A')}: "
@@ -817,6 +1061,71 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
             invoice.save()
         
         return invoice
+
+
+class PaymentReceiptSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.CharField(read_only=True)
+    reviewed_by_name = serializers.CharField(read_only=True)
+    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
+    
+    class Meta:
+        model = PaymentReceipt
+        fields = [
+            'receipt_id',
+            'invoice',
+            'invoice_number',
+            'receipt_image',
+            'receipt_number',
+            'payment_amount',
+            'payment_date',
+            'payment_method',
+            'notes',
+            'status',
+            'uploaded_by',
+            'uploaded_by_name',
+            'uploaded_at',
+            'reviewed_by',
+            'reviewed_by_name',
+            'reviewed_at',
+            'review_notes',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = [
+            'receipt_id',
+            'uploaded_by',
+            'uploaded_at',
+            'status',
+            'reviewed_by',
+            'reviewed_at',
+            'review_notes',
+            'created_at',
+            'updated_at'
+        ]
+    
+    def create(self, validated_data):
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            validated_data['uploaded_by'] = request.user
+        
+        return super().create(validated_data)
+    
+    def validate_payment_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Payment amount must be greater than zero")
+        return value
+    
+    def validate(self, data):
+        invoice = data.get('invoice')
+        payment_amount = data.get('payment_amount')
+        
+        if invoice and payment_amount:
+            if payment_amount > invoice.net_amount:
+                raise serializers.ValidationError({
+                    'payment_amount': f'Payment amount cannot exceed invoice net amount of ₱{invoice.net_amount}'
+                })
+        
+        return data
 
 
 # ============================================
@@ -948,57 +1257,430 @@ class SystemSettingSerializer(serializers.ModelSerializer):
 
 
 # ============================================
+# WORK ORDER SERIALIZERS
+# ============================================
+
+class WorkOrderListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for list views"""
+    
+    class Meta:
+        model = WorkOrder
+        fields = [
+            'id', 'project_id', 'wo_no', 'vip', 'description', 'location', 'municipality',
+            'area_of_responsibility', 'date_received_jacket_ps', 'date_received_awarding_wo',
+            'vendor_remarks', 'c1_remarks', 'assigned', 'status', 'date_wmtrl', 'date_sched',
+            'date_received_by_vc', 'actual_date_completed_on_site', 'date_fcomp', 'date_comp',
+            'days_wmtrl_to_fcomp_apt', 'days_sched_to_fcomp', 'days_comp',
+            'date_needed_wmtrl_to_fcomp_075', 'date_needed_fcomp_095', 
+            'date_needed_wmtrl_to_fcomp_50', 'computed_index_wmtrl_to_fcomp_ccti',
+            'computed_index_comp', 'spt_m', 'spt_l', 'duration_075_days', 'duration_095_days',
+            'target_days', 'spt_m_for_comp', 'duration_comp_days', 'target_days_comp',
+            'date_needed_to_comp', 'ageing_days_since_fcomp', 'exclusion_reason',
+            'for_ccti_exclusion', 'encoded_in_eam', 'validated_by_dcsam', 'for_apt_exclusion',
+            'exclusion_start_date', 'exclusion_duration_days', 'exclusion_end_date',
+            'remarks_follow_up_by', 'remarks_2', 'date_needed_submit_coc',
+            'ageing_submission_coc', 'date_completed_from_coc', 'actual_received_coc',
+            'date_audit', 'audit_by', 'with_back_job', 'backjob_tagged_eam',
+            'date_received_by_contractor', 'date_corrected', 'date_material_balancing',
+            'material_balancing_by', 'yes_no_flag', 'emailed_to_meter', 'dt_correction_method',
+            'tln', 'with_pole_replacement', 'actual_field_status', 'remarks_3',
+            'abf_printed_by', 'date_printed_pole_tag_form', 'pole_tln_tags',
+            'exclusion_days_apt', 'apt_with_exclusion', 'exclusion_days_ccti',
+            'duration_ccti_with_exclusion', 'ccti_with_exclusion', 'e2e_prdi',
+            'current_ccti_with_exclusion', 'current_ccti', 'final_ccti_less_than_fcomp',
+            'prdi', 'days_ageing', 'rev_non_rev', 'age_bracket', 'ntc_date_created',
+            'ntc_amount', 'ntc', 'ntc_date_received_by_contractor', 'ntc_date_completed',
+            'ntc_running_days', 'nov_debit_memo_date_created', 'nov_amount',
+            'nov_date_received_by_contractor', 'ext', 'updated_supv', 'supv_name',
+            'status_as_of_2025_04_04', 'diff_days_wmtrl_to_sched_2025', 'filter_flag',
+            'supervisor_full_name', 'created_at', 'updated_at', 'vendor_id',
+        ]
+
+
+class WorkOrderSerializer(serializers.ModelSerializer):
+    """Full serializer for detail views"""
+    
+    class Meta:
+        model = WorkOrder
+        fields = '__all__'
+        read_only_fields = ['vendor_id', 'id', 'created_at', 'updated_at', 
+                           'days_wmtrl_to_fcomp_apt', 'days_sched_to_fcomp', 
+                           'days_comp', 'computed_index_wmtrl_to_fcomp_ccti', 
+                           'computed_index_comp']
+
+
+class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for create and update operations"""
+    
+    class Meta:
+        model = WorkOrder
+        exclude = ['created_at', 'updated_at', 'days_wmtrl_to_fcomp_apt', 
+                   'days_sched_to_fcomp', 'days_comp', 
+                   'computed_index_wmtrl_to_fcomp_ccti', 'computed_index_comp']
+    
+    def validate_wo_no(self, value):
+        if self.instance is None:
+            if WorkOrder.objects.filter(wo_no=value).exists():
+                raise serializers.ValidationError("Work Order number already exists")
+        return value
+    
+    def validate(self, data):
+        if data.get('date_received_jacket_ps') and data.get('date_comp'):
+            if data['date_comp'] < data['date_received_jacket_ps']:
+                raise serializers.ValidationError(
+                    "Completion date cannot be before received date"
+                )
+        
+        if data.get('date_fcomp') and data.get('date_comp'):
+            if data['date_comp'] < data['date_fcomp']:
+                raise serializers.ValidationError(
+                    "Completion date cannot be before FCOMP date"
+                )
+        
+        return data
+
+
+class WorkOrderDocumentSerializer(serializers.ModelSerializer):
+    uploaded_by_username = serializers.SerializerMethodField()
+    approved_by_username = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkOrderDocument
+        fields = [
+            'id', 'work_order', 'document_type', 'document_name', 'document_path',
+            'file', 'file_url', 'uploaded_by_id', 'uploaded_by_username', 'upload_date',
+            'is_approved', 'approved_by_id', 'approved_by_username', 'approval_date',
+            'notes', 'created_at',
+        ]
+        read_only_fields = ['upload_date', 'created_at', 'document_name', 'document_path']
+
+    def get_file_url(self, obj):
+        request = self.context.get('request')
+        if obj.file and request:
+            return request.build_absolute_uri(obj.file.url)
+        elif obj.file:
+            return obj.file.url
+        return None
+
+    def get_uploaded_by_username(self, obj):
+        if obj.uploaded_by_id:
+            try:
+                user = User.objects.get(user_id=obj.uploaded_by_id)
+                return user.username
+            except User.DoesNotExist:
+                return "Unknown User"
+        return "System"
+    
+    def get_approved_by_username(self, obj):
+        if obj.approved_by_id:
+            try:
+                user = User.objects.get(user_id=obj.approved_by_id)
+                return user.username
+            except User.DoesNotExist:
+                return "Unknown User"
+        return None
+
+
+class WorkOrderTimelineSerializer(serializers.ModelSerializer):
+    """Specialized serializer for timeline view"""
+    milestones = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = WorkOrder
+        fields = ['id', 'wo_no', 'description', 'status', 'milestones']
+    
+    def get_milestones(self, obj):
+        milestones = []
+        
+        milestone_mapping = [
+            ('Jacket Received (PS)', obj.date_received_jacket_ps),
+            ('Awarding WO Received', obj.date_received_awarding_wo),
+            ('WMTRL', obj.date_wmtrl),
+            ('Scheduled', obj.date_sched),
+            ('Received by VC', obj.date_received_by_vc),
+            ('Completed On-Site', obj.actual_date_completed_on_site),
+            ('FCOMP', obj.date_fcomp),
+            ('Completed', obj.date_comp),
+            ('Received by Contractor', obj.date_received_by_contractor),
+            ('Corrected', obj.date_corrected),
+        ]
+        
+        for label, date_val in milestone_mapping:
+            if date_val:
+                milestones.append({
+                    'label': label,
+                    'date': date_val,
+                    'completed': True
+                })
+        
+        return sorted(milestones, key=lambda x: x['date'])
+
+
+class WorkOrderStatsSerializer(serializers.Serializer):
+    """Serializer for dashboard statistics"""
+    total_count = serializers.IntegerField()
+    status_breakdown = serializers.ListField()
+    vip_count = serializers.IntegerField()
+    overdue_count = serializers.IntegerField()
+    overdue_percentage = serializers.FloatField()
+    avg_completion_days = serializers.FloatField()
+    completion_rate = serializers.FloatField()
+    by_municipality = serializers.ListField()
+    by_assigned = serializers.ListField()
+    recent_work_orders = WorkOrderListSerializer(many=True)
+
+
+class COCChecklistSerializer(serializers.ModelSerializer):
+    """Serializer for COC Checklist - Work Orders needing COC review"""
+    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
+    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
+    supervisor_name = serializers.SerializerMethodField()
+    days_since_energized = serializers.SerializerMethodField()
+    days_since_coc = serializers.SerializerMethodField()
+    needs_attention = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = WorkOrder
+        fields = [
+            'id', 'wo_no', 'description', 'location', 'municipality',
+            'vendor_id', 'vendor_name', 'vendor_code', 'assigned',
+            'supervisor_full_name', 'supervisor_name', 'status',
+            'date_received_by_vc', 'date_sched', 'date_received_jacket_ps',
+            'days_since_energized', 'days_since_coc', 'needs_attention',
+            'vendor_remarks', 'c1_remarks', 'ntc_amount',
+            'created_at', 'updated_at'
+        ]
+    
+    def get_supervisor_name(self, obj):
+        return obj.supervisor_full_name or 'N/A'
+    
+    def get_days_since_energized(self, obj):
+        if obj.date_received_by_vc:
+            delta = timezone.now().date() - obj.date_received_by_vc
+            return delta.days
+        return None
+    
+    def get_days_since_coc(self, obj):
+        if obj.date_sched:
+            delta = timezone.now().date() - obj.date_sched
+            return delta.days
+        return None
+    
+    def get_needs_attention(self, obj):
+        if obj.date_received_by_vc and not obj.date_sched:
+            days = (timezone.now().date() - obj.date_received_by_vc).days
+            return days > 7
+        if obj.date_sched and not obj.date_received_jacket_ps:
+            days = (timezone.now().date() - obj.date_sched).days
+            return days > 3
+        return False
+
+
+# ============================================
+# CREW MONITORING SERIALIZERS
+# ============================================
+
+class CrewTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CrewType
+        fields = '__all__'
+
+
+class DailyCrewMonitoringSerializer(serializers.ModelSerializer):
+    crew_code = serializers.CharField(source='crew_type.crew_code', read_only=True)
+    crew_name = serializers.CharField(source='crew_type.crew_name', read_only=True)
+    
+    class Meta:
+        model = DailyCrewMonitoring
+        fields = '__all__'
+        read_only_fields = ['weighted_productivity', 'monthly_peso_value', 
+                           'weekly_peso_value', 'daily_peso_value', 
+                           'created_at', 'updated_at']
+
+
+class DailyCrewMonitoringSummarySerializer(serializers.Serializer):
+    """Aggregated summary for crew monitoring"""
+    crew_code = serializers.CharField()
+    crew_name = serializers.CharField()
+    month = serializers.DateField()
+    total_productivity = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_peso_value = serializers.DecimalField(max_digits=15, decimal_places=2)
+    average_daily_productivity = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+
+# ============================================
+# PCA SERIALIZERS
+# ============================================
+
+class PCAGoalSerializer(serializers.ModelSerializer):
+    month_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = PCAGoal
+        fields = '__all__'
+    
+    def get_month_display(self, obj):
+        return obj.month.strftime('%B %Y')
+
+
+class PCASummarySerializer(serializers.ModelSerializer):
+    month_display = serializers.SerializerMethodField()
+    goal = PCAGoalSerializer(source='month', read_only=True)
+    
+    class Meta:
+        model = PCASummary
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_month_display(self, obj):
+        return obj.month.strftime('%B %Y')
+
+
+# ============================================
+# VENDOR PRODUCTIVITY SERIALIZERS
+# ============================================
+
+class VendorProductivityMonthlySerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
+    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
+    month_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = VendorProductivityMonthly
+        fields = '__all__'
+        read_only_fields = ['actual_capability_percentage', 'productivity_percentage', 
+                        'created_at', 'updated_at']
+
+    def get_month_display(self, obj):
+        return obj.month.strftime('%B %Y')
+
+
+# ============================================
+# AGEING ANALYSIS SERIALIZERS
+# ============================================
+
+class AgeingAnalysisSerializer(serializers.ModelSerializer):
+    wo_no = serializers.CharField(source='work_order.wo_no', read_only=True)
+    wo_description = serializers.CharField(source='work_order.description', read_only=True)
+    supervisor_name = serializers.SerializerMethodField()
+    age_bracket_display = serializers.CharField(source='get_age_bracket_display', read_only=True)
+    
+    class Meta:
+        model = AgeingAnalysis
+        fields = '__all__'
+
+    def get_supervisor_name(self, obj):
+        return obj.supervisor.get_full_name() if obj.supervisor else None
+
+
+class AgeingSummarySerializer(serializers.Serializer):
+    """Summary statistics for ageing analysis"""
+    age_bracket = serializers.CharField()
+    count = serializers.IntegerField()
+    exclusion_duration = serializers.DecimalField(max_digits=15, decimal_places=2)
+
+
+# ============================================
+# BACKJOB MONITORING SERIALIZERS
+# ============================================
+
+class BackjobMonitoringSerializer(serializers.ModelSerializer):
+    wo_no = serializers.CharField(source='work_order.wo_no', read_only=True)
+    wo_description = serializers.CharField(source='work_order.description', read_only=True)
+    assigned_to_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = BackjobMonitoring
+        fields = '__all__'
+        read_only_fields = ['days_pending', 'is_overdue', 'created_at', 'updated_at']
+
+    def get_assigned_to_name(self, obj):
+        return obj.assigned_to.get_full_name() if obj.assigned_to else None
+
+
+# ============================================
+# KPI TRACKING SERIALIZERS
+# ============================================
+
+class KPISnapshotSerializer(serializers.ModelSerializer):
+    kpi_type_display = serializers.CharField(source='get_kpi_type_display', read_only=True)
+    status = serializers.SerializerMethodField()
+    variance = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = KPISnapshot
+        fields = '__all__'
+    
+    def get_status(self, obj):
+        if not obj.target_value:
+            return 'NEUTRAL'
+        
+        if obj.kpi_value >= obj.target_value:
+            return 'GREEN'
+        elif obj.kpi_value >= obj.target_value * 0.9:
+            return 'YELLOW'
+        else:
+            return 'RED'
+    
+    def get_variance(self, obj):
+        if not obj.target_value or obj.target_value == 0:
+            return None
+        return float((obj.kpi_value - obj.target_value) / obj.target_value * 100)
+
+
+class KPITargetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = KPITarget
+        fields = '__all__'
+
+
+class KPIDashboardSerializer(serializers.Serializer):
+    """Serializer for comprehensive KPI dashboard data"""
+    period_start = serializers.DateField()
+    period_end = serializers.DateField()
+    total_kpis = serializers.IntegerField()
+    ccti = serializers.DictField()
+    pca_conversion = serializers.DictField()
+    ageing_completion = serializers.DictField()
+    pai_adherence = serializers.DictField()
+    termination_apt = serializers.DictField()
+    termination_resolution = serializers.DictField()
+    prdi = serializers.DictField()
+    cost_settlement = serializers.DictField()
+    quality_index = serializers.DictField()
+    capability_utilization = serializers.DictField()
+    historical_trends = serializers.DictField()
+    chart_data = serializers.DictField()
+
+
+# ============================================
+# VENDOR DAILY ACTIVITY SERIALIZERS
+# ============================================
+
+class VendorActivityPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VendorActivityPhoto
+        fields = '__all__'
+        read_only_fields = ['photo_id', 'uploaded_at']
+
+
+class VendorDailyActivitySerializer(serializers.ModelSerializer):
+    photos = VendorActivityPhotoSerializer(many=True, read_only=True)
+    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
+    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
+    
+    class Meta:
+        model = VendorDailyActivity
+        fields = '__all__'
+        read_only_fields = ['activity_id', 'signed_on_at', 'created_at', 'updated_at']
+
+
+# ============================================
 # DASHBOARD & ANALYTICS SERIALIZERS
 # ============================================
 
-class DashboardStatsSerializer(serializers.Serializer):
-    """Serializer for dashboard statistics"""
-    total_projects = serializers.IntegerField()
-    active_projects = serializers.IntegerField()
-    delayed_projects = serializers.IntegerField()
-    completed_projects = serializers.IntegerField()
-    total_vendors = serializers.IntegerField()
-    active_vendors = serializers.IntegerField()
-    blacklisted_vendors = serializers.IntegerField()
-    pending_inspections = serializers.IntegerField()
-    overdue_documents = serializers.IntegerField()
-    sla_breaches = serializers.IntegerField()
-    total_penalties = serializers.DecimalField(max_digits=15, decimal_places=2)
-    pending_invoices = serializers.IntegerField()
-
-
-class ProjectStatusSummarySerializer(serializers.Serializer):
-    """Serializer for project status summary"""
-    status_name = serializers.CharField()
-    project_count = serializers.IntegerField()
-    percentage = serializers.DecimalField(max_digits=5, decimal_places=2)
-
-
-class VendorPerformanceSummarySerializer(serializers.Serializer):
-    """Serializer for vendor performance summary"""
-    id = serializers.IntegerField()
-    vendor_code = serializers.CharField()
-    vendor_name = serializers.CharField()
-    compliance_score = serializers.DecimalField(max_digits=5, decimal_places=2)
-    total_projects = serializers.IntegerField()
-    delayed_projects = serializers.IntegerField()
-    on_time_percentage = serializers.DecimalField(max_digits=5, decimal_places=2)
-    total_penalties = serializers.DecimalField(max_digits=15, decimal_places=2)
-    sla_breaches = serializers.IntegerField()
-
-
-class DelayAnalysisSerializer(serializers.Serializer):
-    """Serializer for delay analysis"""
-    factor__factor_name = serializers.CharField()
-    factor__factor_category = serializers.CharField()
-    occurrence_count = serializers.IntegerField()
-    total_delay_days = serializers.IntegerField()
-    avg_delay_days = serializers.DecimalField(max_digits=10, decimal_places=2)
-    
-
-from rest_framework import serializers
-
-# Dashboard Statistics Serializers
 class DashboardStatsSerializer(serializers.Serializer):
     total_projects = serializers.IntegerField()
     active_projects = serializers.IntegerField()
@@ -1102,1079 +1784,82 @@ class UpcomingDeadlinesSerializer(serializers.Serializer):
     due_date = serializers.DateField()
     days_remaining = serializers.IntegerField()
     priority = serializers.CharField()
-    
-
-
-
-# ============================================
-# CREW MONITORING SERIALIZERS
-# ============================================
-
-class CrewTypeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CrewType
-        fields = '__all__'
-
-
-class DailyCrewMonitoringSerializer(serializers.ModelSerializer):
-    crew_code = serializers.CharField(source='crew_type.crew_code', read_only=True)
-    crew_name = serializers.CharField(source='crew_type.crew_name', read_only=True)
-    
-    class Meta:
-        model = DailyCrewMonitoring
-        fields = '__all__'
-        read_only_fields = ['weighted_productivity', 'monthly_peso_value', 
-                           'weekly_peso_value', 'daily_peso_value', 
-                           'created_at', 'updated_at']
-
-
-class DailyCrewMonitoringSummarySerializer(serializers.Serializer):
-    """Aggregated summary for crew monitoring"""
-    crew_code = serializers.CharField()
-    crew_name = serializers.CharField()
-    month = serializers.DateField()
-    total_productivity = serializers.DecimalField(max_digits=15, decimal_places=2)
-    total_peso_value = serializers.DecimalField(max_digits=15, decimal_places=2)
-    average_daily_productivity = serializers.DecimalField(max_digits=10, decimal_places=2)
 
 
 # ============================================
-# QI MONITORING SERIALIZERS
+# AI & ML SERIALIZERS
 # ============================================
 
-class QIWeeklyAccomplishmentSerializer(serializers.ModelSerializer):
-    qi_name = serializers.CharField(source='qi_user.get_full_name', read_only=True)
-    
-    class Meta:
-        model = QIWeeklyAccomplishment
-        fields = '__all__'
-        read_only_fields = ['total_inspections', 'target_met', 'created_at', 'updated_at']
-
-
-class QIMonthlyAccomplishmentSerializer(serializers.ModelSerializer):
-    qi_name = serializers.CharField(source='qi_user.get_full_name', read_only=True)
-    month_display = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = QIMonthlyAccomplishment
-        fields = '__all__'
-        read_only_fields = ['total_inspections', 'target_met', 
-                           'achievement_percentage', 'created_at', 'updated_at']
-    
-    def get_month_display(self, obj):
-        return obj.month.strftime('%B %Y')
-
-
-
-# serializers.py - Add these serializers
-
-from rest_framework import serializers
-from .models import *
-
-# ============================================
-# WORK ORDER SERIALIZERS
-# ============================================
-
-from rest_framework import serializers
-from .models import WorkOrder
-
-class WorkOrderListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for list views"""
-
-    class Meta:
-        model = WorkOrder
-        fields = [
-            # Primary / Basic
-            'id',
-            'project_id',
-            'wo_no',
-            'vip',
-            'description',
-            'location',
-            'municipality',
-            'area_of_responsibility',
-            
-
-            # Dates – Basic
-            'date_received_jacket_ps',
-            'date_received_awarding_wo',
-
-            # Remarks & Status
-            'vendor_remarks',
-            'c1_remarks',
-            'assigned',
-            'status',
-
-            # Work Dates
-            'date_wmtrl',
-            'date_sched',
-            'date_received_by_vc',
-            'actual_date_completed_on_site',
-            'date_fcomp',
-            'date_comp',
-
-            # Durations (APT / SPT)
-            'days_wmtrl_to_fcomp',
-            'days_sched_to_fcomp',
-            'days_comp',
-            'date_needed_075_wmtrl_to_fcomp',
-            'date_needed_095_fcomp',
-            'date_needed_50days_wmtrl_to_fcomp',
-            'computed_index_wmtrl_to_fcomp',
-            'computed_index_comp',
-            'spt_m',
-            'spt_l',
-            'duration_075_days',
-            'duration_095_days',
-            'target_days',
-            'spt_m_comp',
-            'duration_comp_days',
-            'target_days_comp',
-            'date_needed_to_comp',
-            'ageing_days_since_fcomp',
-
-            # Exclusions
-            'exclusion_reason',
-            'ccti_exclusion',
-            'encoded_in_eam',
-            'validated_by_dcsam',
-            'apt_exclusion',
-            'exclusion_start_date',
-            'exclusion_duration',
-            'exclusion_end_date',
-
-            # COC
-            'remarks_follow_up',
-            'remarks_2',
-            'date_needed_submit_coc',
-            'ageing_submission_coc',
-            'date_completed_from_coc',
-            'actual_received_coc',
-
-            # Audit / Backjob
-            'date_audit',
-            'audit_by',
-            'with_backjob',
-            'backjob_tagged_in_eam',
-
-            # Contractor / Correction
-            'date_received_by_contractor',
-            'date_corrected',
-            'date_material_balancing',
-            'material_balancing_by',
-            'emailed_to_meter',
-            'dt_correction_method',
-            'tln',
-            'with_pole_replacement',
-            'actual_field_status',
-            'remarks_3',
-            'abf_printed_by',
-            'date_printed_pole_tag',
-            'pole_tln_tags',
-
-            # APT / CCTI with Exclusion
-            'apt_days_exclusion',
-            'apt_with_exclusion',
-            'ccti_days_exclusion',
-            'duration_ccti_with_exclusion',
-            'ccti_with_exclusion',
-
-            # Performance
-            'e2e_prdi',
-            'current_ccti_with_exclusion',
-            'current_ccti',
-            'final_ccti',
-            'prdi',
-            'days_ageing',
-            'rev_nonrev',
-            'age_bracket',
-
-            # NTC
-            'ntc_date_created',
-            'ntc_amount',
-            'ntc_reference',
-            'ntc_date_received_by_contractor',
-            'ntc_date_completed',
-            'ntc_running_days',
-
-            # NOV / Debit
-            'nov_debit_date_created',
-            'nov_debit_amount',
-            'nov_debit_date_received_by_contractor',
-
-            # Supervisor
-            'ext',
-            'updated_supv',
-            'supv_name',
-            'status_040425',
-            'diff_days_wmtrl_to_sched',
-            'supervisor_full_name',
-
-            # Timestamps
-            'created_at',
-            'updated_at',
-            'vendor_id',
-        ]
-
-    
-class DocumentTypeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DocumentType
-        fields = '__all__'
-
-
-class ProjectDocumentListSerializer(serializers.ModelSerializer):
-    """Serializer for listing documents with validation info"""
-    doc_type_name = serializers.CharField(source='doc_type.doc_type_name', read_only=True)
-    uploaded_by_name = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = ProjectDocument
-        fields = [
-            'document_id', 'document_name', 'doc_type', 'doc_type_name',
-            'file_size', 'file_type', 'upload_date', 'approval_status',
-            'approval_date', 'rejection_reason', 'uploaded_by_name',
-            'document_path', 'notes'
-        ]
-    
-    def get_uploaded_by_name(self, obj):
-        if obj.uploaded_by:
-            return obj.uploaded_by.get_full_name()
-        return None
-
-
-class ProjectDocumentValidationSerializer(serializers.ModelSerializer):
-    """Serializer for validating/updating documents"""
-    
-    class Meta:
-        model = ProjectDocument
-        fields = ['approval_status', 'approval_date', 'rejection_reason', 'approved_by']
-        read_only_fields = ['approved_by']
-    
-    def update(self, instance, validated_data):
-        # Set approved_by to current user
-        if 'approval_status' in validated_data:
-            request = self.context.get('request')
-            if request and request.user:
-                validated_data['approved_by'] = request.user
-        
-        return super().update(instance, validated_data)
-
-
-class VendorBasicSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Vendor
-        fields = ['vendor_id', 'vendor_code', 'vendor_name', 'email', 'phone_number']
-
-
-class ProjectValidationListSerializer(serializers.ModelSerializer):
-    """Serializer for projects awaiting document validation"""
-    vendor_info = VendorBasicSerializer(source='vendor', read_only=True)
-    document_count = serializers.SerializerMethodField()
-    pending_documents = serializers.SerializerMethodField()
-    approved_documents = serializers.SerializerMethodField()
-    rejected_documents = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = Project
-        fields = [
-            'project_id', 'project_code', 'project_name', 'project_location',
-            'completion_date', 'vendor_info', 'document_count',
-            'pending_documents', 'approved_documents', 'rejected_documents',
-            'status'
-        ]
-    
-    def get_document_count(self, obj):
-        return obj.documents.count()
-    
-    def get_pending_documents(self, obj):
-        return obj.documents.filter(approval_status='Pending').count()
-    
-    def get_approved_documents(self, obj):
-        return obj.documents.filter(approval_status='Approved').count()
-    
-    def get_rejected_documents(self, obj):
-        return obj.documents.filter(approval_status='Rejected').count()
-
-
-class DocumentValidationStatsSerializer(serializers.Serializer):
-    """Serializer for validation statistics"""
-    pending_validation = serializers.IntegerField()
-    validated_today = serializers.IntegerField()
-    issues_found = serializers.IntegerField()
-    total_documents = serializers.IntegerField()
-
-
-class WorkOrderSerializer(serializers.ModelSerializer):
-    """Full serializer for detail views"""
-
-    
-    class Meta:
-        model = WorkOrder
-        fields = '__all__'
-        read_only_fields = ['vendor_id','id', 'created_at', 'updated_at', 
-                           'days_wmtrl_to_fcomp', 'days_sched_to_fcomp', 
-                           'days_comp', 'computed_index_wmtrl_to_fcomp', 
-                           'computed_index_comp']
-    
-    
-    def get_timeline_summary(self, obj):
-        """Get a summary of the work order timeline"""
-        return {
-            'received_jacket': obj.date_received_jacket_ps,
-            'received_awarding': obj.date_received_awarding_wo,
-            'wmtrl_date': obj.date_wmtrl,
-            'scheduled_date': obj.date_sched,
-            'received_by_vc': obj.date_received_by_vc,
-            'completed_on_site': obj.actual_date_completed_on_site,
-            'fcomp_date': obj.date_fcomp,
-            'completion_date': obj.date_comp,
-            'days_wmtrl_to_fcomp': obj.days_wmtrl_to_fcomp,
-            'days_sched_to_fcomp': obj.days_sched_to_fcomp,
-            'total_days': obj.days_comp
-        }
-
-
-class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for create and update operations"""
-    
-    class Meta:
-        model = WorkOrder
-        exclude = ['created_at', 'updated_at', 'days_wmtrl_to_fcomp', 
-                   'days_sched_to_fcomp', 'days_comp', 
-                   'computed_index_wmtrl_to_fcomp', 'computed_index_comp']
-    
-    def validate_wo_no(self, value):
-        """Ensure WO number is unique"""
-        if self.instance is None:  # Creating new
-            if WorkOrder.objects.filter(wo_no=value).exists():
-                raise serializers.ValidationError("Work Order number already exists")
-        return value
-    
-    def validate(self, data):
-        """Cross-field validation"""
-        # Ensure completion date is after start date
-        if data.get('date_received_jacket_ps') and data.get('date_comp'):
-            if data['date_comp'] < data['date_received_jacket_ps']:
-                raise serializers.ValidationError(
-                    "Completion date cannot be before received date"
-                )
-        
-        # Ensure FCOMP is before COMP
-        if data.get('date_fcomp') and data.get('date_comp'):
-            if data['date_comp'] < data['date_fcomp']:
-                raise serializers.ValidationError(
-                    "Completion date cannot be before FCOMP date"
-                )
-        
-        return data
-
-class WorkOrderDocumentSerializer(serializers.ModelSerializer):
-    uploaded_by_username = serializers.SerializerMethodField()
-    approved_by_username = serializers.SerializerMethodField()
-    file_url = serializers.SerializerMethodField()
-
-    class Meta:
-        model = WorkOrderDocument
-        fields = [
-            'id',
-            'work_order',
-            'document_type',
-            'document_name',
-            'document_path',
-            'file',
-            'file_url',
-            'uploaded_by_id',
-            'uploaded_by_username',
-            'upload_date',
-            'is_approved',
-            'approved_by_id',
-            'approved_by_username',
-            'approval_date',
-            'notes',
-            'created_at',
-        ]
-        read_only_fields = [
-            'upload_date',
-            'created_at',
-            'document_name',
-            'document_path',
-        ]
-
-    def get_file_url(self, obj):
-        """Get the full URL for the uploaded file"""
-        request = self.context.get('request')
-        if obj.file and request:
-            return request.build_absolute_uri(obj.file.url)
-        elif obj.file:
-            return obj.file.url
-        return None
-
-    def get_uploaded_by_username(self, obj):
-        """Get the username of the uploader"""
-        if obj.uploaded_by_id:
-            try:
-                user = User.objects.get(user_id=obj.uploaded_by_id)
-                return user.username
-            except User.DoesNotExist:
-                return "Unknown User"
-        return "System"
-    
-    def get_approved_by_username(self, obj):
-        """Get the username of the approver"""
-        if obj.approved_by_id:
-            try:
-                user = User.objects.get(user_id=obj.approved_by_id)
-                return user.username
-            except User.DoesNotExist:
-                return "Unknown User"
-        return None
-
-
-class WorkOrderTimelineSerializer(serializers.ModelSerializer):
-    """Specialized serializer for timeline view"""
-    milestones = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = WorkOrder
-        fields = ['id', 'wo_no', 'description', 'status', 'milestones']
-    
-    def get_milestones(self, obj):
-        """Get all timeline milestones"""
-        milestones = []
-        
-        milestone_mapping = [
-            ('Jacket Received (PS)', obj.date_received_jacket_ps),
-            ('Awarding WO Received', obj.date_received_awarding_wo),
-            ('WMTRL', obj.date_wmtrl),
-            ('Scheduled', obj.date_sched),
-            ('Received by VC', obj.date_received_by_vc),
-            ('Completed On-Site', obj.actual_date_completed_on_site),
-            ('FCOMP', obj.date_fcomp),
-            ('Completed', obj.date_comp),
-            ('Received by Contractor', obj.date_received_by_contractor),
-            ('Corrected', obj.date_corrected),
-        ]
-        
-        for label, date in milestone_mapping:
-            if date:
-                milestones.append({
-                    'label': label,
-                    'date': date,
-                    'completed': True
-                })
-        
-        return sorted(milestones, key=lambda x: x['date'])
-
-
-class WorkOrderStatsSerializer(serializers.Serializer):
-    """Serializer for dashboard statistics"""
-    total_count = serializers.IntegerField()
-    status_breakdown = serializers.ListField()
-    vip_count = serializers.IntegerField()
-    overdue_count = serializers.IntegerField()
-    overdue_percentage = serializers.FloatField()
-    avg_completion_days = serializers.FloatField()
-    completion_rate = serializers.FloatField()
-    by_municipality = serializers.ListField()
-    by_assigned = serializers.ListField()
-    recent_work_orders = WorkOrderListSerializer(many=True)
-
-
-
-
-
-# ============================================
-# CREW MONITORING SERIALIZERS
-# ============================================
-
-class CrewTypeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CrewType
-        fields = '__all__'
-
-
-class DailyCrewMonitoringSerializer(serializers.ModelSerializer):
-    crew_code = serializers.CharField(source='crew_type.crew_code', read_only=True)
-    crew_name = serializers.CharField(source='crew_type.crew_name', read_only=True)
-    
-    class Meta:
-        model = DailyCrewMonitoring
-        fields = '__all__'
-        read_only_fields = ['weighted_productivity', 'monthly_peso_value', 
-                           'weekly_peso_value', 'daily_peso_value', 
-                           'created_at', 'updated_at']
-
-
-class DailyCrewMonitoringSummarySerializer(serializers.Serializer):
-    """Aggregated summary for crew monitoring"""
-    crew_code = serializers.CharField()
-    crew_name = serializers.CharField()
-    month = serializers.DateField()
-    total_productivity = serializers.DecimalField(max_digits=15, decimal_places=2)
-    total_peso_value = serializers.DecimalField(max_digits=15, decimal_places=2)
-    average_daily_productivity = serializers.DecimalField(max_digits=10, decimal_places=2)
-
-
-# ============================================
-# QI MONITORING SERIALIZERS
-# ============================================
-
-class QIWeeklyAccomplishmentSerializer(serializers.ModelSerializer):
-    qi_name = serializers.CharField(source='qi_user.get_full_name', read_only=True)
-    
-    class Meta:
-        model = QIWeeklyAccomplishment
-        fields = '__all__'
-        read_only_fields = ['total_inspections', 'target_met', 'created_at', 'updated_at']
-
-
-class QIMonthlyAccomplishmentSerializer(serializers.ModelSerializer):
-    qi_name = serializers.CharField(source='qi_user.get_full_name', read_only=True)
-    month_display = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = QIMonthlyAccomplishment
-        fields = '__all__'
-        read_only_fields = ['total_inspections', 'target_met', 
-                           'achievement_percentage', 'created_at', 'updated_at']
-    
-    def get_month_display(self, obj):
-        return obj.month.strftime('%B %Y')
-
-
-
-
-# ============================================
-# PCA SERIALIZERS
-# ============================================
-
-class PCAGoalSerializer(serializers.ModelSerializer):
-    month_display = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = PCAGoal
-        fields = '__all__'
-    
-    def get_month_display(self, obj):
-        return obj.month.strftime('%B %Y')
-
-
-class PCASummarySerializer(serializers.ModelSerializer):
-    month_display = serializers.SerializerMethodField()
-    goal = PCAGoalSerializer(source='month', read_only=True)
-    class Meta:
-        model = PCASummary
-        fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at']
-
-    def get_month_display(self, obj):
-        return obj.month.strftime('%B %Y')
-
-# ============================================
-# VENDOR PRODUCTIVITY SERIALIZERS
-# ============================================
-class VendorProductivityMonthlySerializer(serializers.ModelSerializer):
-    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
-    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
-    month_display = serializers.SerializerMethodField()
-    class Meta:
-        model = VendorProductivityMonthly
-        fields = '__all__'
-        read_only_fields = ['actual_capability_percentage', 'productivity_percentage', 
-                        'created_at', 'updated_at']
-
-    def get_month_display(self, obj):
-        return obj.month.strftime('%B %Y')
-    
-# ============================================
-# AGEING ANALYSIS SERIALIZERS
-# ============================================
-class AgeingAnalysisSerializer(serializers.ModelSerializer):
-    wo_no = serializers.CharField(source='work_order.wo_no', read_only=True)
-    wo_description = serializers.CharField(source='work_order.description', read_only=True)
-    supervisor_name = serializers.SerializerMethodField()
-    age_bracket_display = serializers.CharField(source='get_age_bracket_display', read_only=True)
-    class Meta:
-        model = AgeingAnalysis
-        fields = '__all__'
-
-    def get_supervisor_name(self, obj):
-        return obj.supervisor.get_full_name() if obj.supervisor else None
-    
-class AgeingSummarySerializer(serializers.Serializer):
-    """Summary statistics for ageing analysis"""
-    age_bracket = serializers.CharField()
-    count = serializers.IntegerField()
-    exclusion_duration = serializers.DecimalField(max_digits=15, decimal_places=2)
-    
-# ============================================
-# BACKJOB MONITORING SERIALIZERS
-# ============================================
-class BackjobMonitoringSerializer(serializers.ModelSerializer):
-    wo_no = serializers.CharField(source='work_order.wo_no', read_only=True)
-    wo_description = serializers.CharField(source='work_order.description', read_only=True)
-    assigned_to_name = serializers.SerializerMethodField()
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
-    class Meta:
-        model = BackjobMonitoring
-        fields = '__all__'
-        read_only_fields = ['days_pending', 'is_overdue', 'created_at', 'updated_at']
-
-    def get_assigned_to_name(self, obj):
-        return obj.assigned_to.get_full_name() if obj.assigned_to else None
-    
-    
-from rest_framework import serializers
-from .models import KPISnapshot, KPITarget
-
-class KPISnapshotSerializer(serializers.ModelSerializer):
-    kpi_type_display = serializers.CharField(source='get_kpi_type_display', read_only=True)
-    status = serializers.SerializerMethodField()
-    variance = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = KPISnapshot
-        fields = '__all__'
-    
-    def get_status(self, obj):
-        """Determine status based on target comparison"""
-        if not obj.target_value:
-            return 'NEUTRAL'
-        
-        # For most KPIs, higher is better
-        if obj.kpi_value >= obj.target_value:
-            return 'GREEN'
-        elif obj.kpi_value >= obj.target_value * 0.9:
-            return 'YELLOW'
-        else:
-            return 'RED'
-    
-    def get_variance(self, obj):
-        """Calculate variance from target"""
-        if not obj.target_value or obj.target_value == 0:
-            return None
-        return float((obj.kpi_value - obj.target_value) / obj.target_value * 100)
-
-
-class KPITargetSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = KPITarget
-        fields = '__all__'
-
-
-class KPIDashboardSerializer(serializers.Serializer):
-    """Serializer for comprehensive KPI dashboard data"""
-    
-    # Summary
-    period_start = serializers.DateField()
-    period_end = serializers.DateField()
-    total_kpis = serializers.IntegerField()
-    
-    # KPI Data
-    ccti = serializers.DictField()
-    pca_conversion = serializers.DictField()
-    ageing_completion = serializers.DictField()
-    pai_adherence = serializers.DictField()
-    termination_apt = serializers.DictField()
-    termination_resolution = serializers.DictField()
-    prdi = serializers.DictField()
-    cost_settlement = serializers.DictField()
-    quality_index = serializers.DictField()
-    capability_utilization = serializers.DictField()
-    
-    # Trends
-    historical_trends = serializers.DictField()
-    
-    # Charts Data
-    chart_data = serializers.DictField()
-    
-    
-from rest_framework import serializers
-from .models import WorkOrder, Project, SLATracking, DocumentCompliance
-
-class UpcomingDeadlineSerializer(serializers.Serializer):
-    """Serializer for upcoming deadlines across different entities"""
-    project_code = serializers.CharField()
-    project_name = serializers.CharField()
-    deadline_type = serializers.CharField()
-    due_date = serializers.DateField()
-    days_remaining = serializers.IntegerField()
-    priority = serializers.CharField()
+class DelayPredictionSerializer(serializers.Serializer):
     status = serializers.CharField()
-    assigned_to = serializers.CharField(required=False, allow_null=True)
-    
+    priority = serializers.CharField()
+    risk_score = serializers.CharField()
+    days_since_start = serializers.IntegerField()
+    contract_value = serializers.FloatField()
+    compliance_score = serializers.FloatField()
 
 
-class VendorActivityPhotoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = VendorActivityPhoto
-        fields = '__all__'
-        read_only_fields = ['photo_id', 'uploaded_at']
+class PenaltyPredictionSerializer(serializers.Serializer):
+    violation_type = serializers.CharField()
+    delay_days = serializers.IntegerField()
 
 
-class VendorDailyActivitySerializer(serializers.ModelSerializer):
-    photos = VendorActivityPhotoSerializer(many=True, read_only=True)
-    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
-    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
-    
-    class Meta:
-        model = VendorDailyActivity
-        fields = '__all__'
-        read_only_fields = ['activity_id', 'signed_on_at', 'created_at', 'updated_at']
-
-# Add to serializers.py
-
-class COCChecklistSerializer(serializers.ModelSerializer):
-    """Serializer for COC Checklist - Work Orders needing COC review"""
-    vendor_name = serializers.CharField(source='vendor.vendor_name', read_only=True)
-    vendor_code = serializers.CharField(source='vendor.vendor_code', read_only=True)
-    supervisor_name = serializers.SerializerMethodField()
-    days_since_energized = serializers.SerializerMethodField()
-    days_since_coc = serializers.SerializerMethodField()
-    needs_attention = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = WorkOrder
-        fields = [
-            'wo_id', 'wo_no', 'description', 'location', 'municipality',
-            'vendor', 'vendor_name', 'vendor_code', 'assigned_crew',
-            'supervisor', 'supervisor_name', 'status',
-            'date_received_by_vc', 'date_sched', 'date_received_jacket_ps',
-            'days_since_energized', 'days_since_coc', 'needs_attention',
-            'vendor_remarks', 'clerk_remarks', 'ntc_amount',
-            'created_at', 'updated_at'
-        ]
-    
-    def get_supervisor_name(self, obj):
-        if obj.supervisor:
-            return obj.supervisor.get_full_name() or obj.supervisor.username
-        return None
-    
-    def get_days_since_energized(self, obj):
-        if obj.date_received_by_vc:
-            from django.utils import timezone
-            delta = timezone.now().date() - obj.date_received_by_vc
-            return delta.days
-        return None
-    
-    def get_days_since_coc(self, obj):
-        if obj.date_sched:
-            from django.utils import timezone
-            delta = timezone.now().date() - obj.date_sched
-            return delta.days
-        return None
-    
-    def get_needs_attention(self, obj):
-        """Determine if work order needs immediate attention"""
-        if obj.date_received_by_vc and not obj.date_sched:
-            from django.utils import timezone
-            days = (timezone.now().date() - obj.date_received_by_vc).days
-            return days > 7  # Alert if no COC after 7 days
-        if obj.date_sched and not obj.date_received_jacket_ps:
-            from django.utils import timezone
-            days = (timezone.now().date() - obj.date_sched).days
-            return days > 3  # Alert if not sent for audit after 3 days
-        return False
+class ChatRequestSerializer(serializers.Serializer):
+    question = serializers.CharField(max_length=500)
 
 
-from rest_framework import serializers
-from .models import (
-    InspectionFlag,
-    InspectionChecklistItem,
-    DefectReport,
-    DefectCorrectionHistory,
-    QIInspection,
-    User
-)
+# ============================================
+# BULK OPERATIONS SERIALIZERS
+# ============================================
 
-# ==================== CHECKLIST ITEM SERIALIZERS ====================
-class InspectionChecklistItemSerializer(serializers.ModelSerializer):
-    checked_by_name = serializers.SerializerMethodField()
+class WorkOrderExcelImportSerializer(serializers.Serializer):
+    """Serializer for Excel import validation"""
+    file = serializers.FileField(required=True)
     
-    class Meta:
-        model = InspectionChecklistItem
-        fields = [
-            'id',
-            'inspection',
-            'item_name',
-            'item_category',
-            'item_order',
-            'status',
-            'notes',
-            'photos',
-            'checked_at',
-            'checked_by',
-            'checked_by_name',
-            'created_at',
-            'updated_at'
-        ]
-        read_only_fields = ['created_at', 'updated_at']
-    
-    def get_checked_by_name(self, obj):
-        if obj.checked_by:
-            return f"{obj.checked_by.first_name} {obj.checked_by.last_name}".strip() or obj.checked_by.username
-        return None
-
-
-# ==================== INSPECTION FLAG SERIALIZERS ====================
-class InspectionFlagSerializer(serializers.ModelSerializer):
-    inspection_code = serializers.CharField(source='inspection.inspection_id', read_only=True)
-    project_code = serializers.CharField(source='inspection.project.project_code', read_only=True)
-    reviewed_by_name = serializers.SerializerMethodField()
-    failed_items = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = InspectionFlag
-        fields = [
-            'id',
-            'inspection',
-            'inspection_code',
-            'project_code',
-            'flag_type',
-            'item_count',
-            'requires_action',
-            'status',
-            'ai_suggestions',
-            'created_at',
-            'reviewed_at',
-            'reviewed_by',
-            'reviewed_by_name',
-            'failed_items'
-        ]
-        read_only_fields = ['created_at']
-    
-    def get_reviewed_by_name(self, obj):
-        if obj.reviewed_by:
-            return f"{obj.reviewed_by.first_name} {obj.reviewed_by.last_name}".strip() or obj.reviewed_by.username
-        return None
-    
-    def get_failed_items(self, obj):
-        """Get the actual failed checklist items"""
-        items = InspectionChecklistItem.objects.filter(
-            inspection=obj.inspection,
-            status='FAIL'
-        )
-        return InspectionChecklistItemSerializer(items, many=True).data
-
-
-# ==================== DEFECT REPORT SERIALIZERS ====================
-class DefectCorrectionHistorySerializer(serializers.ModelSerializer):
-    action_by_name = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = DefectCorrectionHistory
-        fields = [
-            'id',
-            'defect',
-            'action',
-            'action_by',
-            'action_by_name',
-            'action_at',
-            'notes',
-            'photos'
-        ]
-    
-    def get_action_by_name(self, obj):
-        if obj.action_by:
-            return f"{obj.action_by.first_name} {obj.action_by.last_name}".strip() or obj.action_by.username
-        return None
-
-
-class DefectReportSerializer(serializers.ModelSerializer):
-    created_by_name = serializers.SerializerMethodField()
-    reviewed_by_name = serializers.SerializerMethodField()
-    correction_submitted_by_name = serializers.SerializerMethodField()
-    project_code = serializers.CharField(source='project.project_code', read_only=True)
-    vendor_name = serializers.CharField(source='project.vendor.vendor_name', read_only=True)
-    inspection_date = serializers.DateField(source='inspection.inspection_date', read_only=True)
-    correction_history = DefectCorrectionHistorySerializer(many=True, read_only=True)
-    days_overdue = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = DefectReport
-        fields = [
-            'defect_id',
-            'inspection',
-            'project',
-            'project_code',
-            'vendor_name',
-            'inspection_date',
-            'defect_type',
-            'defect_category',
-            'severity',
-            'description',
-            'related_checklist_items',
-            'photos',
-            'location_gps',
-            'qi_notes',
-            'qi_signature',
-            'created_by',
-            'created_by_name',
-            'created_at',
-            'correction_status',
-            'correction_due_date',
-            'correction_photos',
-            'correction_notes',
-            'correction_submitted_at',
-            'correction_submitted_by',
-            'correction_submitted_by_name',
-            'failure_count',
-            'reviewed_by',
-            'reviewed_by_name',
-            'reviewed_at',
-            'review_notes',
-            'is_escalated',
-            'escalated_at',
-            'escalation_reason',
-            'correction_history',
-            'days_overdue'
-        ]
-        read_only_fields = ['defect_id', 'created_at', 'failure_count']
-    
-    def get_created_by_name(self, obj):
-        if obj.created_by:
-            return f"{obj.created_by.first_name} {obj.created_by.last_name}".strip() or obj.created_by.username
-        return None
-    
-    def get_reviewed_by_name(self, obj):
-        if obj.reviewed_by:
-            return f"{obj.reviewed_by.first_name} {obj.reviewed_by.last_name}".strip() or obj.reviewed_by.username
-        return None
-    
-    def get_correction_submitted_by_name(self, obj):
-        if obj.correction_submitted_by:
-            return f"{obj.correction_submitted_by.first_name} {obj.correction_submitted_by.last_name}".strip() or obj.correction_submitted_by.username
-        return None
-    
-    def get_days_overdue(self, obj):
-        if obj.correction_due_date and obj.correction_status not in ['APPROVED', 'CLOSED']:
-            from datetime import date
-            delta = date.today() - obj.correction_due_date
-            return delta.days if delta.days > 0 else 0
-        return 0
-
-
-class DefectReportCreateSerializer(serializers.ModelSerializer):
-    """Serializer for QI to create defect reports"""
-    
-    class Meta:
-        model = DefectReport
-        fields = [
-            'inspection',
-            'project',
-            'defect_type',
-            'defect_category',
-            'severity',
-            'description',
-            'related_checklist_items',
-            'photos',
-            'location_gps',
-            'qi_notes',
-            'qi_signature',
-            'correction_due_date'
-        ]
-    
-    def validate_qi_signature(self, value):
-        if not value:
-            raise serializers.ValidationError("QI signature is required for legal validity")
+    def validate_file(self, value):
+        if not value.name.endswith(('.xlsx', '.xls')):
+            raise serializers.ValidationError(
+                "File must be an Excel file (.xlsx or .xls)"
+            )
+        
+        if value.size > 50 * 1024 * 1024:
+            raise serializers.ValidationError(
+                "File size must not exceed 50MB."
+            )
+        
         return value
+
+
+class WorkOrderBulkUpdateSerializer(serializers.Serializer):
+    """Serializer for bulk update operations"""
+    work_order_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=True,
+        allow_empty=False
+    )
+    status = serializers.CharField(required=False, allow_blank=True)
+    assigned = serializers.CharField(required=False, allow_blank=True)
+    supervisor_full_name = serializers.CharField(required=False, allow_blank=True)
     
-    def create(self, validated_data):
-        # Set created_by from request user
-        validated_data['created_by'] = self.context['request'].user
-        validated_data['correction_status'] = 'OPEN'
-        return super().create(validated_data)
-
-
-# ==================== AI SUGGESTION SERIALIZER ====================
-class AIDefectSuggestionSerializer(serializers.Serializer):
-    """Serializer for AI-generated defect grouping suggestions"""
-    suggested_defect_type = serializers.CharField()
-    suggested_severity = serializers.CharField()
-    suggested_description = serializers.CharField()
-    related_item_ids = serializers.ListField(child=serializers.IntegerField())
-    confidence_score = serializers.FloatField()
-    reasoning = serializers.CharField()
-    
-from .models import QIInspectionPhoto
-
-class QIInspectionPhotoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = QIInspectionPhoto
-        fields = '__all__'
-        read_only_fields = ('photo_id', 'uploaded_at', 'created_at')
+    def validate_work_order_ids(self, value):
+        existing_ids = WorkOrder.objects.filter(
+            id__in=value
+        ).values_list('id', flat=True)
         
+        missing_ids = set(value) - set(existing_ids)
+        if missing_ids:
+            raise serializers.ValidationError(
+                f"Work order IDs not found: {sorted(missing_ids)}"
+            )
         
-
-# Add this to your serializers.py file
-
-from rest_framework import serializers
-from .models import PaymentReceipt, Invoice
-
-class PaymentReceiptSerializer(serializers.ModelSerializer):
-    uploaded_by_name = serializers.CharField(read_only=True)
-    reviewed_by_name = serializers.CharField(read_only=True)
-    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
-    
-    class Meta:
-        model = PaymentReceipt
-        fields = [
-            'receipt_id',
-            'invoice',
-            'invoice_number',
-            'receipt_image',
-            'receipt_number',
-            'payment_amount',
-            'payment_date',
-            'payment_method',
-            'notes',
-            'status',
-            'uploaded_by',
-            'uploaded_by_name',
-            'uploaded_at',
-            'reviewed_by',
-            'reviewed_by_name',
-            'reviewed_at',
-            'review_notes',
-            'created_at',
-            'updated_at'
-        ]
-        read_only_fields = [
-            'receipt_id',
-            'uploaded_by',
-            'uploaded_at',
-            'status',
-            'reviewed_by',
-            'reviewed_at',
-            'review_notes',
-            'created_at',
-            'updated_at'
-        ]
-    
-    def create(self, validated_data):
-        # Set uploaded_by from request user
-        request = self.context.get('request')
-        if request and hasattr(request, 'user'):
-            validated_data['uploaded_by'] = request.user
-        
-        return super().create(validated_data)
-    
-    def validate_payment_amount(self, value):
-        """Ensure payment amount is positive"""
-        if value <= 0:
-            raise serializers.ValidationError("Payment amount must be greater than zero")
         return value
     
     def validate(self, data):
-        """Validate that payment amount doesn't exceed invoice amount"""
-        invoice = data.get('invoice')
-        payment_amount = data.get('payment_amount')
+        updateable_fields = ['status', 'assigned', 'supervisor_full_name']
         
-        if invoice and payment_amount:
-            if payment_amount > invoice.net_amount:
-                raise serializers.ValidationError({
-                    'payment_amount': f'Payment amount cannot exceed invoice net amount of ₱{invoice.net_amount}'
-                })
+        if not any(field in data for field in updateable_fields):
+            raise serializers.ValidationError(
+                "At least one field to update must be provided."
+            )
         
         return data

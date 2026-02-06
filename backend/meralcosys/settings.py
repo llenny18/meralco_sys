@@ -22,6 +22,16 @@ CHATBOT_CONFIG_PATH = os.path.join(BASE_DIR, 'ml_models', 'knowledge_base.json')
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+# Add this for development
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
+
+# Static files finders
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
 
 # EMAIL CONFIG (Gmail + App Password)
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
