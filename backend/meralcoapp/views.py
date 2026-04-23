@@ -500,66 +500,83 @@ logger = logging.getLogger(__name__)
 @permission_classes([AllowAny])
 def chat(request):
     """
-    Chat endpoint for AI assistant
-    
-    Expected payload:
+    Chat endpoint — now supports live DB data + role-based access.
+
+    Request payload:
     {
-        "question": "What is the Smart Vendor Monitoring System?"
+        "question": "List my defect reports",
+        "token":    "<optional — if not using Authorization header>"
     }
-    
-    Returns:
+
+    Response:
     {
-        "question": "What is the Smart Vendor Monitoring System?",
-        "answer": "The Smart Vendor Monitoring System is...",
-        "confidence": 0.85,
-        "matched_question": "What is the Smart Vendor Monitoring System?"
+        "question": "...",
+        "type":     "data | knowledge | both | fallback",
+        "answer":   "...",
+        "data":     [ {...}, ... ] | null,
+        "total":    42 | null,
+        "title":    "Defect Reports" | null,
+        "user_role": "Quality Inspector" | "anonymous",
+        "timestamp": "..."
     }
     """
+    from rest_framework.authtoken.models import Token as AuthToken
+
     serializer = ChatRequestSerializer(data=request.data)
-    
     if not serializer.is_valid():
         return Response(
-            {
-                'error': 'Invalid request',
-                'details': serializer.errors
-            }, 
-            status=status.HTTP_400_BAD_REQUEST
+            {'error': 'Invalid request', 'details': serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST,
         )
-    
+
+    question = serializer.validated_data['question']
+
+    # ── Resolve user (header token OR body token OR session) ──────────
+    resolved_user = None
+    if request.user and request.user.is_authenticated:
+        resolved_user = request.user
+    else:
+        # Accept token from request body as fallback (mobile / SPA)
+        raw_token = request.data.get('token') or request.META.get('HTTP_X_CHAT_TOKEN')
+        if raw_token:
+            try:
+                token_obj = AuthToken.objects.select_related('user__role').get(key=raw_token)
+                resolved_user = token_obj.user
+            except AuthToken.DoesNotExist:
+                pass
+
+    role_name = (
+        resolved_user.role.role_name
+        if resolved_user and resolved_user.role
+        else 'anonymous'
+    )
+
+    logger.info(f"Chat | user={getattr(resolved_user, 'username', 'anon')} | role={role_name} | q={question}")
+
     try:
-        question = serializer.validated_data['question']
-        
-        # Log the incoming question
-        logger.info(f"Chat question received: {question}")
-        print(f"\n{'='*80}")
-        print(f"📥 INCOMING QUESTION: {question}")
-        print(f"{'='*80}")
-        
-        # Get answer from chatbot service
-        answer = chatbot_service.answer(question)
-        
-        # Log the response
-        logger.info(f"Chat answer generated: {answer[:100]}...")
-        print(f"📤 RESPONSE: {answer[:200]}...")
-        print(f"{'='*80}\n")
-        
+        # Pass user so data service can apply role-based filtering
+        result = chatbot_service.answer(question, user=resolved_user)
+
         return Response({
-            'question': question,
-            'answer': answer,
-            'timestamp': request.META.get('HTTP_DATE', None)
+            'question':  question,
+            'type':      result['type'],
+            'answer':    result['text'],
+            'data':      result['data'],
+            'total':     result['total'],
+            'title':     result['title'],
+            'user_role': role_name,
+            'timestamp': timezone.now().isoformat(),
         }, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
-        logger.error(f"Chat error: {str(e)}", exc_info=True)
-        print(f"❌ ERROR in chat endpoint: {e}")
-        
+        logger.error(f"Chat error: {e}", exc_info=True)
         return Response(
             {
-                'error': 'Internal server error',
+                'error':   'Internal server error',
                 'message': 'Sorry, I encountered an error processing your question.',
-                'details': str(e) if request.user.is_staff else None
-            }, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                'details': str(e) if (resolved_user and resolved_user.is_staff) else None,
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
@@ -601,7 +618,15 @@ def chat_debug(request):
     try:
         # Get similar questions
         similar = chatbot_service.get_similar_questions(question, top_k=10)
-        
+        from .chatbot_data_service import detect_intent
+        intent = detect_intent(question)
+
+        return Response({
+            'question':         question,
+            'detected_intent':  intent,          # ← new
+            'similar_questions': similar,
+            'threshold':        0.35
+        })
         return Response({
             'question': question,
             'similar_questions': similar,
@@ -671,7 +696,7 @@ class AuthViewSet(viewsets.ViewSet):
             
             # Determine redirect path based on role
             redirect_paths = {
-                'System Administrator': '/admin/dashboard',
+                'System Administrator': '/system-admin/dashboard', 
                 'Team Leader': '/leader/dashboard',
                 'Sector Manager': '/sector-manager/dashboard',
                 'Engineer': '/engineer/dashboard',

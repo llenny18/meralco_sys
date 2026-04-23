@@ -164,14 +164,15 @@ WSGI_APPLICATION = 'meralcosys.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
+# aimsWo12356@
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'aimswo_db',
+        'NAME': 'meralco_sys_db',
         'USER': 'postgres',
-        'PASSWORD': 'aimsWOpass1@',
-        'HOST': '72.61.215.239',
+        'PASSWORD': 'admin123',
+        'HOST': 'localhost',
         'PORT': '5432',
     }
 }
